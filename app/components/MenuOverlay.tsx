@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 
-export default function MenuOverlay({ isOpen }: { isOpen: boolean }) {
+export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const bracketsRef = useRef<HTMLDivElement>(null);
@@ -92,18 +92,27 @@ export default function MenuOverlay({ isOpen }: { isOpen: boolean }) {
             <div className="absolute -bottom-2 -right-4 w-3 h-3 border-b-2 border-r-2 border-[#CCFF00]" />
           </div>
 
-          {navItems.map((item, idx) => (
-            <a 
-              key={item}
-              id={`nav-${item}`}
-              href="#" 
-              onMouseEnter={(e) => handleNavHover(e, item)}
-              className={`menu-stagger transition-colors relative group w-fit ${activeNav === item ? 'text-[#CCFF00]' : 'text-[#E3E3E3]/70 hover:text-opacity-100'}`}
-            >
-              <span className="absolute -top-3 right-0 text-sm font-sans font-bold text-[#CCFF00]">0{idx + 1}</span>
-              {item}
-            </a>
-          ))}
+          {navItems.map((item, idx) => {
+            let href = "#";
+            if (item === "HOME") href = "#";
+            else if (item === "ABOUT") href = "#about";
+            else if (item === "WORK") href = "#work";
+            else if (item === "CONTACT") href = "#contact";
+            
+            return (
+              <a 
+                key={item}
+                id={`nav-${item}`}
+                href={href}
+                onClick={() => onClose()}
+                onMouseEnter={(e) => handleNavHover(e, item)}
+                className={`menu-stagger transition-colors relative group w-fit ${activeNav === item ? 'text-[#CCFF00]' : 'text-[#E3E3E3]/70 hover:text-opacity-100'}`}
+              >
+                <span className="absolute -top-3 right-0 text-sm font-sans font-bold text-[#CCFF00]">0{idx + 1}</span>
+                {item}
+              </a>
+            );
+          })}
         </nav>
 
         <div className="flex flex-col gap-10 text-white font-sans mt-16 md:mt-0 md:mr-[10%] lg:mr-[15%] items-center md:items-start text-center md:text-left w-full md:w-auto">
@@ -122,7 +131,7 @@ export default function MenuOverlay({ isOpen }: { isOpen: boolean }) {
           <div className="menu-stagger flex flex-col gap-3">
             <div className="text-[10px] text-[#CCFF00] font-bold uppercase tracking-widest">E-MAIL</div>
             <div className="text-xs uppercase tracking-widest">
-              [ KANZA@NETWATCHSTUDIO.COM ]
+              [ HARSH.240103263@IIITBH.AC.IN ]
             </div>
           </div>
 

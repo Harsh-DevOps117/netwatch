@@ -64,7 +64,7 @@ export default function Navbar() {
         </div>
       </header>
 
-      <MenuOverlay isOpen={isMenuOpen} />
+      <MenuOverlay isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </>
   );
 }

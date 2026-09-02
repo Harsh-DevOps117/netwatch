@@ -4,7 +4,6 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { useRef, useState } from "react";
 
-import Footer from "./Footer";
 
 export default function Hero() {
   const [attackText, setAttackText] = useState("DDoS Protected");
@@ -133,7 +132,6 @@ export default function Hero() {
         </div>
       </div>
 
-      <Footer />
     </main>
   );
 }

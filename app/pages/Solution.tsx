@@ -1,13 +1,53 @@
-import React from "react";
+"use client";
+
+import React, { useRef } from "react";
 import Image from "next/image";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import mapSvg from "../assets/Solution/6974cbc80c8fcd560c92026c_map.svg";
 import makeSvg from "../assets/Solution/6974cbc8861fbf07e229e1cb_make.svg";
 import moveSvg from "../assets/Solution/6974cbc8367ce36cd627e7cf_move.svg";
 
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger);
+}
+
 export default function Solution() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const tlRef = useRef<gsap.core.Timeline>();
+
+  useGSAP(() => {
+    tlRef.current = gsap.timeline({ repeat: -1 })
+      .to(".rotating-img", {
+        rotation: 360,
+        ease: "none",
+        duration: 15
+      });
+
+    ScrollTrigger.create({
+      trigger: document.body,
+      start: "top top",
+      end: "bottom bottom",
+      onUpdate: (self) => {
+        const velocity = self.getVelocity();
+        const targetTimeScale = 1 + Math.abs(velocity / 300);
+
+        gsap.to(tlRef.current, {
+          timeScale: Math.min(targetTimeScale, 10),
+          duration: 0.1,
+          overwrite: true,
+          onComplete: () => {
+            gsap.to(tlRef.current, { timeScale: 1, duration: 0.5 });
+          }
+        });
+      }
+    });
+  }, { scope: sectionRef });
+
   return (
-    <section className="w-full md:min-h-screen grid grid-cols-1 md:grid-cols-4 relative z-10 border-t border-black/[0.05]">
-      <div className="col-span-1 px-4 md:px-8 py-16 md:py-24 flex flex-col border-b md:border-b-0 border-black/[0.05]">
+    <section id="work" ref={sectionRef} className="w-full md:min-h-[70vh] grid grid-cols-1 md:grid-cols-4 relative z-10 border-t border-black/[0.05]">
+      <div className="col-span-1 px-4 md:px-8 py-10 md:py-16 flex flex-col border-b md:border-b-0 border-black/[0.05]">
         <div className="bg-[#0033FF] text-white text-[10px] sm:text-xs font-semibold tracking-widest uppercase px-3 py-1 inline-block mb-8 self-start">
           PROCESS
         </div>
@@ -15,7 +55,7 @@ export default function Solution() {
           HOW IT WORKS
         </h2>
         <p className="text-[#444444] text-sm leading-relaxed mb-12 max-w-xs">
-          Here's how we build websites that actually work:
+          Here's how we build solutions that actually work:
         </p>
         <a
           href="#"
@@ -38,66 +78,57 @@ export default function Solution() {
         </a>
       </div>
 
-      <div className="col-span-1 px-4 md:px-8 py-16 md:py-24 flex flex-col border-l border-transparent md:border-black/[0.05] border-b md:border-b-0 border-black/[0.05]">
+      <div className="col-span-1 px-4 md:px-8 py-10 md:py-16 flex flex-col border-l border-transparent md:border-black/[0.05] border-b md:border-b-0 border-black/[0.05]">
         <div className="text-center mb-12">
           <div className="text-[#888888] text-xs font-semibold mb-1">01</div>
           <h3 className="text-[#0033FF] text-4xl font-normal tracking-tight uppercase mb-2">
-            MAP
+            INGEST
           </h3>
-          <div className="text-[#222222] text-sm">Strategy // Structure</div>
-        </div>
-        
-        <div className="flex-1 flex flex-col items-center justify-center mb-12 min-h-[200px]">
-          <Image src={mapSvg} alt="Map Strategy Structure" width={200} height={200} className="w-full max-w-[180px] mx-auto opacity-80" />
+          <div className="text-[#222222] text-lg md:text-xl font-medium tracking-tight">Ingest Network Data</div>
         </div>
 
-        <p className="text-[#444444] text-xs leading-relaxed text-center mt-auto">
-          We start by understanding your goals, your positioning, and what
-          actually makes your brand valuable. This is where we figure out the
-          story you're telling, who needs to hear it, and how to guide them from
-          curious to ready to book.
+        <div className="flex-1 flex flex-col items-center justify-center mb-12 min-h-[200px]">
+          <Image src={mapSvg} alt="Ingest Network Data" width={200} height={200} className="rotating-img w-full max-w-[180px] mx-auto opacity-80" />
+        </div>
+
+        <p className="text-[#444444] text-sm md:text-base leading-relaxed text-center mt-auto">
+          We are ingesting <span className="text-[#0033FF] font-medium">Network Data and packets</span> continuously to capture every detail and temporal behavior of the traffic flow.
         </p>
       </div>
 
-      <div className="col-span-1 px-4 md:px-8 py-16 md:py-24 flex flex-col border-l border-transparent md:border-black/[0.05] border-b md:border-b-0 border-black/[0.05] bg-black/[0.02]">
+      <div className="col-span-1 px-4 md:px-8 py-10 md:py-16 flex flex-col border-l border-transparent md:border-black/[0.05] border-b md:border-b-0 border-black/[0.05] bg-black/[0.02]">
         <div className="text-center mb-12">
           <div className="text-[#888888] text-xs font-semibold mb-1">02</div>
           <h3 className="text-[#0033FF] text-4xl font-normal tracking-tight uppercase mb-2">
-            MAKE
+            MODEL
           </h3>
-          <div className="text-[#222222] text-sm">Design // Experience</div>
-        </div>
-        
-        <div className="flex-1 flex flex-col items-center justify-center mb-12 min-h-[200px]">
-          <Image src={makeSvg} alt="Make Design Experience" width={200} height={200} className="w-full max-w-[180px] mx-auto opacity-80" />
+          <div className="text-[#222222] text-lg md:text-xl font-medium tracking-tight">GNN and TFT Models</div>
         </div>
 
-        <p className="text-[#444444] text-xs leading-relaxed text-center mt-auto">
-          Your brand gets translated into a visual journey that feels
-          intentional. Every click, scroll, and CTA has a purpose. We're
-          building the experience that takes your leads from "this looks
-          interesting" to "I need to work with them."
+        <div className="flex-1 flex flex-col items-center justify-center mb-12 min-h-[200px]">
+          <Image src={makeSvg} alt="GNN and TFT Models" width={200} height={200} className="rotating-img w-full max-w-[180px] mx-auto opacity-80" />
+        </div>
+
+        <p className="text-[#444444] text-sm md:text-base leading-relaxed text-center mt-auto">
+          The ingested models go to <span className="text-[#0033FF] font-medium">Graph Neural Networks (GNN)</span> and Temporal Fusion Transformers (TFT) to learn complex transition dynamics.
         </p>
       </div>
 
-      <div className="col-span-1 px-4 md:px-8 py-16 md:py-24 flex flex-col border-l border-transparent md:border-black/[0.05] bg-black/[0.04]">
+      <div className="col-span-1 px-4 md:px-8 py-10 md:py-16 flex flex-col border-l border-transparent md:border-black/[0.05] bg-black/[0.04]">
         <div className="text-center mb-12">
           <div className="text-[#888888] text-xs font-semibold mb-1">03</div>
           <h3 className="text-[#0033FF] text-4xl font-normal tracking-tight uppercase mb-2">
-            MOVE
+            ACT
           </h3>
-          <div className="text-[#222222] text-sm">Develop // Automate</div>
-        </div>
-        
-        <div className="flex-1 flex flex-col items-center justify-center mb-12 min-h-[200px]">
-          <Image src={moveSvg} alt="Move Develop Automate" width={200} height={200} className="w-full max-w-[180px] mx-auto opacity-80" />
+          <div className="text-[#222222] text-lg md:text-xl font-medium tracking-tight">Dashboard and Automation</div>
         </div>
 
-        <p className="text-[#444444] text-xs leading-relaxed text-center mt-auto">
-          We build it fast, clean, and scalable. Then we plug in the tools,
-          automate, and set up your systems. Your website becomes something that
-          works for you, educating leads, filtering out, and delivering
-          qualified clients ready to book.
+        <div className="flex-1 flex flex-col items-center justify-center mb-12 min-h-[200px]">
+          <Image src={moveSvg} alt="Dashboard and Automation" width={200} height={200} className="rotating-img w-full max-w-[180px] mx-auto opacity-80" />
+        </div>
+
+        <p className="text-[#444444] text-sm md:text-base leading-relaxed text-center mt-auto">
+          Output to a score dashboard for interpretable decision support, with possible <span className="text-[#0033FF] font-medium">automated defensive measures</span> triggered dynamically.
         </p>
       </div>
     </section>
