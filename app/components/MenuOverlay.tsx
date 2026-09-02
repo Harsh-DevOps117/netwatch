@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
+import { useEffect, useRef, useState } from "react";
 
 export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -67,7 +67,7 @@ export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onCl
   };
 
   return (
-    <div 
+    <div
       ref={overlayRef}
       className="fixed inset-0 z-40 bg-[#0033FF] flex flex-col -translate-y-full overflow-hidden"
     >
@@ -81,9 +81,9 @@ export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onCl
 
       <div className="flex-1 w-full max-w-[1400px] mx-auto flex flex-col md:flex-row items-center md:items-start lg:items-center justify-between px-6 md:px-12 pt-24 md:pt-32 pb-8 md:pb-16 z-10 overflow-y-auto">
         <nav ref={navRef} className="flex flex-col gap-6 font-pixel font-bold text-[48px] leading-[48px] md:text-[80px] md:leading-[80px] text-white uppercase relative md:ml-[15%] lg:ml-[20%] items-center md:items-end text-center md:text-right mt-12 md:mt-0 w-full md:w-auto">
-          
-          <div 
-            ref={bracketsRef} 
+
+          <div
+            ref={bracketsRef}
             className="absolute top-0 left-0 pointer-events-none opacity-0"
           >
             <div className="absolute -top-3 -left-4 w-3 h-3 border-t-2 border-l-2 border-[#CCFF00]" />
@@ -98,9 +98,9 @@ export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onCl
             else if (item === "ABOUT") href = "#about";
             else if (item === "WORK") href = "#work";
             else if (item === "CONTACT") href = "#contact";
-            
+
             return (
-              <a 
+              <a
                 key={item}
                 id={`nav-${item}`}
                 href={href}
@@ -137,14 +137,14 @@ export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onCl
 
           <div className="menu-stagger flex flex-col gap-0 w-64 mt-2">
             <div className="bg-[#CCFF00] text-[#0033FF] text-[10px] font-bold uppercase tracking-widest px-2 py-1 w-fit">JOIN THE ARCHIVE</div>
-            <input 
-              type="text" 
-              placeholder="Your Name" 
+            <input
+              type="text"
+              placeholder="Your Name"
               className="bg-transparent border border-[#CCFF00] text-white px-3 py-2 text-xs outline-none placeholder-white/70 focus:bg-white/10 mt-[2px]"
             />
-            <input 
-              type="email" 
-              placeholder="name@example.com" 
+            <input
+              type="email"
+              placeholder="name@example.com"
               className="bg-transparent border border-[#CCFF00] border-t-0 text-white px-3 py-2 text-xs outline-none placeholder-white/70 focus:bg-white/10"
             />
             <button className="bg-[#CCFF00] text-[#0033FF] hover:bg-white transition-colors text-xs font-bold uppercase tracking-widest px-4 py-2 w-fit mt-3">

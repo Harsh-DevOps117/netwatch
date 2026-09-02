@@ -15,7 +15,7 @@ if (typeof window !== "undefined") {
 
 export default function Solution() {
   const sectionRef = useRef<HTMLElement>(null);
-  const tlRef = useRef<gsap.core.Timeline>();
+  const tlRef = useRef<gsap.core.Timeline | null>(null);
 
   useGSAP(() => {
     tlRef.current = gsap.timeline({ repeat: -1 })
