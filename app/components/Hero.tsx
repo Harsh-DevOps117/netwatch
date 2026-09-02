@@ -11,8 +11,8 @@ export default function Hero() {
   const container = useRef<HTMLElement>(null);
   const floatBoxRef = useRef<HTMLDivElement>(null);
 
-  const xTo = useRef<gsap.QuickToFunc>();
-  const yTo = useRef<gsap.QuickToFunc>();
+  const xTo = useRef<gsap.QuickToFunc | null>(null);
+  const yTo = useRef<gsap.QuickToFunc | null>(null);
 
   const attacks = [
     "DDoS Protected",
