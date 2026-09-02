@@ -6,9 +6,13 @@
   --font-pixel: var(--font-pixel, monospace);
 }
 
+::-webkit-scrollbar {
+  display: none;
+}
+
 ::selection {
-  background-color: #BEFD66;
-  color: #0033FF;
+  background-color: #befd66;
+  color: #0033ff;
 }
 
 body {
