@@ -2,7 +2,7 @@
 const team = [
   { name: 'Harsh', url: 'https://www.linkedin.com/in/harsh-kharwar-093919282/' },
   { name: 'Vedant', url: 'https://www.linkedin.com/in/vedant-singh-1b996b313/' },
-  { name: 'Kautuk', url: 'https://www.linkedin.com/in/kaustuk-pratap-singh-23291b36b/' },
+  { name: 'Kaustuk', url: 'https://www.linkedin.com/in/kaustuk-pratap-singh-23291b36b/' },
   { name: 'Abhijit', url: 'https://www.linkedin.com/in/abhijit-kumar-b10080318/' },
   { name: 'Sneha', url: 'https://www.linkedin.com/in/sneha-varma13/' },
   { name: 'Yug', url: 'https://www.linkedin.com/in/yug-s-538a8a321/' },
