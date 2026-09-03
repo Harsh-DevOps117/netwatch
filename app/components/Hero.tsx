@@ -132,6 +132,13 @@ export default function Hero() {
         </div>
       </div>
 
+      <div className="w-full flex justify-between items-center px-4 md:px-8 xl:px-12 py-6 text-xs sm:text-sm text-[#666] uppercase tracking-widest mt-auto font-medium">
+        <div>TEAM COD-I</div>
+        <div className="hidden sm:flex items-center gap-2 text-[#0033FF]">
+          &darr; SCROLL DOWN
+        </div>
+        <div>IIIT BHAGALPUR</div>
+      </div>
     </main>
   );
 }
