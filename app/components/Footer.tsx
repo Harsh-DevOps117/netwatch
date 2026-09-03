@@ -1,4 +1,3 @@
-import React from 'react';
 
 const team = [
   { name: 'Harsh', url: 'https://www.linkedin.com/in/harsh-kharwar-093919282/' },
@@ -38,7 +37,7 @@ export default function Footer() {
       <div className="w-full h-px bg-black/[0.15] mb-8 md:mb-12"></div>
 
       <div className="w-full flex justify-center items-center overflow-hidden mb-8 md:mb-12">
-        <h1 
+        <h1
           className="text-[clamp(3.5rem,15vw,15rem)] leading-none text-[#222] tracking-tighter font-semibold"
         >
           NetWatch

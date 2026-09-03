@@ -2,9 +2,9 @@
 
 import React from "react";
 import Image from "next/image";
-import onePagerSvg from "../assets/goal/6989b42085127d3eab25d1a7_One-Pager Website.svg";
-import fullWebsiteSvg from "../assets/goal/6989b42c18da3e945b5ae4bf_Full Website.svg";
-import websiteGrowthSvg from "../assets/goal/6989b4375c02d9c20017e998_Website + Growth System.svg";
+import onePagerSvg from "../assets/goal/one-pager.svg";
+import fullWebsiteSvg from "../assets/goal/full-website.svg";
+import websiteGrowthSvg from "../assets/goal/website-growth.svg";
 
 export default function Goal() {
   return (
