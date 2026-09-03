@@ -118,11 +118,11 @@ export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onCl
         <div className="flex flex-col gap-10 text-white font-sans mt-16 md:mt-0 md:mr-[10%] lg:mr-[15%] items-center md:items-start text-center md:text-left w-full md:w-auto">
           <div className="menu-stagger flex flex-col gap-3">
             <div className="text-[10px] text-[#CCFF00] font-bold uppercase tracking-widest">SOCIALS</div>
-            <a href="#" className="text-xs uppercase tracking-widest hover:text-[#CCFF00] transition-colors flex items-center gap-2">
+            <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" className="text-xs uppercase tracking-widest hover:text-[#CCFF00] transition-colors flex items-center gap-2">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
               INSTAGRAM
             </a>
-            <a href="#" className="text-xs uppercase tracking-widest hover:text-[#CCFF00] transition-colors flex items-center gap-2">
+            <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer" className="text-xs uppercase tracking-widest hover:text-[#CCFF00] transition-colors flex items-center gap-2">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
               LINKEDIN
             </a>
