@@ -24,8 +24,6 @@ export default function MenuOverlay({ isOpen, onClose }: { isOpen: boolean; onCl
         { y: 0, opacity: 1, duration: 0.6, stagger: 0.1, delay: 0.4, ease: "power3.out" }
       );
 
-      // Initialize bracket position AFTER the stagger animation completes
-      // Delay (0.4) + Duration (0.6) = 1.0s. We wait 1100ms to be perfectly safe.
       setTimeout(() => {
         const homeEl = document.getElementById("nav-HOME");
         if (homeEl) {

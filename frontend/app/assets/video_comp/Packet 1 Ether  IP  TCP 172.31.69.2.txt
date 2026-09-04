@@ -1,0 +1,169 @@
+Packet 1: Ether / IP / TCP 172.31.69.25:ssh > 131.202.242.193:35605 PA / Raw
+###[ Ethernet ]###
+  dst       = 02:ca:69:c4:6d:06
+  src       = 02:d8:a9:4e:38:42
+  type      = IPv4
+###[ IP ]###
+     version   = 4
+     ihl       = 5
+     tos       = 0x10
+     len       = 104
+     id        = 41527
+     flags     = DF
+     frag      = 0
+     ttl       = 64
+     proto     = tcp
+     chksum    = 0x3084
+     src       = 172.31.69.25
+     dst       = 131.202.242.193
+     \options   \
+###[ TCP ]###
+        sport     = ssh
+        dport     = 35605
+        seq       = 1043996076
+        ack       = 3299606346
+        dataofs   = 5
+        reserved  = 0
+        flags     = PA
+        window    = 263
+        chksum    = 0x681f
+        urgptr    = 0
+        options   = []
+###[ Raw ]###
+           load      = b')\xad\x87\xe6\xd5\x02\xc4\x03\x80\xea\x1c\xba\x82tB\xc6\x12(\xd3q\x00ljR\x86\xbe\xce\x81\xbb\x93R\x94\xbda\xcd\x8fh\rW\xb1.\xcbl\xf8\x1e%M\xe0\xda\xb4\xdf\xd7Bs\x1f\x8f.\xe1`\x95\xbd\xd7\x944'
+
+
+Packet 2: Ether / IP / TCP 172.31.69.25:ssh > 131.202.242.193:35605 PA / Raw
+###[ Ethernet ]###
+  dst       = 02:ca:69:c4:6d:06
+  src       = 02:d8:a9:4e:38:42
+  type      = IPv4
+###[ IP ]###
+     version   = 4
+     ihl       = 5
+     tos       = 0x10
+     len       = 232
+     id        = 41528
+     flags     = DF
+     frag      = 0
+     ttl       = 64
+     proto     = tcp
+     chksum    = 0x3003
+     src       = 172.31.69.25
+     dst       = 131.202.242.193
+     \options   \
+###[ TCP ]###
+        sport     = ssh
+        dport     = 35605
+        seq       = 1043996140
+        ack       = 3299606346
+        dataofs   = 5
+        reserved  = 0
+        flags     = PA
+        window    = 263
+        chksum    = 0x689f
+        urgptr    = 0
+        options   = []
+###[ Raw ]###
+           load      = b'\x07\x9e\xf1\xed\xea\x86P\xd5\xf5\x94\xf0\xdd5v\x93\x96\x8b\xc4\xeb\xd2\x02\xd7\x11\x93\xc5\x19\xa0\xb5\x87k\x8f8\xa8\x1e\x1a\x11\'\x83\x94\x95\xfa\x1e\xae"M\x08\x81\xb7\x17\xdd$$M@7}%/9#yx\xc61\xa8\x8eQ \x13\\}\xba\x1e\x9c\xcfs\xe5G\xea\x0e\xf6n]\x1c\xd5\xd4\xaf\xa2\xf8^\xcb$\x0bt\xa6\xed\xa2\xc7\xc3\x1b\x1at#\xb6\xff0$;\x81\xcc\xf8\xe2\x92\xc0CG\xb7\xe9\xb0\x05\x95\xc95\xf0\xa6\xde\x89\x1b\x81\xbc=4\xb8\x8d\x98i\xbc\x99\xcf\xfe\x92\xe1\xc0P\x8b\x943\x8e\xa3\xaa\x80\xbe>m\x8c`\x95\x89\xfd\x87,\x945\x12\xf0\x180\x95<Y\xe4\xe5\xf62> \x93\t\xda\xfc\x86\x1c\xf5\x0e\x08\xa4I\x01$\xbfMC'
+
+
+Packet 3: Ether / IP / TCP 131.202.242.193:35605 > 172.31.69.25:ssh A
+###[ Ethernet ]###
+  dst       = 02:d8:a9:4e:38:42
+  src       = 02:ca:69:c4:6d:06
+  type      = IPv4
+###[ IP ]###
+     version   = 4
+     ihl       = 5
+     tos       = 0x0
+     len       = 40
+     id        = 15657
+     flags     = DF
+     frag      = 0
+     ttl       = 109
+     proto     = tcp
+     chksum    = 0x68e2
+     src       = 131.202.242.193
+     dst       = 172.31.69.25
+     \options   \
+###[ TCP ]###
+        sport     = 35605
+        dport     = ssh
+        seq       = 3299606346
+        ack       = 1043996140
+        dataofs   = 5
+        reserved  = 0
+        flags     = A
+        window    = 252
+        chksum    = 0x9bcb
+        urgptr    = 0
+        options   = []
+
+
+Packet 4: Ether / IP / TCP 131.202.242.193:35605 > 172.31.69.25:ssh A
+###[ Ethernet ]###
+  dst       = 02:d8:a9:4e:38:42
+  src       = 02:ca:69:c4:6d:06
+  type      = IPv4
+###[ IP ]###
+     version   = 4
+     ihl       = 5
+     tos       = 0x0
+     len       = 40
+     id        = 15658
+     flags     = DF
+     frag      = 0
+     ttl       = 109
+     proto     = tcp
+     chksum    = 0x68e1
+     src       = 131.202.242.193
+     dst       = 172.31.69.25
+     \options   \
+###[ TCP ]###
+        sport     = 35605
+        dport     = ssh
+        seq       = 3299606346
+        ack       = 1043996332
+        dataofs   = 5
+        reserved  = 0
+        flags     = A
+        window    = 251
+        chksum    = 0x9b0c
+        urgptr    = 0
+        options   = []
+
+
+Packet 5: Ether / IP / TCP 131.202.242.193:35605 > 172.31.69.25:ssh PA / Raw
+###[ Ethernet ]###
+  dst       = 02:d8:a9:4e:38:42
+  src       = 02:ca:69:c4:6d:06
+  type      = IPv4
+###[ IP ]###
+     version   = 4
+     ihl       = 5
+     tos       = 0x0
+     len       = 104
+     id        = 15659
+     flags     = DF
+     frag      = 0
+     ttl       = 109
+     proto     = tcp
+     chksum    = 0x68a0
+     src       = 131.202.242.193
+     dst       = 172.31.69.25
+     \options   \
+###[ TCP ]###
+        sport     = 35605
+        dport     = ssh
+        seq       = 3299606346
+        ack       = 1043996332
+        dataofs   = 5
+        reserved  = 0
+        flags     = PA
+        window    = 251
+        chksum    = 0x1af7
+        urgptr    = 0
+        options   = []
+###[ Raw ]###
+           load      = b'Y=a\x8a\xa6w\x8b\xbe\xa48\x0e\x0b\r4+\x9d\xd40\x1e\xb2\x8b\xf8\xc8\xaaF\xcb\xcdZ\xda\x0b\xc2BeK\x84\xb75\xc6Xw.A=\xdb\xa4Y\xbaK\xc5a\xf27U\xa4BnSa\xafRq\x95\xa8\xc7'
