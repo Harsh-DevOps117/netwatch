@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useRef } from "react";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -53,7 +53,7 @@ export default function ProblemStatement() {
 
       <div className="col-span-1 md:col-span-3 flex flex-col border-l border-transparent md:border-black/[0.05]">
         <div className="px-4 md:px-8 xl:px-12 overflow-hidden">
-          <h2 
+          <h2
             ref={textRef}
             className="text-[clamp(18px,2.5vw,42px)] leading-[1.3] tracking-normal text-[#222222] w-full"
             style={{ fontFamily: 'var(--font-pixel)' }}
@@ -87,12 +87,12 @@ export default function ProblemStatement() {
 
         {/* Video Section */}
         <div className="w-full pr-4 md:pr-8 xl:pr-12 pb-8 flex justify-center perspective-[1000px]">
-          <div 
-            ref={videoContainerRef} 
+          <div
+            ref={videoContainerRef}
             className="w-full max-w-5xl overflow-hidden shadow-2xl bg-black border border-black/[0.1] relative"
             style={{ transformOrigin: "center center" }}
           >
-            <video 
+            <video
               ref={videoRef}
               src="/video_comp/Here_s_a_production_ready_prom.mp4"
               className="w-full h-auto object-cover opacity-90"
@@ -100,7 +100,7 @@ export default function ProblemStatement() {
               muted
               playsInline
             />
-            {/* Overlay to give a bit of brutalist texture */}
+
             <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none"></div>
           </div>
         </div>
