@@ -1,0 +1,61 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const pixelFont = localFont({
+  src: [
+    {
+      path: "./assets/fonts/691b2c11b078c711c1f34d61_OffBitTrial-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./assets/fonts/691b2c11a2ce279ba75d42c9_OffBitTrial-Bold.otf",
+      weight: "700",
+      style: "normal",
+    }
+  ],
+  variable: "--font-pixel",
+  display: "swap",
+});
+
+import SmoothScroll from "./components/SmoothScroll";
+
+export const metadata: Metadata = {
+  title: "NetWatch | Predictive Defence by COD-I",
+  description: "Forecast future network states and estimate the probability of attacker progression. Built by Team COD-I.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${pixelFont.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col bg-[#E3E3E3] text-[#111111] font-sans overflow-x-hidden p-4 sm:p-6 md:p-8">
+        <SmoothScroll>
+          <div className="fixed inset-4 sm:inset-6 md:inset-8 pointer-events-none grid grid-cols-4 divide-x divide-black/[0.05] z-0">
+            <div />
+            <div />
+            <div />
+            <div />
+          </div>
+          <div className="relative z-10 flex flex-col flex-1">
+            {children}
+          </div>
+        </SmoothScroll>
+      </body>
+    </html>
+  );
+}

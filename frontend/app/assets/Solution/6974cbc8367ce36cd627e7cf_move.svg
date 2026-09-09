@@ -1,0 +1,91 @@
+<svg width="600" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="arrowGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#666666;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#999999;stop-opacity:0" />
+    </radialGradient>
+    
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#333333"/>
+    </marker>
+    
+    <marker id="arrowhead2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#666666"/>
+    </marker>
+    
+    <marker id="arrowhead3" markerWidth="8" markerHeight="8" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 8 2.5, 0 5" fill="#999999"/>
+    </marker>
+  </defs>
+  
+  <!-- Rotating arrows system -->
+  <g transform="translate(300, 300)">
+    <!-- Outer rotation ring with arrows (clockwise) -->
+    <g>
+      <!-- Curved arrow paths -->
+      <path d="M 0,-220 A 220,220 0 0,1 155,-155" fill="none" stroke="#333333" stroke-width="4" marker-end="url(#arrowhead)"/>
+      <path d="M 155,-155 A 220,220 0 0,1 220,0" fill="none" stroke="#333333" stroke-width="4" marker-end="url(#arrowhead)"/>
+      <path d="M 220,0 A 220,220 0 0,1 155,155" fill="none" stroke="#666666" stroke-width="4" marker-end="url(#arrowhead2)"/>
+      <path d="M 155,155 A 220,220 0 0,1 0,220" fill="none" stroke="#666666" stroke-width="4" marker-end="url(#arrowhead2)"/>
+      <path d="M 0,220 A 220,220 0 0,1 -155,155" fill="none" stroke="#333333" stroke-width="4" marker-end="url(#arrowhead)"/>
+      <path d="M -155,155 A 220,220 0 0,1 -220,0" fill="none" stroke="#333333" stroke-width="4" marker-end="url(#arrowhead)"/>
+      <path d="M -220,0 A 220,220 0 0,1 -155,-155" fill="none" stroke="#666666" stroke-width="4" marker-end="url(#arrowhead2)"/>
+      <path d="M -155,-155 A 220,220 0 0,1 0,-220" fill="none" stroke="#666666" stroke-width="4" marker-end="url(#arrowhead2)"/>
+    </g>
+    
+    <!-- Middle rotation ring - counter-clockwise -->
+    <g opacity="0.8">
+      <path d="M 0,-160 A 160,160 0 0,0 -113,-113" fill="none" stroke="#666666" stroke-width="3.5" marker-end="url(#arrowhead2)"/>
+      <path d="M -113,-113 A 160,160 0 0,0 -160,0" fill="none" stroke="#666666" stroke-width="3.5" marker-end="url(#arrowhead2)"/>
+      <path d="M -160,0 A 160,160 0 0,0 -113,113" fill="none" stroke="#333333" stroke-width="3.5" marker-end="url(#arrowhead)"/>
+      <path d="M -113,113 A 160,160 0 0,0 0,160" fill="none" stroke="#333333" stroke-width="3.5" marker-end="url(#arrowhead)"/>
+      <path d="M 0,160 A 160,160 0 0,0 113,113" fill="none" stroke="#666666" stroke-width="3.5" marker-end="url(#arrowhead2)"/>
+      <path d="M 113,113 A 160,160 0 0,0 160,0" fill="none" stroke="#666666" stroke-width="3.5" marker-end="url(#arrowhead2)"/>
+      <path d="M 160,0 A 160,160 0 0,0 113,-113" fill="none" stroke="#333333" stroke-width="3.5" marker-end="url(#arrowhead)"/>
+      <path d="M 113,-113 A 160,160 0 0,0 0,-160" fill="none" stroke="#333333" stroke-width="3.5" marker-end="url(#arrowhead)"/>
+    </g>
+    
+    <!-- Inner rotation ring - clockwise -->
+    <g opacity="0.7">
+      <path d="M 0,-100 A 100,100 0 0,1 70,-70" fill="none" stroke="#333333" stroke-width="3" marker-end="url(#arrowhead)"/>
+      <path d="M 70,-70 A 100,100 0 0,1 100,0" fill="none" stroke="#333333" stroke-width="3" marker-end="url(#arrowhead)"/>
+      <path d="M 100,0 A 100,100 0 0,1 70,70" fill="none" stroke="#666666" stroke-width="3" marker-end="url(#arrowhead2)"/>
+      <path d="M 70,70 A 100,100 0 0,1 0,100" fill="none" stroke="#666666" stroke-width="3" marker-end="url(#arrowhead2)"/>
+      <path d="M 0,100 A 100,100 0 0,1 -70,70" fill="none" stroke="#333333" stroke-width="3" marker-end="url(#arrowhead)"/>
+      <path d="M -70,70 A 100,100 0 0,1 -100,0" fill="none" stroke="#333333" stroke-width="3" marker-end="url(#arrowhead)"/>
+      <path d="M -100,0 A 100,100 0 0,1 -70,-70" fill="none" stroke="#666666" stroke-width="3" marker-end="url(#arrowhead2)"/>
+      <path d="M -70,-70 A 100,100 0 0,1 0,-100" fill="none" stroke="#666666" stroke-width="3" marker-end="url(#arrowhead2)"/>
+    </g>
+    
+    <!-- Straight directional arrows emanating from center -->
+    <g opacity="0.6">
+      <!-- Cardinal directions -->
+      <line x1="0" y1="0" x2="0" y2="-55" stroke="#333333" stroke-width="2.5" marker-end="url(#arrowhead3)"/>
+      <line x1="0" y1="0" x2="55" y2="0" stroke="#666666" stroke-width="2.5" marker-end="url(#arrowhead3)"/>
+      <line x1="0" y1="0" x2="0" y2="55" stroke="#333333" stroke-width="2.5" marker-end="url(#arrowhead3)"/>
+      <line x1="0" y1="0" x2="-55" y2="0" stroke="#666666" stroke-width="2.5" marker-end="url(#arrowhead3)"/>
+      
+      <!-- Diagonal directions -->
+      <line x1="0" y1="0" x2="39" y2="-39" stroke="#999999" stroke-width="2" marker-end="url(#arrowhead3)"/>
+      <line x1="0" y1="0" x2="39" y2="39" stroke="#999999" stroke-width="2" marker-end="url(#arrowhead3)"/>
+      <line x1="0" y1="0" x2="-39" y2="39" stroke="#999999" stroke-width="2" marker-end="url(#arrowhead3)"/>
+      <line x1="0" y1="0" x2="-39" y2="-39" stroke="#999999" stroke-width="2" marker-end="url(#arrowhead3)"/>
+    </g>
+    
+    <!-- Motion particles along paths (static positions) -->
+    <circle cx="155" cy="-155" r="5" fill="#333333" opacity="0.7"/>
+    <circle cx="-113" cy="113" r="5" fill="#666666" opacity="0.7"/>
+    <circle cx="70" cy="70" r="5" fill="#333333" opacity="0.7"/>
+    
+    <!-- Central momentum core -->
+    <circle r="40" fill="url(#arrowGlow)" opacity="0.4"/>
+    <circle r="25" fill="#333333" opacity="0.7"/>
+    <circle r="15" fill="#666666"/>
+    <circle r="8" fill="#000000"/>
+    
+    <!-- Rotation indicator marks on center -->
+    <circle cx="0" cy="-25" r="2" fill="#000000" opacity="0.6"/>
+    <circle cx="18" cy="-18" r="2" fill="#000000" opacity="0.6"/>
+    <circle cx="25" cy="0" r="2" fill="#000000" opacity="0.6"/>
+  </g>
+</svg>
