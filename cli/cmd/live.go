@@ -26,19 +26,14 @@ telemetry, and triggering deterministic alerts instantly.`,
 }
 
 func runLive(iface string, bpf string) {
-	targetIface := iface
-	if targetIface == "" {
-		targetIface = capture.GetDefaultInterface()
-	}
-
-	liveH, err := capture.OpenLive(targetIface, bpf)
+	liveH, err := capture.OpenLive(iface, bpf)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error starting live capture on interface %q: %v\n", targetIface, err)
+		fmt.Fprintf(os.Stderr, "Error starting live capture: %v\n", err)
 		os.Exit(1)
 	}
 	defer liveH.Close()
 
-	sourceDesc := fmt.Sprintf("Live Interface: %s", targetIface)
+	sourceDesc := fmt.Sprintf("Live Interface: %s", liveH.Interface())
 	if bpf != "" {
 		sourceDesc += fmt.Sprintf(" (BPF: %s)", bpf)
 	}
