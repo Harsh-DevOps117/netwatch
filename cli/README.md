@@ -115,20 +115,17 @@ sih-2026/
 │   ├── root.go                 # Root command, persistent flags & pipeline runner
 │   ├── analyze.go              # 'detector analyze <file>' command
 │   ├── live.go                 # 'detector live' real-time network capture command
-│   ├── generate.go             # 'detector generate [sample|attack]' PCAP generator
 │   └── version.go              # 'detector version' information command
 │
 ├── capture/
 │   ├── pcap.go                 # Offline PCAP and PCAP-NG reader
-│   └── pcap_test.go            # Unit tests for capture handles
+│   └── live.go                 # Live network interface streamer
 │
 ├── parser/
-│   ├── packet.go               # Protocol parser & safe field extraction
-│   └── packet_test.go          # Unit tests for IPv4/IPv6, TCP flags, ICMP
+│   └── packet.go               # Protocol parser & safe field extraction
 │
 ├── window/
-│   ├── window.go               # Sliding / tumbling time window manager
-│   └── window_test.go          # Unit tests for 10-second relative windowing
+│   └── window.go               # Sliding / tumbling time window manager
 │
 ├── features/
 │   └── features.go             # Statistical feature calculation & state aggregation
@@ -141,8 +138,7 @@ sih-2026/
 │   ├── ackflood.go             # High TCP ACK volume detector
 │   ├── udpflood.go             # High UDP packet/byte rate detector
 │   ├── connectionburst.go      # Burst TCP connection attempt detector
-│   ├── flags.go                # Illegal TCP flag combinations (SYN+FIN, etc.)
-│   └── rules_test.go           # 9 comprehensive unit tests for all rule scenarios
+│   └── flags.go                # Illegal TCP flag combinations (SYN+FIN, etc.)
 │
 ├── alert/
 │   └── alert.go                # Alert data structures and severity constants
@@ -150,24 +146,21 @@ sih-2026/
 ├── config/
 │   └── config.go               # YAML configuration loader and default fallback
 │
-├── output/
-│   ├── console.go              # Formatted terminal printing (windows & summary)
-│   └── json.go                 # JSON exporter for window features & alerts
-│
-└── testutil/
-    ├── gensample/main.go       # Generator for normal baseline PCAP
-    └── genattack/main.go       # Generator for synthetic attack PCAP
+└── output/
+    ├── console.go              # Formatted terminal printing (windows & summary)
+    └── json.go                 # JSON exporter for window features & alerts
 ```
 
 ---
 
 ## 5. Detailed Component & Function Breakdown
 
-### `capture/pcap.go`
-- **Purpose:** Opens offline capture files without CGO dependencies.
+### `capture/pcap.go` & `capture/live.go`
+- **Purpose:** Opens offline capture files (PCAP/PCAP-NG) or live network interfaces without CGO dependencies.
 - **Key Structs & Functions:**
   - `type Handle struct`: Wraps an `os.File` and a `*gopacket.PacketSource`.
-  - `OpenPCAP(path string) (*Handle, error)`: Attempts classic PCAP format (`pcapgo.NewReader`), falling back automatically to PCAP-NG (`pcapgo.NewNgReader`).
+  - `OpenPCAP(path string) (*Handle, error)`: Reads classic PCAP and PCAP-NG.
+  - `OpenLive(iface, bpf string) (*LiveHandle, error)`: Streams live network traffic directly from local interfaces.
   - `(h *Handle) Packets() <-chan gopacket.Packet`: Returns packet stream channel.
   - `(h *Handle) Close() error`: Cleans up the underlying file descriptor.
 
@@ -198,7 +191,7 @@ sih-2026/
     - **Connection State:** `ApproxIncompleteConnections` ($\max(0, \text{SYN} - \text{SYN-ACK})$).
     - **Mappings:** `SrcIPToDstPorts`, `SrcIPToDstIPs`, `SrcIPToPackets`, `SrcIPToSYNs`, `SuspiciousFlagPackets`.
   - `(a *FeatureAggregator) AddPacket(p *parser.ParsedPacket)`: Updates ongoing counts and relationship maps.
-  - `(a *FeatureAggregator) ComputeFinalFeatures() *WindowFeatures`: Normalizes rates against window duration and computes ratios safely (zero-division guarded).
+  - `(a *FeatureAggregator) ComputeFinalFeatures() *WindowFeatures`: Normalizes rates against window duration and computes ratios safely.
 
 ### `rules/` (Detection Rules)
 - **`rules/engine.go`:**
@@ -295,17 +288,17 @@ rules:
 
 The engine supports dual operating modes: **Offline PCAP Forensics** and **Real-Time Live Network Monitoring**.
 
-### Mode A: Real-Time Live Monitoring (on Laptop Interface)
+### Mode A: Real-Time Live Monitoring
 
 ```bash
-# 1. Automatic Live Mode (auto-detects active Wi-Fi / Ethernet interface, e.g. wlo1)
+# 1. Automatic Live Mode (auto-detects active network interface)
 go run . --live
 
 # 2. Live capture on a specific network interface
-go run . --interface wlo1
+go run . --interface eth0
 
 # 3. Live capture with BPF packet filter
-go run . --interface wlo1 --bpf "tcp or udp"
+go run . --interface eth0 --bpf "tcp or udp"
 
 # 4. Live capture with custom 5-second aggregation windows & JSON export
 go run . --live --window 5 --output live_telemetry.json
@@ -317,68 +310,26 @@ go run . --live --window 5 --output live_telemetry.json
 
 ```bash
 # 1. Analyze an existing PCAP file
-go run . --pcap laptop_traffic.pcap
+go run . --pcap capture.pcap
+# or
+go run . analyze capture.pcap
 
 # 2. Custom window duration (e.g. 5 seconds)
-go run . --pcap laptop_traffic.pcap --window 5
+go run . --pcap capture.pcap --window 5
 
 # 3. Custom configuration thresholds
-go run . --pcap laptop_traffic.pcap --config config.yaml
+go run . --pcap capture.pcap --config config.yaml
 
 # 4. Export JSON features & alerts for downstream ML / World Model
-go run . --pcap laptop_traffic.pcap --output alerts.json
+go run . --pcap capture.pcap --output alerts.json
 
 # 5. Read PCAP stream from standard input pipe
-tshark -i wlo1 -F pcap -w - | go run . --stdin
+tshark -i eth0 -F pcap -w - | go run . --stdin
 ```
 
 ---
 
-## 8. Verification & Synthetic Testing
-
-Two test utilities are provided to test both clean traffic and active threat scenarios:
-
-### 1. Test Clean Traffic
-```bash
-go run ./testutil/gensample
-go run . --pcap sample.pcap
-```
-**Result:** 6 windows processed, 0 threat indicators (clean capture).
-
-### 2. Test Attack Scenarios (Port Scan, SYN Flood, Flag Anomalies)
-```bash
-go run ./testutil/genattack
-go run . --pcap attack_sample.pcap
-```
-**Result:** Detects `PORT_SCAN_INDICATOR`, `SYN_FLOOD_INDICATOR`, and `SUSPICIOUS_TCP_FLAGS` across respective windows.
-
----
-
-## 9. Automated Unit Test Suite
-
-Run all unit tests across the entire codebase:
-
-```bash
-go test -v ./...
-```
-
-The test suite covers:
-1. `TestPortScanTriggersAboveThreshold`
-2. `TestPortScanDoesNotTriggerBelowThreshold`
-3. `TestSynFloodTriggersOnHighRate`
-4. `TestSynFloodTriggersOnAbnormalRatio`
-5. `TestAckFloodTriggersAboveThreshold`
-6. `TestUdpFloodTriggersAboveThreshold`
-7. `TestHostScanTriggersAboveThreshold`
-8. `TestSuspiciousTCPFlagsTrigger`
-9. `TestNormalTrafficProducesZeroAlerts`
-10. `TestWindowManager10SecondWindows`
-11. `TestOpenPCAPAndReadPackets`
-12. `TestParseIPv4TCPPacket`, `TestParseIPv6UDPPacket`, `TestParseICMPPacket`
-
----
-
-## 10. Summary of Output Formats
+## 8. Summary of Output Formats
 
 ### Sample Console Output
 
@@ -386,7 +337,7 @@ The test suite covers:
 ========================================
 DETERMINISTIC NETWORK THREAT DETECTOR
 ========================================
-Input:  attack_sample.pcap
+Input:  capture.pcap
 Window: 10 seconds
 
 --------------------------------------------------------------------------------
