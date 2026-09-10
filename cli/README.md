@@ -105,50 +105,59 @@ Network traffic flows through a strictly decoupled pipeline:
 
 ```
 sih-2026/
-├── main.go                     # Application entry point (delegates to cmd.Execute())
-├── go.mod                      # Go module definition
-├── go.sum                      # Dependency checksums
-├── config.yaml                 # Configurable detection thresholds and rule flags
-├── README.md                   # Complete architectural and usage guide
+├── run.sh                      # Universal runner script (live capture, PCAP analysis, builds)
+├── README.md                   # Project overview & NTRO problem statement
 │
-├── cmd/                        # Cobra CLI Commands
-│   ├── root.go                 # Root command, persistent flags & pipeline runner
-│   ├── analyze.go              # 'detector analyze <file>' command
-│   ├── live.go                 # 'detector live' real-time network capture command
-│   └── version.go              # 'detector version' information command
-│
-├── capture/
-│   ├── pcap.go                 # Offline PCAP and PCAP-NG reader
-│   └── live.go                 # Live network interface streamer
-│
-├── parser/
-│   └── packet.go               # Protocol parser & safe field extraction
-│
-├── window/
-│   └── window.go               # Sliding / tumbling time window manager
-│
-├── features/
-│   └── features.go             # Statistical feature calculation & state aggregation
-│
-├── rules/
-│   ├── engine.go               # Rule coordinator and multi-rule evaluator
-│   ├── portscan.go             # Destination port fan-out detector
-│   ├── hostscan.go             # Destination host fan-out detector
-│   ├── synflood.go             # High SYN rate and SYN/SYN-ACK ratio detector
-│   ├── ackflood.go             # High TCP ACK volume detector
-│   ├── udpflood.go             # High UDP packet/byte rate detector
-│   ├── connectionburst.go      # Burst TCP connection attempt detector
-│   └── flags.go                # Illegal TCP flag combinations (SYN+FIN, etc.)
-│
-├── alert/
-│   └── alert.go                # Alert data structures and severity constants
-│
-├── config/
-│   └── config.go               # YAML configuration loader and default fallback
-│
-└── output/
-    ├── console.go              # Formatted terminal printing (windows & summary)
-    └── json.go                 # JSON exporter for window features & alerts
+└── cli/
+    ├── main.go                 # Application entry point (delegates to cmd.Execute())
+    ├── go.mod                  # Go module definition
+    ├── go.sum                  # Dependency checksums
+    ├── config.yaml             # Configurable detection thresholds and rule flags
+    ├── Makefile                # Fast build and lint automation
+    ├── README.md               # Complete architectural and usage guide
+    │
+    ├── cmd/                    # Cobra CLI Commands
+    │   ├── root.go             # Root command, persistent flags & pipeline runner
+    │   ├── analyze.go          # 'detector analyze <file>' command
+    │   ├── live.go             # 'detector live' real-time network capture command
+    │   └── version.go          # 'detector version' information command
+    │
+    ├── capture/
+    │   ├── pcap.go             # Offline PCAP and PCAP-NG reader
+    │   └── live.go             # Live network interface streamer (tshark / tcpdump)
+    │
+    ├── parser/
+    │   └── packet.go           # Protocol parser & safe field extraction
+    │
+    ├── window/
+    │   └── window.go           # Sliding / tumbling time window manager
+    │
+    ├── features/
+    │   └── features.go         # Statistical feature calculation & state aggregation
+    │
+    ├── rules/
+    │   ├── engine.go           # Rule coordinator and multi-rule evaluator
+    │   ├── portscan.go         # Destination port fan-out detector
+    │   ├── hostscan.go         # Destination host fan-out detector
+    │   ├── synflood.go         # High SYN rate & SYN/SYN-ACK ratio detector
+    │   ├── ackflood.go         # High TCP ACK volume detector
+    │   ├── rstflood.go         # High TCP RST rate (teardown attack) detector
+    │   ├── udpflood.go         # High UDP packet/byte rate detector
+    │   ├── icmpflood.go        # ICMP flood & Ping Sweep reconnaissance detector
+    │   ├── dnsamplification.go # High DNS packet/byte rate amplification detector
+    │   ├── stealthscan.go      # Stealth TCP scans (NULL, XMAS, FIN scans)
+    │   ├── connectionburst.go  # Burst TCP connection attempt detector
+    │   └── flags.go            # Illegal TCP flag combinations (SYN+FIN, etc.)
+    │
+    ├── alert/
+    │   └── alert.go            # Alert data structures and severity constants
+    │
+    ├── config/
+    │   └── config.go           # YAML configuration loader and default fallback
+    │
+    └── output/
+        ├── console.go          # Formatted terminal printing (windows & summary)
+        └── json.go             # JSON exporter for window features & alerts
 ```
 
 ---
@@ -165,10 +174,10 @@ sih-2026/
   - `(h *Handle) Close() error`: Cleans up the underlying file descriptor.
 
 ### `parser/packet.go`
-- **Purpose:** Safely extracts network layer, transport layer, and TCP flag metadata from raw packets. Gracefully handles missing layers without panicking.
+- **Purpose:** Safely extracts network layer, transport layer, ICMP, DNS, and TCP flag metadata from raw packets. Gracefully handles missing layers without panicking.
 - **Key Structs & Functions:**
-  - `type TCPFlags struct`: Holds boolean flags (`SYN`, `ACK`, `RST`, `FIN`, `PSH`).
-  - `type ParsedPacket struct`: Normalized packet representation containing `Timestamp`, `Length`, `SrcIP`, `DstIP`, `SrcPort`, `DstPort`, `Protocol`, `TCPFlags`.
+  - `type TCPFlags struct`: Holds boolean flags (`SYN`, `ACK`, `RST`, `FIN`, `PSH`, `URG`, `ECE`, `CWR`, `NS`).
+  - `type ParsedPacket struct`: Normalized packet representation containing `Timestamp`, `Length`, `SrcIP`, `DstIP`, `SrcPort`, `DstPort`, `Protocol`, `TCPFlags`, `IsICMPEchoRequest`, `IsDNS`.
   - `ParsePacket(pkt gopacket.Packet) *ParsedPacket`: Extracts fields safely from IPv4, IPv6, TCP, UDP, ICMPv4, ICMPv6, and ARP layers.
 
 ### `window/window.go`
@@ -186,60 +195,27 @@ sih-2026/
     - **Basic:** `TotalPackets`, `TotalBytes`, `PacketsPerSecond`, `BytesPerSecond`.
     - **IPs:** `UniqueSourceIPs`, `UniqueDestinationIPs`.
     - **Ports:** `UniqueSourcePorts`, `UniqueDestinationPorts`.
-    - **TCP:** `TCPPackets`, `SYNCount`, `SYNACKCount`, `ACKCount`, `RSTCount`, `FINCount`, `PSHCount`, `SYNPerSecond`, `ACKPerSecond`, `SYNAckRatio`.
-    - **UDP:** `UDPPackets`, `UDPBytes`, `UDPPacketsPerSecond`, `UDPBytesPerSecond`.
+    - **TCP:** `TCPPackets`, `SYNCount`, `SYNACKCount`, `ACKCount`, `RSTCount`, `FINCount`, `PSHCount`, `URGCount`, `SYNPerSecond`, `ACKPerSecond`, `RSTPerSecond`, `SYNAckRatio`.
+    - **UDP & DNS:** `UDPPackets`, `UDPBytes`, `UDPPacketsPerSecond`, `UDPBytesPerSecond`, `DNSPackets`, `DNSBytes`, `DNSPacketsPerSecond`, `DNSBytesPerSecond`.
+    - **ICMP:** `ICMPPackets`, `ICMPBytes`, `ICMPPacketsPerSecond`, `ICMPEchoRequests`.
     - **Connection State:** `ApproxIncompleteConnections` ($\max(0, \text{SYN} - \text{SYN-ACK})$).
-    - **Mappings:** `SrcIPToDstPorts`, `SrcIPToDstIPs`, `SrcIPToPackets`, `SrcIPToSYNs`, `SuspiciousFlagPackets`.
+    - **Mappings:** `SrcIPToDstPorts`, `SrcIPToDstIPs`, `SrcIPToPackets`, `SrcIPToSYNs`, `SrcIPToICMPEcho`, `SuspiciousFlagPackets`, `NullScanPackets`, `XmasScanPackets`, `FinScanPackets`.
   - `(a *FeatureAggregator) AddPacket(p *parser.ParsedPacket)`: Updates ongoing counts and relationship maps.
   - `(a *FeatureAggregator) ComputeFinalFeatures() *WindowFeatures`: Normalizes rates against window duration and computes ratios safely.
 
 ### `rules/` (Detection Rules)
-- **`rules/engine.go`:**
-  - `type Rule interface`: `Name() string`, `Evaluate(feat *features.WindowFeatures) []alert.Alert`.
-  - `type Engine struct`: Orchestrates and runs all enabled rules against each window.
-- **`rules/portscan.go` (`PORT_SCAN_INDICATOR`):**
-  - Triggers if a single source IP contacts $\ge \text{unique\_ports}$ (default: 20) destination ports within one window.
-  - Severity: `HIGH`.
-- **`rules/hostscan.go` (`HOST_SCAN_INDICATOR`):**
-  - Triggers if a single source IP contacts $\ge \text{unique\_hosts}$ (default: 20) destination IPs within one window.
-  - Severity: `HIGH`.
-- **`rules/synflood.go` (`SYN_FLOOD_INDICATOR`):**
-  - Triggers if `SYNPerSecond >= syn_per_second` (default: 500) OR (`SYNAckRatio >= syn_ack_ratio` (default: 5.0) AND `SYNCount >= min_syn_count`).
-  - Severity: `HIGH`.
-- **`rules/ackflood.go` (`ACK_FLOOD_INDICATOR`):**
-  - Triggers if `ACKPerSecond >= ack_per_second` (default: 1000).
-  - Severity: `HIGH`.
-- **`rules/udpflood.go` (`UDP_FLOOD_INDICATOR`):**
-  - Triggers if `UDPPacketsPerSecond >= udp_packets_per_second` (default: 1000).
-  - Severity: `HIGH`.
-- **`rules/connectionburst.go` (`CONNECTION_BURST_INDICATOR`):**
-  - Triggers on sudden spikes of new TCP connection attempts (`SYNPerSecond >= syn_per_second`).
-  - Severity: `MEDIUM`.
-- **`rules/flags.go` (`SUSPICIOUS_TCP_FLAGS`):**
-  - Identifies illegal TCP flag combinations: `SYN+FIN`, `SYN+RST`, `FIN+RST`.
-  - Severity: `MEDIUM`.
-
-### `alert/alert.go`
-- **Purpose:** Standardized schema for threat indicators.
-- **Fields:**
-  ```go
-  type Alert struct {
-      Timestamp     time.Time              `json:"timestamp"`
-      WindowStart   time.Time              `json:"window_start"`
-      WindowEnd     time.Time              `json:"window_end"`
-      Type          string                 `json:"type"`
-      Severity      string                 `json:"severity"` // LOW, MEDIUM, HIGH
-      SourceIP      string                 `json:"source_ip,omitempty"`
-      DestinationIP string                 `json:"destination_ip,omitempty"`
-      Protocol      string                 `json:"protocol,omitempty"`
-      Reason        string                 `json:"reason"`
-      Features      map[string]interface{} `json:"features,omitempty"`
-  }
-  ```
-
-### `output/console.go` & `output/json.go`
-- **`console.go`:** Prints formatted startup banners, per-window telemetry summaries, alerts, and final completion statistics. If no alerts trigger, explicitly confirms: *"No deterministic threat indicators detected."*
-- **`json.go`:** Exports an array of `WindowRecord` objects containing timestamp bounds, complete `features` payload, and detected `alerts` array.
+- **`rules/engine.go`:** Orchestrates and runs all enabled rules against each window.
+- **`rules/portscan.go` (`PORT_SCAN_INDICATOR`):** Triggers if a single source IP contacts $\ge \text{unique\_ports}$ (default: 20) destination ports within one window.
+- **`rules/hostscan.go` (`HOST_SCAN_INDICATOR`):** Triggers if a single source IP contacts $\ge \text{unique\_hosts}$ (default: 20) destination IPs within one window.
+- **`rules/synflood.go` (`SYN_FLOOD_INDICATOR`):** Triggers if `SYNPerSecond >= syn_per_second` (default: 500) OR (`SYNAckRatio >= syn_ack_ratio` (default: 5.0) AND `SYNCount >= min_syn_count`).
+- **`rules/ackflood.go` (`ACK_FLOOD_INDICATOR`):** Triggers if `ACKPerSecond >= ack_per_second` (default: 1000).
+- **`rules/rstflood.go` (`RST_FLOOD_INDICATOR`):** Triggers if `RSTPerSecond >= rst_per_second` (default: 500) (connection teardown attacks).
+- **`rules/udpflood.go` (`UDP_FLOOD_INDICATOR`):** Triggers if `UDPPacketsPerSecond >= udp_packets_per_second` (default: 1000).
+- **`rules/icmpflood.go` (`ICMP_FLOOD_INDICATOR` / `PING_SWEEP_INDICATOR`):** Detects ICMP packet floods and single-source ping sweeps across multiple target hosts.
+- **`rules/dnsamplification.go` (`DNS_AMPLIFICATION_INDICATOR`):** Detects volumetric DNS request/response amplification floods on port 53.
+- **`rules/stealthscan.go` (`NULL_SCAN_INDICATOR` / `XMAS_SCAN_INDICATOR` / `FIN_SCAN_INDICATOR`):** Identifies stealth scanning signatures (no flags, FIN+PSH+URG, isolated FIN).
+- **`rules/connectionburst.go` (`CONNECTION_BURST_INDICATOR`):** Triggers on sudden spikes of new TCP connection attempts.
+- **`rules/flags.go` (`SUSPICIOUS_TCP_FLAGS`):** Identifies illegal TCP flag combinations: `SYN+FIN`, `SYN+RST`, `FIN+RST`.
 
 ---
 
@@ -254,77 +230,85 @@ window_seconds: 10
 rules:
   port_scan:
     enabled: true
-    unique_ports: 20       # Trigger if 1 IP contacts >= 20 destination ports
+    unique_ports: 20
 
   host_scan:
     enabled: true
-    unique_hosts: 20       # Trigger if 1 IP contacts >= 20 destination IPs
+    unique_hosts: 20
 
   syn_flood:
     enabled: true
-    syn_per_second: 500    # Trigger if SYN rate exceeds 500/sec
-    syn_ack_ratio: 5.0     # Trigger if SYN to SYN-ACK ratio exceeds 5.0
-    min_syn_count: 50      # Minimum SYNs required to evaluate ratio
+    syn_per_second: 500
+    syn_ack_ratio: 5.0
+    min_syn_count: 50
 
   ack_flood:
     enabled: true
-    ack_per_second: 1000   # Trigger if ACK rate exceeds 1000/sec
+    ack_per_second: 1000
+
+  rst_flood:
+    enabled: true
+    rst_per_second: 500
 
   udp_flood:
     enabled: true
-    udp_packets_per_second: 1000 # Trigger if UDP packet rate exceeds 1000/sec
+    udp_packets_per_second: 1000
+
+  icmp_flood:
+    enabled: true
+    icmp_per_second: 300
+    ping_sweep_enabled: true
+    unique_targets: 15
+
+  dns_flood:
+    enabled: true
+    dns_packets_per_second: 500
+    dns_bytes_per_second: 500000
+
+  stealth_scan:
+    enabled: true
+    min_packets: 3
 
   connection_burst:
     enabled: true
-    syn_per_second: 500    # Trigger on burst connection attempts
+    syn_per_second: 500
 
   suspicious_flags:
-    enabled: true          # Detect SYN+FIN, SYN+RST, FIN+RST
+    enabled: true
 ```
 
 ---
 
 ## 7. How to Run
 
-The engine supports dual operating modes: **Offline PCAP Forensics** and **Real-Time Live Network Monitoring**.
-
-### Mode A: Real-Time Live Monitoring
+### Using the Runner Script (`run.sh`)
 
 ```bash
-# 1. Automatic Live Mode (auto-detects active network interface)
-go run . --live
+# 1. Real-time Live Network Monitoring (auto-detects active Wi-Fi / Ethernet interface)
+./run.sh live
 
-# 2. Live capture on a specific network interface
-go run . --interface eth0
+# 2. Live Monitoring on specific interface (e.g. eth0, wlo1)
+./run.sh live eth0
 
-# 3. Live capture with BPF packet filter
-go run . --interface eth0 --bpf "tcp or udp"
+# 3. Offline PCAP Forensics
+./run.sh analyze capture.pcap
 
-# 4. Live capture with custom 5-second aggregation windows & JSON export
-go run . --live --window 5 --output live_telemetry.json
+# 4. Stream via standard input pipe
+tshark -i eth0 -F pcap -w - | ./run.sh stdin
 
-# (Press Ctrl+C at any time to stop live monitoring and print the audit summary)
+# 5. Build or Clean
+./run.sh build
+./run.sh clean
 ```
 
-### Mode B: Offline PCAP Forensics
+### Direct Go Commands
 
 ```bash
-# 1. Analyze an existing PCAP file
-go run . --pcap capture.pcap
-# or
-go run . analyze capture.pcap
+# Live monitoring
+go run . --live
 
-# 2. Custom window duration (e.g. 5 seconds)
-go run . --pcap capture.pcap --window 5
-
-# 3. Custom configuration thresholds
-go run . --pcap capture.pcap --config config.yaml
-
-# 4. Export JSON features & alerts for downstream ML / World Model
-go run . --pcap capture.pcap --output alerts.json
-
-# 5. Read PCAP stream from standard input pipe
-tshark -i eth0 -F pcap -w - | go run . --stdin
+# Offline analysis with custom window and JSON export
+go run . analyze capture.pcap --window 5 --output alerts.json
 ```
 
 ---
@@ -337,75 +321,25 @@ tshark -i eth0 -F pcap -w - | go run . --stdin
 ========================================
 DETERMINISTIC NETWORK THREAT DETECTOR
 ========================================
-Input:  capture.pcap
-Window: 10 seconds
+Traffic Source : capture.pcap
+Operating Mode : Offline PCAP Forensics
+Time Window    : 10 seconds per aggregation slice
 
---------------------------------------------------------------------------------
-Window #1: 0s - 10s (10:00:00.100 to 10:00:10.100)
-Packets: 42     | Bytes: 2520       | Packets/sec: 4.2     | Bytes/sec: 252.0     
-TCP: 42         | SYN: 42    | SYN-ACK: 0     | ACK: 0      | RST: 0   
-UDP: 0          | UDP Bytes: 0          | Unique Dst Ports: 36   | Unique Dst IPs: 1   
-
-Threat Indicators:
-  [HIGH] PORT_SCAN_INDICATOR
-    Source: 192.168.1.50
-    Reason: One source contacted an unusually large number of destination ports (35 unique ports in 10s window).
-
-========================================
-PROCESSING SUMMARY
-========================================
-Packets processed:        640
-Windows processed:        3
-Threat indicators raised: 4
-
-Conclusion: 4 deterministic threat indicator(s) identified for further inspection.
-```
-
-### Sample JSON Output (`alerts.json`)
-
-```json
-[
-  {
-    "window_start": "2026-09-05T10:00:00.1Z",
-    "window_end": "2026-09-05T10:00:10.1Z",
-    "duration_seconds": 10,
-    "features": {
-      "total_packets": 42,
-      "total_bytes": 2520,
-      "packets_per_second": 4.2,
-      "bytes_per_second": 252,
-      "unique_source_ips": 1,
-      "unique_destination_ips": 1,
-      "unique_source_ports": 35,
-      "unique_destination_ports": 35,
-      "tcp_packets": 42,
-      "syn_count": 42,
-      "syn_ack_count": 0,
-      "ack_count": 0,
-      "rst_count": 0,
-      "fin_count": 0,
-      "psh_count": 0,
-      "syn_per_second": 4.2,
-      "ack_per_second": 0,
-      "syn_ack_ratio": 42,
-      "udp_packets": 0,
-      "udp_bytes": 0,
-      "udp_packets_per_second": 0,
-      "udp_bytes_per_second": 0,
-      "approx_incomplete_connections": 42
-    },
-    "alerts": [
-      {
-        "timestamp": "2026-09-05T11:27:41Z",
-        "window_start": "2026-09-05T10:00:00.1Z",
-        "window_end": "2026-09-05T10:00:10.1Z",
-        "type": "PORT_SCAN_INDICATOR",
-        "severity": "HIGH",
-        "source_ip": "192.168.1.50",
-        "protocol": "TCP/UDP",
-        "reason": "One source contacted an unusually large number of destination ports (35 unique ports in 10s window)."
-      }
-    ]
-  }
-]
+┌── WINDOW #1 (10s duration) ───────────────────────── [10:00:00.100 → 10:00:10.100] ┐
+│  TRAFFIC VOLUME
+│    Packets : 42       | Volume  : 2.46 KB     | Rate : 4.2 pkts/s (0.2 KB/s)
+│
+│  PROTOCOL & TRAFFIC DYNAMICS
+│    TCP  : 42     (SYN: 42 | SYN-ACK: 0 | ACK: 0 | RST: 0 | FIN: 0 | PSH: 0 | URG: 0)
+│    UDP  : 0      (0 B) | DNS: 0    (0 B) | ICMP: 0    (Echo: 0)
+│    Rate : SYN 4.2/s | ACK 0.0/s | RST 0.0/s | Ratio SYN/SYN-ACK: 42.0 | Incomplete: 42
+│
+│  HOST & PORT CARDINALITY
+│    Unique Source IPs : 1    | Unique Dest IPs : 1    | Unique Dest Ports : 35  
+│
+│  DETERMINISTIC THREAT INDICATORS
+│    [▲ HIGH ALARM] PORT_SCAN_INDICATOR
+│        Attacker / Source IP: 192.168.1.50
+│        Diagnostic Evidence : One source contacted an unusually large number of destination ports (35 unique ports in 10s window).
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```

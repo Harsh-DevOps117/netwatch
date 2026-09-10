@@ -19,9 +19,28 @@ rules:
     enabled: true
     ack_per_second: 1000
 
+  rst_flood:
+    enabled: true
+    rst_per_second: 500
+
   udp_flood:
     enabled: true
     udp_packets_per_second: 1000
+
+  icmp_flood:
+    enabled: true
+    icmp_per_second: 300
+    ping_sweep_enabled: true
+    unique_targets: 15
+
+  dns_flood:
+    enabled: true
+    dns_packets_per_second: 500
+    dns_bytes_per_second: 500000
+
+  stealth_scan:
+    enabled: true
+    min_packets: 3
 
   connection_burst:
     enabled: true

@@ -9,13 +9,20 @@ const (
 )
 
 const (
-	TypePortScanIndicator        = "PORT_SCAN_INDICATOR"
-	TypeHostScanIndicator        = "HOST_SCAN_INDICATOR"
-	TypeSynFloodIndicator        = "SYN_FLOOD_INDICATOR"
-	TypeAckFloodIndicator        = "ACK_FLOOD_INDICATOR"
-	TypeUdpFloodIndicator        = "UDP_FLOOD_INDICATOR"
-	TypeConnectionBurstIndicator = "CONNECTION_BURST_INDICATOR"
-	TypeSuspiciousTCPFlags       = "SUSPICIOUS_TCP_FLAGS"
+	TypePortScanIndicator         = "PORT_SCAN_INDICATOR"
+	TypeHostScanIndicator         = "HOST_SCAN_INDICATOR"
+	TypeSynFloodIndicator         = "SYN_FLOOD_INDICATOR"
+	TypeAckFloodIndicator         = "ACK_FLOOD_INDICATOR"
+	TypeUdpFloodIndicator         = "UDP_FLOOD_INDICATOR"
+	TypeRstFloodIndicator         = "RST_FLOOD_INDICATOR"
+	TypeIcmpFloodIndicator        = "ICMP_FLOOD_INDICATOR"
+	TypePingSweepIndicator        = "PING_SWEEP_INDICATOR"
+	TypeDnsAmplificationIndicator = "DNS_AMPLIFICATION_INDICATOR"
+	TypeNullScanIndicator         = "NULL_SCAN_INDICATOR"
+	TypeXmasScanIndicator         = "XMAS_SCAN_INDICATOR"
+	TypeFinScanIndicator          = "FIN_SCAN_INDICATOR"
+	TypeConnectionBurstIndicator  = "CONNECTION_BURST_INDICATOR"
+	TypeSuspiciousTCPFlags        = "SUSPICIOUS_TCP_FLAGS"
 )
 
 type Alert struct {

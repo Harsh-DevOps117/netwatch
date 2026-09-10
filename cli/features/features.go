@@ -39,8 +39,10 @@ type WindowFeatures struct {
 	RSTCount     int     `json:"rst_count"`
 	FINCount     int     `json:"fin_count"`
 	PSHCount     int     `json:"psh_count"`
+	URGCount     int     `json:"urg_count"`
 	SYNPerSecond float64 `json:"syn_per_second"`
 	ACKPerSecond float64 `json:"ack_per_second"`
+	RSTPerSecond float64 `json:"rst_per_second"`
 	SYNAckRatio  float64 `json:"syn_ack_ratio"`
 
 	UDPPackets          int     `json:"udp_packets"`
@@ -48,13 +50,27 @@ type WindowFeatures struct {
 	UDPPacketsPerSecond float64 `json:"udp_packets_per_second"`
 	UDPBytesPerSecond   float64 `json:"udp_bytes_per_second"`
 
+	DNSPackets          int     `json:"dns_packets"`
+	DNSBytes            int64   `json:"dns_bytes"`
+	DNSPacketsPerSecond float64 `json:"dns_packets_per_second"`
+	DNSBytesPerSecond   float64 `json:"dns_bytes_per_second"`
+
+	ICMPPackets          int     `json:"icmp_packets"`
+	ICMPBytes            int64   `json:"icmp_bytes"`
+	ICMPPacketsPerSecond float64 `json:"icmp_packets_per_second"`
+	ICMPEchoRequests     int     `json:"icmp_echo_requests"`
+
 	ApproxIncompleteConnections int `json:"approx_incomplete_connections"`
 
-	SrcIPToDstPorts       map[string]map[uint16]int `json:"-"`
-	SrcIPToDstIPs         map[string]map[string]int `json:"-"`
-	SrcIPToPackets        map[string]int            `json:"-"`
-	SrcIPToSYNs           map[string]int            `json:"-"`
-	SuspiciousFlagPackets []SuspiciousFlagRecord    `json:"-"`
+	SrcIPToDstPorts       map[string]map[uint16]int    `json:"-"`
+	SrcIPToDstIPs         map[string]map[string]int    `json:"-"`
+	SrcIPToPackets        map[string]int               `json:"-"`
+	SrcIPToSYNs           map[string]int               `json:"-"`
+	SrcIPToICMPEcho       map[string]map[string]int    `json:"-"`
+	SuspiciousFlagPackets []SuspiciousFlagRecord       `json:"-"`
+	NullScanPackets       []SuspiciousFlagRecord       `json:"-"`
+	XmasScanPackets       []SuspiciousFlagRecord       `json:"-"`
+	FinScanPackets        []SuspiciousFlagRecord       `json:"-"`
 }
 
 type FeatureAggregator struct {
@@ -73,13 +89,23 @@ type FeatureAggregator struct {
 	rstCount              int
 	finCount              int
 	pshCount              int
+	urgCount              int
 	udpPackets            int
 	udpBytes              int64
+	dnsPackets            int
+	dnsBytes              int64
+	icmpPackets           int
+	icmpBytes             int64
+	icmpEchoRequests      int
 	srcIPToDstPorts       map[string]map[uint16]int
 	srcIPToDstIPs         map[string]map[string]int
 	srcIPToPackets        map[string]int
 	srcIPToSYNs           map[string]int
+	srcIPToICMPEcho       map[string]map[string]int
 	suspiciousFlagPackets []SuspiciousFlagRecord
+	nullScanPackets       []SuspiciousFlagRecord
+	xmasScanPackets       []SuspiciousFlagRecord
+	finScanPackets        []SuspiciousFlagRecord
 }
 
 func NewAggregator(start, end time.Time) *FeatureAggregator {
@@ -94,7 +120,11 @@ func NewAggregator(start, end time.Time) *FeatureAggregator {
 		srcIPToDstIPs:         make(map[string]map[string]int),
 		srcIPToPackets:        make(map[string]int),
 		srcIPToSYNs:           make(map[string]int),
+		srcIPToICMPEcho:       make(map[string]map[string]int),
 		suspiciousFlagPackets: make([]SuspiciousFlagRecord, 0),
+		nullScanPackets:       make([]SuspiciousFlagRecord, 0),
+		xmasScanPackets:       make([]SuspiciousFlagRecord, 0),
+		finScanPackets:        make([]SuspiciousFlagRecord, 0),
 	}
 }
 
@@ -138,6 +168,19 @@ func (a *FeatureAggregator) AddPacket(p *parser.ParsedPacket) {
 		a.srcIPToDstPorts[srcIPStr][p.DstPort]++
 	}
 
+	if p.IsDNS {
+		a.dnsPackets++
+		a.dnsBytes += int64(p.Length)
+	}
+
+	if p.IsICMPEchoRequest && srcIPStr != "" && dstIPStr != "" {
+		a.icmpEchoRequests++
+		if a.srcIPToICMPEcho[srcIPStr] == nil {
+			a.srcIPToICMPEcho[srcIPStr] = make(map[string]int)
+		}
+		a.srcIPToICMPEcho[srcIPStr][dstIPStr]++
+	}
+
 	switch p.Protocol {
 	case "TCP":
 		a.tcpPackets++
@@ -164,7 +207,43 @@ func (a *FeatureAggregator) AddPacket(p *parser.ParsedPacket) {
 		if f.PSH {
 			a.pshCount++
 		}
+		if f.URG {
+			a.urgCount++
+		}
 
+		// Stealth Scan Detections (NULL, XMAS, FIN)
+		if f.IsZero() {
+			a.nullScanPackets = append(a.nullScanPackets, SuspiciousFlagRecord{
+				Timestamp: p.Timestamp,
+				SrcIP:     srcIPStr,
+				DstIP:     dstIPStr,
+				SrcPort:   p.SrcPort,
+				DstPort:   p.DstPort,
+				Flags:     "NULL (No flags)",
+			})
+		}
+		if f.IsXmas() {
+			a.xmasScanPackets = append(a.xmasScanPackets, SuspiciousFlagRecord{
+				Timestamp: p.Timestamp,
+				SrcIP:     srcIPStr,
+				DstIP:     dstIPStr,
+				SrcPort:   p.SrcPort,
+				DstPort:   p.DstPort,
+				Flags:     "XMAS (FIN+PSH+URG)",
+			})
+		}
+		if f.IsFinOnly() {
+			a.finScanPackets = append(a.finScanPackets, SuspiciousFlagRecord{
+				Timestamp: p.Timestamp,
+				SrcIP:     srcIPStr,
+				DstIP:     dstIPStr,
+				SrcPort:   p.SrcPort,
+				DstPort:   p.DstPort,
+				Flags:     "FIN (FIN scan)",
+			})
+		}
+
+		// Illegal Flag Combinations
 		if (f.SYN && f.FIN) || (f.SYN && f.RST) || (f.FIN && f.RST) {
 			flagDesc := ""
 			if f.SYN && f.FIN {
@@ -187,6 +266,10 @@ func (a *FeatureAggregator) AddPacket(p *parser.ParsedPacket) {
 	case "UDP":
 		a.udpPackets++
 		a.udpBytes += int64(p.Length)
+
+	case "ICMP", "ICMPv6":
+		a.icmpPackets++
+		a.icmpBytes += int64(p.Length)
 	}
 }
 
@@ -200,8 +283,12 @@ func (a *FeatureAggregator) ComputeFinalFeatures() *WindowFeatures {
 	bps := float64(a.totalBytes) / duration
 	synPerSec := float64(a.synCount) / duration
 	ackPerSec := float64(a.ackCount) / duration
+	rstPerSec := float64(a.rstCount) / duration
 	udpPps := float64(a.udpPackets) / duration
 	udpBps := float64(a.udpBytes) / duration
+	dnsPps := float64(a.dnsPackets) / duration
+	dnsBps := float64(a.dnsBytes) / duration
+	icmpPps := float64(a.icmpPackets) / duration
 
 	var synAckRatio float64
 	if a.synAckCount > 0 {
@@ -234,18 +321,32 @@ func (a *FeatureAggregator) ComputeFinalFeatures() *WindowFeatures {
 		RSTCount:                    a.rstCount,
 		FINCount:                    a.finCount,
 		PSHCount:                    a.pshCount,
+		URGCount:                    a.urgCount,
 		SYNPerSecond:                math.Round(synPerSec*100) / 100,
 		ACKPerSecond:                math.Round(ackPerSec*100) / 100,
+		RSTPerSecond:                math.Round(rstPerSec*100) / 100,
 		SYNAckRatio:                 math.Round(synAckRatio*100) / 100,
 		UDPPackets:                  a.udpPackets,
 		UDPBytes:                    a.udpBytes,
 		UDPPacketsPerSecond:         math.Round(udpPps*100) / 100,
 		UDPBytesPerSecond:           math.Round(udpBps*100) / 100,
+		DNSPackets:                  a.dnsPackets,
+		DNSBytes:                    a.dnsBytes,
+		DNSPacketsPerSecond:         math.Round(dnsPps*100) / 100,
+		DNSBytesPerSecond:           math.Round(dnsBps*100) / 100,
+		ICMPPackets:                 a.icmpPackets,
+		ICMPBytes:                   a.icmpBytes,
+		ICMPPacketsPerSecond:        math.Round(icmpPps*100) / 100,
+		ICMPEchoRequests:            a.icmpEchoRequests,
 		ApproxIncompleteConnections: incompleteConns,
 		SrcIPToDstPorts:             a.srcIPToDstPorts,
 		SrcIPToDstIPs:               a.srcIPToDstIPs,
 		SrcIPToPackets:              a.srcIPToPackets,
 		SrcIPToSYNs:                 a.srcIPToSYNs,
+		SrcIPToICMPEcho:             a.srcIPToICMPEcho,
 		SuspiciousFlagPackets:       a.suspiciousFlagPackets,
+		NullScanPackets:             a.nullScanPackets,
+		XmasScanPackets:             a.xmasScanPackets,
+		FinScanPackets:              a.finScanPackets,
 	}
 }

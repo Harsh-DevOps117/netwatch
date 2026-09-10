@@ -97,20 +97,28 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 	)
 	fmt.Printf("%s│%s\n", cardColor, colorReset)
 
-	fmt.Printf("%s│%s  %s%sPROTOCOL & TCP CONTROL DYNAMICS%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
-	fmt.Printf("%s│%s    TCP : %s%-6d%s (SYN: %s%d%s | SYN-ACK: %s%d%s | ACK: %d | RST: %d | FIN: %d | PSH: %d)\n",
+	fmt.Printf("%s│%s  %s%sPROTOCOL & TRAFFIC DYNAMICS%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
+	fmt.Printf("%s│%s    TCP  : %s%-6d%s (SYN: %s%d%s | SYN-ACK: %s%d%s | ACK: %d | RST: %s%d%s | FIN: %d | PSH: %d | URG: %d)\n",
 		cardColor, colorReset,
 		colorBold, feat.TCPPackets, colorReset,
 		colorYellow, feat.SYNCount, colorReset,
 		colorCyan, feat.SYNACKCount, colorReset,
-		feat.ACKCount, feat.RSTCount, feat.FINCount, feat.PSHCount,
+		feat.ACKCount,
+		colorRed, feat.RSTCount, colorReset,
+		feat.FINCount, feat.PSHCount, feat.URGCount,
 	)
-	fmt.Printf("%s│%s    UDP : %s%-6d%s (%s) | Ratio SYN/SYN-ACK : %s%.1f%s | Incomplete Conns : %s%d%s\n",
+	fmt.Printf("%s│%s    UDP  : %s%-6d%s (%s) | DNS: %s%-4d%s (%s) | ICMP: %s%-4d%s (Echo: %d)\n",
 		cardColor, colorReset,
 		colorBold, feat.UDPPackets, colorReset,
 		FormatBytes(feat.UDPBytes),
-		colorYellow, feat.SYNAckRatio, colorReset,
-		colorDim, feat.ApproxIncompleteConnections, colorReset,
+		colorCyan, feat.DNSPackets, colorReset,
+		FormatBytes(feat.DNSBytes),
+		colorYellow, feat.ICMPPackets, colorReset,
+		feat.ICMPEchoRequests,
+	)
+	fmt.Printf("%s│%s    Rate : SYN %.1f/s | ACK %.1f/s | RST %.1f/s | Ratio SYN/SYN-ACK: %.1f | Incomplete: %d\n",
+		cardColor, colorReset,
+		feat.SYNPerSecond, feat.ACKPerSecond, feat.RSTPerSecond, feat.SYNAckRatio, feat.ApproxIncompleteConnections,
 	)
 	fmt.Printf("%s│%s\n", cardColor, colorReset)
 
