@@ -2,8 +2,7 @@
 set -eo pipefail
 
 # Netwatch - Deterministic Network Threat Detection Engine Runner
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_DIR="${SCRIPT_DIR}/cli"
+CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${CLI_DIR}/bin"
 BINARY="${BIN_DIR}/detector"
 
@@ -33,7 +32,7 @@ check_go() {
 
 build_binary() {
     mkdir -p "${BIN_DIR}"
-    echo -e "${CYAN}[*] Building detector binary in ${CLI_DIR}...${NC}"
+    echo -e "${CYAN}[*] Building detector binary...${NC}"
     (
         cd "${CLI_DIR}"
         go build -o "${BINARY}" main.go
@@ -107,7 +106,7 @@ case "${1:-}" in
         ;;
     "clean")
         echo -e "${CYAN}[*] Cleaning build artifacts and exported reports...${NC}"
-        rm -rf "${BIN_DIR}" "${CLI_DIR}/*.pcap" "${CLI_DIR}/alerts.json" "${SCRIPT_DIR}/alerts.json"
+        rm -rf "${BIN_DIR}" "${CLI_DIR}/*.pcap" "${CLI_DIR}/alerts.json"
         echo -e "${GREEN}[✓] Clean completed.${NC}"
         exit 0
         ;;

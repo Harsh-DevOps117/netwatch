@@ -105,10 +105,10 @@ Network traffic flows through a strictly decoupled pipeline:
 
 ```
 sih-2026/
-├── run.sh                      # Universal runner script (live capture, PCAP analysis, builds)
 ├── README.md                   # Project overview & NTRO problem statement
 │
 └── cli/
+    ├── run.sh                  # Universal runner script (live capture, PCAP analysis, builds)
     ├── main.go                 # Application entry point (delegates to cmd.Execute())
     ├── go.mod                  # Go module definition
     ├── go.sum                  # Dependency checksums
@@ -281,9 +281,11 @@ rules:
 
 ## 7. How to Run
 
-### Using the Runner Script (`run.sh`)
+### Using the Runner Script (`cli/run.sh`)
 
 ```bash
+cd cli
+
 # 1. Real-time Live Network Monitoring (auto-detects active Wi-Fi / Ethernet interface)
 ./run.sh live
 
@@ -301,9 +303,11 @@ tshark -i eth0 -F pcap -w - | ./run.sh stdin
 ./run.sh clean
 ```
 
-### Direct Go Commands
+### Direct Go Commands (Inside `cli/`)
 
 ```bash
+cd cli
+
 # Live monitoring
 go run . --live
 
