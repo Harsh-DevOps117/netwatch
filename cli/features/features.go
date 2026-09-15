@@ -113,22 +113,22 @@ type FeatureAggregator struct {
 	totalBytes   int64
 
 	// Packet stats accumulators
-	ttlSum        float64
-	ttlSumSq      float64
-	ttlCount      int
-	ttlMin        uint8
-	ttlMax        uint8
-	tcpWinSum     float64
-	tcpWinSumSq   float64
-	tcpWinCount   int
-	tcpWinMin     uint16
-	tcpWinMax     uint16
-	fragCount     int
-	payloadSum    float64
-	payloadSumSq  float64
-	payloadCount  int
-	payloadMin    int
-	payloadMax    int
+	ttlSum         float64
+	ttlSumSq       float64
+	ttlCount       int
+	ttlMin         uint8
+	ttlMax         uint8
+	tcpWinSum      float64
+	tcpWinSumSq    float64
+	tcpWinCount    int
+	tcpWinMin      uint16
+	tcpWinMax      uint16
+	fragCount      int
+	payloadSum     float64
+	payloadSumSq   float64
+	payloadCount   int
+	payloadMin     int
+	payloadMax     int
 	payloadBuckets map[string]int
 
 	// IAT accumulators
@@ -140,8 +140,8 @@ type FeatureAggregator struct {
 	iatMaxUs       float64
 
 	// Retransmissions
-	seenTCPSeqs       map[string]time.Time
-	retransCount      int
+	seenTCPSeqs  map[string]time.Time
+	retransCount int
 
 	// Host & Protocol Tracking
 	srcIPs           map[string]int
@@ -180,13 +180,13 @@ type FeatureAggregator struct {
 
 func NewAggregator(windowIndex int, start, end time.Time, flowTracker *FlowTracker) *FeatureAggregator {
 	return &FeatureAggregator{
-		windowIndex:    windowIndex,
-		windowStart:    start,
-		windowEnd:      end,
-		ttlMin:         255,
-		tcpWinMin:      65535,
-		payloadMin:     math.MaxInt32,
-		iatMinUs:       math.MaxFloat64,
+		windowIndex: windowIndex,
+		windowStart: start,
+		windowEnd:   end,
+		ttlMin:      255,
+		tcpWinMin:   65535,
+		payloadMin:  math.MaxInt32,
+		iatMinUs:    math.MaxFloat64,
 		payloadBuckets: map[string]int{
 			"0_64":      0,
 			"65_512":    0,
@@ -449,6 +449,7 @@ func (a *FeatureAggregator) AddPacket(p *parser.ParsedPacket) {
 		isACK := (p.Protocol == "TCP" && p.TCPFlags.ACK)
 		isRST := (p.Protocol == "TCP" && p.TCPFlags.RST)
 		a.graphBuilder.AddPacket(srcIPStr, dstIPStr, p.SrcPort, p.DstPort, p.Length, p.Protocol, isSYN, isACK, isRST)
+		a.graphBuilder.AddDNSHostnames(p.DNSHostnames)
 	}
 
 	// 8. Bidirectional Flow Tracking

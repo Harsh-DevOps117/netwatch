@@ -66,6 +66,7 @@ show_help() {
     echo -e "  ${GREEN}live${NC} [interface] [bpf]       Start real-time live network capture (auto-detects interface if omitted)"
     echo -e "  ${GREEN}analyze${NC} <pcap-file>          Analyze an offline PCAP / PCAP-NG packet capture file"
     echo -e "  ${GREEN}stdin${NC}                        Stream and parse PCAP telemetry from standard input pipe"
+    echo -e "  ${GREEN}dashboard${NC} [--port 8787]      Start the local real-time intelligence dashboard"
     echo -e "  ${GREEN}build${NC}                        Compile the detector binary"
     echo -e "  ${GREEN}clean${NC}                        Clean up compiled binaries and exported JSON reports"
     echo -e "  ${GREEN}help${NC}                         Show this help message"
@@ -91,11 +92,18 @@ show_help() {
     echo -e "  # 4. Stream from tshark / tcpdump directly through stdin:"
     echo -e "  ${CYAN}tshark -i eth0 -F pcap -w - | ./run.sh stdin${NC}"
     echo ""
+    echo -e "  # 5. Start the local dashboard (opens http://127.0.0.1:8787):"
+    echo -e "  ${CYAN}./run.sh dashboard --port 8787${NC}"
+    echo ""
 }
 
 # Main Execution Switch
 case "${1:-}" in
-    ""|"-h"|"--help"|"help")
+    "")
+        ensure_binary
+        exec "${BINARY}"
+        ;;
+    "-h"|"--help"|"help")
         show_help
         exit 0
         ;;
@@ -131,6 +139,16 @@ case "${1:-}" in
         shift
         ensure_binary
         exec "${BINARY}" --stdin "$@"
+        ;;
+    "dashboard")
+        shift
+        ensure_binary
+        if [[ $EUID -ne 0 ]] && command -v sudo &>/dev/null; then
+            echo -e "${YELLOW}[!] Live packet sniffing requires root permissions. Elevating via sudo...${NC}"
+            exec sudo "${BINARY}" dashboard "$@"
+        else
+            exec "${BINARY}" dashboard "$@"
+        fi
         ;;
     *)
         # Direct pass-through of flags (e.g., ./run.sh --pcap file.pcap or ./run.sh --live)

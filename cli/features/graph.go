@@ -6,15 +6,16 @@ import (
 )
 
 type HostNode struct {
-	IP                         string `json:"ip"`
-	OutDegree                  int    `json:"out_degree"`
-	InDegree                   int    `json:"in_degree"`
-	PacketsSent                int    `json:"packets_sent"`
-	PacketsReceived            int    `json:"packets_received"`
-	BytesSent                  int64  `json:"bytes_sent"`
-	BytesReceived              int64  `json:"bytes_received"`
-	DistinctPortsContacted     int    `json:"distinct_ports_contacted"`
-	IncompleteConnsInitiated   int    `json:"incomplete_conns_initiated"`
+	IP                       string   `json:"ip"`
+	Hostnames                []string `json:"hostnames,omitempty"`
+	OutDegree                int      `json:"out_degree"`
+	InDegree                 int      `json:"in_degree"`
+	PacketsSent              int      `json:"packets_sent"`
+	PacketsReceived          int      `json:"packets_received"`
+	BytesSent                int64    `json:"bytes_sent"`
+	BytesReceived            int64    `json:"bytes_received"`
+	DistinctPortsContacted   int      `json:"distinct_ports_contacted"`
+	IncompleteConnsInitiated int      `json:"incomplete_conns_initiated"`
 }
 
 type HostEdge struct {
@@ -50,11 +51,12 @@ type edgeAccumulator struct {
 }
 
 type GraphBuilder struct {
-	nodes    map[string]*HostNode
-	edges    map[string]*edgeAccumulator
-	srcPorts map[string]map[uint16]bool
-	maxNodes int
-	maxEdges int
+	nodes     map[string]*HostNode
+	edges     map[string]*edgeAccumulator
+	srcPorts  map[string]map[uint16]bool
+	hostnames map[string]map[string]bool
+	maxNodes  int
+	maxEdges  int
 }
 
 func NewGraphBuilder(maxNodes, maxEdges int) *GraphBuilder {
@@ -65,11 +67,26 @@ func NewGraphBuilder(maxNodes, maxEdges int) *GraphBuilder {
 		maxEdges = 20000
 	}
 	return &GraphBuilder{
-		nodes:    make(map[string]*HostNode),
-		edges:    make(map[string]*edgeAccumulator),
-		srcPorts: make(map[string]map[uint16]bool),
-		maxNodes: maxNodes,
-		maxEdges: maxEdges,
+		nodes:     make(map[string]*HostNode),
+		edges:     make(map[string]*edgeAccumulator),
+		srcPorts:  make(map[string]map[uint16]bool),
+		hostnames: make(map[string]map[string]bool),
+		maxNodes:  maxNodes,
+		maxEdges:  maxEdges,
+	}
+}
+
+// AddDNSHostnames records only domains carried in captured DNS answer packets.
+// It never performs external resolution and therefore cannot invent host labels.
+func (gb *GraphBuilder) AddDNSHostnames(names map[string]string) {
+	for ip, hostname := range names {
+		if ip == "" || hostname == "" {
+			continue
+		}
+		if gb.hostnames[ip] == nil {
+			gb.hostnames[ip] = make(map[string]bool)
+		}
+		gb.hostnames[ip][hostname] = true
 	}
 }
 
@@ -159,6 +176,15 @@ func (gb *GraphBuilder) BuildGraph() NetworkGraph {
 	for ip, ports := range gb.srcPorts {
 		if node, ok := gb.nodes[ip]; ok {
 			node.DistinctPortsContacted = len(ports)
+		}
+	}
+	for ip, names := range gb.hostnames {
+		if node, ok := gb.nodes[ip]; ok {
+			node.Hostnames = node.Hostnames[:0]
+			for hostname := range names {
+				node.Hostnames = append(node.Hostnames, hostname)
+			}
+			sort.Strings(node.Hostnames)
 		}
 	}
 

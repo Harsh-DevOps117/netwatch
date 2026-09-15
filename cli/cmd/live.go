@@ -29,7 +29,7 @@ func runLive(iface string, bpf string) {
 	liveH, err := capture.OpenLive(iface, bpf)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting live capture: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	defer liveH.Close()
 
@@ -45,7 +45,7 @@ func runStdin() {
 	stdinH, err := capture.OpenStdin()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing PCAP reader from stdin: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	defer stdinH.Close()
 

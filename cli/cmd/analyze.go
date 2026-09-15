@@ -23,7 +23,7 @@ evaluating deterministic attack indicator rules.`,
 		}
 		if targetFile == "" {
 			fmt.Fprintln(os.Stderr, "Error: Please specify a PCAP file path (e.g. 'detector analyze sample.pcap' or '--pcap sample.pcap')")
-			os.Exit(1)
+			return
 		}
 		runAnalysis(targetFile)
 	},
@@ -33,7 +33,7 @@ func runAnalysis(filePath string) {
 	h, err := capture.OpenPCAP(filePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening PCAP file %q: %v\n", filePath, err)
-		os.Exit(1)
+		return
 	}
 	defer h.Close()
 

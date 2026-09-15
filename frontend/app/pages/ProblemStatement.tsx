@@ -24,7 +24,8 @@ export default function ProblemStatement() {
       ease: "power3.out",
     });
 
-    gsap.fromTo(videoContainerRef.current,
+    gsap.fromTo(
+      videoContainerRef.current,
       { scale: 0.5, opacity: 0, borderRadius: "2rem" },
       {
         scale: 1,
@@ -38,13 +39,16 @@ export default function ProblemStatement() {
           scrub: 1,
           onEnter: () => videoRef.current?.play(),
           onLeaveBack: () => videoRef.current?.pause(),
-        }
-      }
+        },
+      },
     );
   }, []);
 
   return (
-    <section id="about" className="w-full md:min-h-screen grid grid-cols-1 md:grid-cols-4 relative z-10 pt-24 md:pt-32 pb-8 md:pb-12">
+    <section
+      id="about"
+      className="w-full md:min-h-screen grid grid-cols-1 md:grid-cols-4 relative z-10 pt-24 md:pt-32 pb-8 md:pb-12"
+    >
       <div className="col-span-1 px-4 md:px-8 flex flex-col items-start border-b md:border-b-0 border-black/[0.05] pb-8 md:pb-0">
         <div className="bg-[#0033FF] text-white text-[10px] sm:text-xs font-semibold tracking-widest uppercase px-3 py-1 inline-block">
           PROBLEM STATEMENT
@@ -56,9 +60,23 @@ export default function ProblemStatement() {
           <h2
             ref={textRef}
             className="text-[clamp(18px,2.5vw,42px)] leading-[1.3] tracking-normal text-[#222222] w-full"
-            style={{ fontFamily: 'var(--font-pixel)' }}
+            style={{ fontFamily: "var(--font-pixel)" }}
           >
-            Traditional machine learning classifiers applied to network traffic treat each flow in isolation. We need AI systems capable of learning network behaviour, <span className="bg-[#CCFF00] text-[#0000FF] px-2 leading-none inline-block pb-1 rounded-sm">anticipating attacker progression</span> and supporting <span className="text-[#0033FF] font-semibold border-b-2 border-[#0033FF]">proactive cyber defence</span> using the emerging concept of <span className="bg-[#0033FF] text-white px-2 leading-none inline-block pb-1 rounded-sm">World Models</span>.
+            Traditional machine learning classifiers applied to network traffic
+            treat each flow in isolation. We need AI systems capable of learning
+            network behaviour,{" "}
+            <span className="bg-[#CCFF00] text-[#0000FF] px-2 leading-none inline-block pb-1 rounded-sm">
+              anticipating attacker progression
+            </span>{" "}
+            and supporting{" "}
+            <span className="text-[#0033FF] font-semibold border-b-2 border-[#0033FF]">
+              proactive cyber defence
+            </span>{" "}
+            using the emerging concept of{" "}
+            <span className="bg-[#0033FF] text-white px-2 leading-none inline-block pb-1 rounded-sm">
+              World Models
+            </span>
+            .
           </h2>
         </div>
 
@@ -104,7 +122,6 @@ export default function ProblemStatement() {
             <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none"></div>
           </div>
         </div>
-
       </div>
     </section>
   );

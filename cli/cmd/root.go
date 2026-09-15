@@ -57,7 +57,7 @@ and PCAP analysis using deterministic telemetry and sliding time windows.`,
 			return
 		}
 
-		_ = cmd.Help()
+		runInteractive()
 	},
 }
 
@@ -84,7 +84,7 @@ func runPipeline(reader capture.PacketReader, sourceDesc string, isLive bool) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	if windowSec > 0 {
 		cfg.WindowSeconds = windowSec

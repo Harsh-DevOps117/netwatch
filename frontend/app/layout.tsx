@@ -24,7 +24,7 @@ const pixelFont = localFont({
       path: "./assets/fonts/691b2c11a2ce279ba75d42c9_OffBitTrial-Bold.otf",
       weight: "700",
       style: "normal",
-    }
+    },
   ],
   variable: "--font-pixel",
   display: "swap",
@@ -34,10 +34,15 @@ import SmoothScroll from "./components/SmoothScroll";
 
 export const metadata: Metadata = {
   title: "NetWatch | Predictive Defence by COD-I",
-  description: "Forecast future network states and estimate the probability of attacker progression. Built by Team COD-I.",
+  description:
+    "Forecast future network states and estimate the probability of attacker progression. Built by Team COD-I.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
@@ -51,9 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div />
             <div />
           </div>
-          <div className="relative z-10 flex flex-col flex-1">
-            {children}
-          </div>
+          <div className="relative z-10 flex flex-col flex-1">{children}</div>
         </SmoothScroll>
       </body>
     </html>

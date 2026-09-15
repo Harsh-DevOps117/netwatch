@@ -4,7 +4,6 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { useRef, useState } from "react";
 
-
 export default function Hero() {
   const [attackText, setAttackText] = useState("DDoS Protected");
   const container = useRef<HTMLElement>(null);

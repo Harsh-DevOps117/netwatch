@@ -289,10 +289,17 @@ cd cli
 # 4. Stream via standard input pipe
 tshark -i eth0 -F pcap -w - | ./run.sh stdin
 
-# 5. Build or Clean
+# 5. Local dashboard: captures live traffic and opens the browser at 127.0.0.1 only
+./run.sh dashboard --port 8787
+
+# 6. Build or Clean
 ./run.sh build
 ./run.sh clean
 ```
+
+The dashboard uses Server-Sent Events to deliver completed real Netwatch windows,
+active flows, graph topology, and deterministic rule alerts. It does not send
+telemetry to a cloud service or generate placeholder packet data.
 
 ---
 

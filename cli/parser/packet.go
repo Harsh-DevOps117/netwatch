@@ -51,6 +51,9 @@ type ParsedPacket struct {
 	TCPAck            uint32    `json:"tcp_ack,omitempty"`
 	IsICMPEchoRequest bool      `json:"is_icmp_echo_request,omitempty"`
 	IsDNS             bool      `json:"is_dns,omitempty"`
+	// DNSHostnames holds IP-to-domain mappings observed in DNS answer packets.
+	// It is internal telemetry for graph labelling, not a packet export field.
+	DNSHostnames map[string]string `json:"-"`
 }
 
 func ParsePacket(pkt gopacket.Packet) *ParsedPacket {
@@ -153,6 +156,23 @@ func ParsePacket(pkt gopacket.Packet) *ParsedPacket {
 		}
 	} else if pkt.Layer(layers.LayerTypeARP) != nil {
 		parsed.Protocol = "ARP"
+	}
+
+	// Capture only names actually present in an observed DNS response. This avoids
+	// reverse-DNS lookups or fabricated website labels in downstream consumers.
+	if dnsLayer := pkt.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+		if dns, ok := dnsLayer.(*layers.DNS); ok {
+			parsed.IsDNS = true
+			for _, answer := range dns.Answers {
+				if answer.IP == nil || len(answer.Name) == 0 {
+					continue
+				}
+				if parsed.DNSHostnames == nil {
+					parsed.DNSHostnames = make(map[string]string)
+				}
+				parsed.DNSHostnames[answer.IP.String()] = string(answer.Name)
+			}
+		}
 	}
 
 	// Fallback for payload length from application layer if available
