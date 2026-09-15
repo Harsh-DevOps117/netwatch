@@ -31,13 +31,17 @@ func (r *PortScanRule) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 		uniquePortsCount := len(dstPorts)
 		if uniquePortsCount >= r.cfg.UniquePorts {
 			alerts = append(alerts, alert.Alert{
-				Timestamp:   time.Now(),
-				WindowStart: feat.WindowStart,
-				WindowEnd:   feat.WindowEnd,
-				Type:        alert.TypePortScanIndicator,
-				Severity:    alert.SeverityHigh,
-				SourceIP:    srcIP,
-				Protocol:    "TCP/UDP",
+				Timestamp:          time.Now(),
+				WindowIndex:        feat.WindowIndex,
+				WindowStart:        feat.WindowStart,
+				WindowEnd:          feat.WindowEnd,
+				Type:               alert.TypePortScanIndicator,
+				Severity:           alert.SeverityHigh,
+				MitreAttackID:      "T1046",
+				MitreTactic:        "Discovery",
+				MitreTechniqueName: "Network Service Discovery",
+				SourceIP:           srcIP,
+				Protocol:           "TCP/UDP",
 				Reason: fmt.Sprintf(
 					"One source contacted an unusually large number of destination ports (%d unique ports in %.0fs window).",
 					uniquePortsCount, feat.DurationSeconds,

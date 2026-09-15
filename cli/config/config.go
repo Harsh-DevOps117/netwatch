@@ -8,22 +8,36 @@ import (
 )
 
 type Config struct {
-	WindowSeconds int         `yaml:"window_seconds"`
-	Rules         RulesConfig `yaml:"rules"`
+	WindowSeconds int                 `yaml:"window_seconds"`
+	FlowTracking  FlowTrackingConfig  `yaml:"flow_tracking"`
+	GraphTracking GraphTrackingConfig `yaml:"graph_tracking"`
+	Rules         RulesConfig         `yaml:"rules"`
+}
+
+type FlowTrackingConfig struct {
+	Enabled            bool `yaml:"enabled"`
+	IdleTimeoutSeconds int  `yaml:"idle_timeout_seconds"`
+	MaxActiveFlows     int  `yaml:"max_active_flows"`
+}
+
+type GraphTrackingConfig struct {
+	Enabled  bool `yaml:"enabled"`
+	MaxNodes int  `yaml:"max_nodes"`
+	MaxEdges int  `yaml:"max_edges"`
 }
 
 type RulesConfig struct {
-	PortScan         PortScanConfig         `yaml:"port_scan"`
-	HostScan         HostScanConfig         `yaml:"host_scan"`
-	SynFlood         SynFloodConfig         `yaml:"syn_flood"`
-	AckFlood         AckFloodConfig         `yaml:"ack_flood"`
-	RstFlood         RstFloodConfig         `yaml:"rst_flood"`
-	UdpFlood         UdpFloodConfig         `yaml:"udp_flood"`
-	IcmpFlood        IcmpFloodConfig        `yaml:"icmp_flood"`
-	DnsFlood         DnsFloodConfig         `yaml:"dns_flood"`
-	StealthScan      StealthScanConfig      `yaml:"stealth_scan"`
-	ConnectionBurst  ConnectionBurstConfig  `yaml:"connection_burst"`
-	SuspiciousFlags  SuspiciousFlagsConfig  `yaml:"suspicious_flags"`
+	PortScan        PortScanConfig        `yaml:"port_scan"`
+	HostScan        HostScanConfig        `yaml:"host_scan"`
+	SynFlood        SynFloodConfig        `yaml:"syn_flood"`
+	AckFlood        AckFloodConfig        `yaml:"ack_flood"`
+	RstFlood        RstFloodConfig        `yaml:"rst_flood"`
+	UdpFlood        UdpFloodConfig        `yaml:"udp_flood"`
+	IcmpFlood       IcmpFloodConfig       `yaml:"icmp_flood"`
+	DnsFlood        DnsFloodConfig        `yaml:"dns_flood"`
+	StealthScan     StealthScanConfig     `yaml:"stealth_scan"`
+	ConnectionBurst ConnectionBurstConfig `yaml:"connection_burst"`
+	SuspiciousFlags SuspiciousFlagsConfig `yaml:"suspicious_flags"`
 }
 
 type PortScanConfig struct {
@@ -88,6 +102,16 @@ type SuspiciousFlagsConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		WindowSeconds: 10,
+		FlowTracking: FlowTrackingConfig{
+			Enabled:            true,
+			IdleTimeoutSeconds: 30,
+			MaxActiveFlows:     10000,
+		},
+		GraphTracking: GraphTrackingConfig{
+			Enabled:  true,
+			MaxNodes: 5000,
+			MaxEdges: 20000,
+		},
 		Rules: RulesConfig{
 			PortScan: PortScanConfig{
 				Enabled:     true,
@@ -144,7 +168,11 @@ func DefaultConfig() *Config {
 func LoadConfig(path string) (*Config, error) {
 	cfg := DefaultConfig()
 	if path == "" {
-		return cfg, nil
+		if _, err := os.Stat("config.yaml"); err == nil {
+			path = "config.yaml"
+		} else {
+			return cfg, nil
+		}
 	}
 
 	data, err := os.ReadFile(path)
@@ -158,6 +186,18 @@ func LoadConfig(path string) (*Config, error) {
 
 	if cfg.WindowSeconds <= 0 {
 		cfg.WindowSeconds = 10
+	}
+	if cfg.FlowTracking.IdleTimeoutSeconds <= 0 {
+		cfg.FlowTracking.IdleTimeoutSeconds = 30
+	}
+	if cfg.FlowTracking.MaxActiveFlows <= 0 {
+		cfg.FlowTracking.MaxActiveFlows = 10000
+	}
+	if cfg.GraphTracking.MaxNodes <= 0 {
+		cfg.GraphTracking.MaxNodes = 5000
+	}
+	if cfg.GraphTracking.MaxEdges <= 0 {
+		cfg.GraphTracking.MaxEdges = 20000
 	}
 
 	return cfg, nil

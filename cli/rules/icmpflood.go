@@ -31,12 +31,16 @@ func (r *IcmpFloodRule) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 	// 1. Volumetric ICMP Flood Evaluation
 	if feat.ICMPPacketsPerSecond >= r.cfg.IcmpPerSecond && r.cfg.IcmpPerSecond > 0 {
 		alerts = append(alerts, alert.Alert{
-			Timestamp:   time.Now(),
-			WindowStart: feat.WindowStart,
-			WindowEnd:   feat.WindowEnd,
-			Type:        alert.TypeIcmpFloodIndicator,
-			Severity:    alert.SeverityHigh,
-			Protocol:    "ICMP",
+			Timestamp:          time.Now(),
+			WindowIndex:        feat.WindowIndex,
+			WindowStart:        feat.WindowStart,
+			WindowEnd:          feat.WindowEnd,
+			Type:               alert.TypeIcmpFloodIndicator,
+			Severity:           alert.SeverityHigh,
+			MitreAttackID:      "T1498.001",
+			MitreTactic:        "Impact",
+			MitreTechniqueName: "Direct Network Flood (ICMP Flood)",
+			Protocol:           "ICMP",
 			Reason: fmt.Sprintf(
 				"Excessive ICMP packet rate detected (%.1f pkts/sec exceeds threshold %.1f pkts/sec). Possible ICMP/Ping Flood attack.",
 				feat.ICMPPacketsPerSecond, r.cfg.IcmpPerSecond,
@@ -57,13 +61,17 @@ func (r *IcmpFloodRule) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 			uniqueTargetsCount := len(targetHosts)
 			if uniqueTargetsCount >= r.cfg.UniqueTargets && r.cfg.UniqueTargets > 0 {
 				alerts = append(alerts, alert.Alert{
-					Timestamp:   time.Now(),
-					WindowStart: feat.WindowStart,
-					WindowEnd:   feat.WindowEnd,
-					Type:        alert.TypePingSweepIndicator,
-					Severity:    alert.SeverityHigh,
-					SourceIP:    srcIP,
-					Protocol:    "ICMP",
+					Timestamp:          time.Now(),
+					WindowIndex:        feat.WindowIndex,
+					WindowStart:        feat.WindowStart,
+					WindowEnd:          feat.WindowEnd,
+					Type:               alert.TypePingSweepIndicator,
+					Severity:           alert.SeverityHigh,
+					MitreAttackID:      "T1595.001",
+					MitreTactic:        "Reconnaissance",
+					MitreTechniqueName: "Active Scanning: IP Network Scanning",
+					SourceIP:           srcIP,
+					Protocol:           "ICMP",
 					Reason: fmt.Sprintf(
 						"Reconnaissance ping sweep observed: host probed %d unique destination IPs via ICMP Echo within %.0fs window.",
 						uniqueTargetsCount, feat.DurationSeconds,

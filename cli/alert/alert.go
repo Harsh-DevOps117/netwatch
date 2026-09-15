@@ -26,14 +26,18 @@ const (
 )
 
 type Alert struct {
-	Timestamp     time.Time              `json:"timestamp"`
-	WindowStart   time.Time              `json:"window_start"`
-	WindowEnd     time.Time              `json:"window_end"`
-	Type          string                 `json:"type"`
-	Severity      string                 `json:"severity"`
-	SourceIP      string                 `json:"source_ip,omitempty"`
-	DestinationIP string                 `json:"destination_ip,omitempty"`
-	Protocol      string                 `json:"protocol,omitempty"`
-	Reason        string                 `json:"reason"`
-	Features      map[string]interface{} `json:"features,omitempty"`
+	Timestamp          time.Time              `json:"timestamp"`
+	WindowIndex        int                    `json:"window_index"`
+	WindowStart        time.Time              `json:"window_start"`
+	WindowEnd          time.Time              `json:"window_end"`
+	Type               string                 `json:"type"`
+	Severity           string                 `json:"severity"`
+	MitreAttackID      string                 `json:"mitre_attack_id,omitempty"`
+	MitreTactic        string                 `json:"mitre_tactic,omitempty"`
+	MitreTechniqueName string                 `json:"mitre_technique_name,omitempty"`
+	SourceIP           string                 `json:"source_ip,omitempty"`
+	DestinationIP      string                 `json:"destination_ip,omitempty"`
+	Protocol           string                 `json:"protocol,omitempty"`
+	Reason             string                 `json:"reason"`
+	Features           map[string]interface{} `json:"features,omitempty"`
 }

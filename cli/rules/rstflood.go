@@ -29,12 +29,16 @@ func (r *RstFloodRule) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 	if feat.RSTPerSecond >= r.cfg.RstPerSecond && r.cfg.RstPerSecond > 0 {
 		return []alert.Alert{
 			{
-				Timestamp:   time.Now(),
-				WindowStart: feat.WindowStart,
-				WindowEnd:   feat.WindowEnd,
-				Type:        alert.TypeRstFloodIndicator,
-				Severity:    alert.SeverityHigh,
-				Protocol:    "TCP",
+				Timestamp:          time.Now(),
+				WindowIndex:        feat.WindowIndex,
+				WindowStart:        feat.WindowStart,
+				WindowEnd:          feat.WindowEnd,
+				Type:               alert.TypeRstFloodIndicator,
+				Severity:           alert.SeverityHigh,
+				MitreAttackID:      "T1499",
+				MitreTactic:        "Impact",
+				MitreTechniqueName: "Endpoint Denial of Service: Connection Teardown",
+				Protocol:           "TCP",
 				Reason: fmt.Sprintf(
 					"Abnormal TCP RST packet rate detected (%.1f/sec exceeds threshold %.1f/sec). Possible connection teardown attack.",
 					feat.RSTPerSecond, r.cfg.RstPerSecond,

@@ -88,6 +88,7 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 		colorBold, cardColor, headerText, padding, colorWhite, timeSpan, colorBold, cardColor, colorReset,
 	)
 
+	// Section 1: Traffic Volume & Bandwidth
 	fmt.Printf("%s│%s  %s%sTRAFFIC VOLUME%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
 	fmt.Printf("%s│%s    Packets : %s%-8d%s | Volume  : %s%-11s%s | Rate : %s%.1f pkts/s (%.1f KB/s)%s\n",
 		cardColor, colorReset,
@@ -97,6 +98,7 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 	)
 	fmt.Printf("%s│%s\n", cardColor, colorReset)
 
+	// Section 2: Protocol Dynamics
 	fmt.Printf("%s│%s  %s%sPROTOCOL & TRAFFIC DYNAMICS%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
 	fmt.Printf("%s│%s    TCP  : %s%-6d%s (SYN: %s%d%s | SYN-ACK: %s%d%s | ACK: %d | RST: %s%d%s | FIN: %d | PSH: %d | URG: %d)\n",
 		cardColor, colorReset,
@@ -122,15 +124,38 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 	)
 	fmt.Printf("%s│%s\n", cardColor, colorReset)
 
-	fmt.Printf("%s│%s  %s%sHOST & PORT CARDINALITY%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
-	fmt.Printf("%s│%s    Unique Source IPs : %s%-4d%s | Unique Dest IPs : %s%-4d%s | Unique Dest Ports : %s%-4d%s\n",
+	// Section 3: Deep Packet Telemetry
+	fmt.Printf("%s│%s  %s%sDEEP PACKET TELEMETRY & STATS%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
+	fmt.Printf("%s│%s    TTL  : Mean %.1f (Min %d, Max %d, σ=%.1f) | TCP Win: Mean %.0f (Min %d, Max %d)\n",
 		cardColor, colorReset,
-		colorBold, feat.UniqueSourceIPs, colorReset,
-		colorBold, feat.UniqueDestinationIPs, colorReset,
-		colorBold, feat.UniqueDestinationPorts, colorReset,
+		feat.TTLMean, feat.TTLMin, feat.TTLMax, feat.TTLStdDev,
+		feat.TCPWindowMean, feat.TCPWindowMin, feat.TCPWindowMax,
+	)
+	fmt.Printf("%s│%s    IAT  : Mean %.1f µs (Min %.1f, Max %.1f, σ=%.1f) | Frag Pkts: %d | Retrans: %d (%.2f%%)\n",
+		cardColor, colorReset,
+		feat.IATMeanMicroseconds, feat.IATMinMicroseconds, feat.IATMaxMicroseconds, feat.IATStdDevMicroseconds,
+		feat.FragmentedPacketsCount, feat.TCPRetransmissionsCount, feat.TCPRetransmissionRatio*100,
 	)
 	fmt.Printf("%s│%s\n", cardColor, colorReset)
 
+	// Section 4: Host Cardinality & Graph Metrics
+	fmt.Printf("%s│%s  %s%sHOST & GRAPH TOPOLOGY%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
+	fmt.Printf("%s│%s    Unique IPs : %s%d Src%s → %s%d Dst%s | Unique Ports: %s%d Src%s → %s%d Dst%s\n",
+		cardColor, colorReset,
+		colorBold, feat.UniqueSourceIPs, colorReset,
+		colorBold, feat.UniqueDestinationIPs, colorReset,
+		colorCyan, feat.UniqueSourcePorts, colorReset,
+		colorCyan, feat.UniqueDestinationPorts, colorReset,
+	)
+	fmt.Printf("%s│%s    Graph View : %s%d Nodes%s | %s%d Edges%s | Density: %.4f | Active Flows: %d\n",
+		cardColor, colorReset,
+		colorBold, feat.Graph.TotalNodes, colorReset,
+		colorBold, feat.Graph.TotalEdges, colorReset,
+		feat.Graph.Density, len(feat.ActiveFlows),
+	)
+	fmt.Printf("%s│%s\n", cardColor, colorReset)
+
+	// Section 5: Threat Indicators
 	fmt.Printf("%s│%s  %s%sDETERMINISTIC THREAT INDICATORS%s\n", cardColor, colorReset, colorBold, colorWhite, colorReset)
 	if !hasAlerts {
 		fmt.Printf("%s│%s    %s%s[✓] CLEAN:%s %sNo abnormal threshold violations or threat indicators detected.%s\n",
@@ -148,7 +173,12 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 				badge = fmt.Sprintf("%s%s[○ LOW]%s", colorBold, colorBlue, colorReset)
 			}
 
-			fmt.Printf("%s│%s    %s %s%s%s\n", cardColor, colorReset, badge, colorBold, a.Type, colorReset)
+			mitreBadge := ""
+			if a.MitreAttackID != "" {
+				mitreBadge = fmt.Sprintf(" %s%s[%s: %s]%s", colorCyan, colorDim, a.MitreAttackID, a.MitreTechniqueName, colorReset)
+			}
+
+			fmt.Printf("%s│%s    %s %s%s%s%s\n", cardColor, colorReset, badge, colorBold, a.Type, colorReset, mitreBadge)
 			if a.SourceIP != "" {
 				fmt.Printf("%s│%s        %sAttacker / Source IP:%s %s%s%s\n",
 					cardColor, colorReset, colorDim, colorReset, colorBold, a.SourceIP, colorReset)
@@ -168,7 +198,7 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 func PrintSummary(totalPackets, totalWindows, totalAlerts int) {
 	fmt.Printf("%s%s╔════════════════════════════════════════════════════════════════════════════════════════╗%s\n", colorBold, colorCyan, colorReset)
 	fmt.Printf("%s%s║                             EXECUTIVE AUDIT SUMMARY                                    ║%s\n", colorBold, colorCyan, colorReset)
-	fmt.Printf("%s%s╚════════════════════════════════════════════════════════════════════════════════════════╝%s\n", colorBold, colorCyan, colorReset)
+	fmt.Printf("%s%s╚════════════════════════════════════════════════════════════════════════════════════════╝%s\n\n", colorBold, colorCyan, colorReset)
 
 	fmt.Printf("  %s• Total Packets Ingested :%s %s%d%s\n", colorBold, colorReset, colorCyan, totalPackets, colorReset)
 	fmt.Printf("  %s• Total Windows Evaluated:%s %s%d%s\n", colorBold, colorReset, colorCyan, totalWindows, colorReset)
@@ -183,7 +213,7 @@ func PrintSummary(totalPackets, totalWindows, totalAlerts int) {
 		fmt.Printf("%s%s%d Indicator(s) Triggered%s\n", colorBold, colorRed, totalAlerts, colorReset)
 		fmt.Println()
 		fmt.Printf("  %s%s[ACTION REQUIRED] AUDIT CONCLUSION:%s %d behavioral threat indicator(s) identified.\n", colorBold, colorRed, colorReset, totalAlerts)
-		fmt.Printf("  Telemetry is packaged and ready for downstream temporal state forecasting.\n")
+		fmt.Printf("  Structured telemetry is packaged and ready for downstream temporal state forecasting.\n")
 	}
 	fmt.Println()
 }

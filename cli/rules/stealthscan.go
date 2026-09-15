@@ -35,12 +35,16 @@ func (r *StealthScanRule) Evaluate(feat *features.WindowFeatures) []alert.Alert 
 	// 1. NULL Scan Evaluation (No TCP flags set)
 	if len(feat.NullScanPackets) >= minPackets {
 		alerts = append(alerts, alert.Alert{
-			Timestamp:   time.Now(),
-			WindowStart: feat.WindowStart,
-			WindowEnd:   feat.WindowEnd,
-			Type:        alert.TypeNullScanIndicator,
-			Severity:    alert.SeverityHigh,
-			Protocol:    "TCP",
+			Timestamp:          time.Now(),
+			WindowIndex:        feat.WindowIndex,
+			WindowStart:        feat.WindowStart,
+			WindowEnd:          feat.WindowEnd,
+			Type:               alert.TypeNullScanIndicator,
+			Severity:           alert.SeverityHigh,
+			MitreAttackID:      "T1046",
+			MitreTactic:        "Discovery",
+			MitreTechniqueName: "Network Service Discovery (Stealth NULL Scan)",
+			Protocol:           "TCP",
 			Reason: fmt.Sprintf(
 				"Stealth TCP NULL scan detected (%d packet(s) with 0 TCP control flags set). Commonly used to evade simple packet filters.",
 				len(feat.NullScanPackets),
@@ -55,12 +59,16 @@ func (r *StealthScanRule) Evaluate(feat *features.WindowFeatures) []alert.Alert 
 	// 2. XMAS Scan Evaluation (FIN+PSH+URG set)
 	if len(feat.XmasScanPackets) >= minPackets {
 		alerts = append(alerts, alert.Alert{
-			Timestamp:   time.Now(),
-			WindowStart: feat.WindowStart,
-			WindowEnd:   feat.WindowEnd,
-			Type:        alert.TypeXmasScanIndicator,
-			Severity:    alert.SeverityHigh,
-			Protocol:    "TCP",
+			Timestamp:          time.Now(),
+			WindowIndex:        feat.WindowIndex,
+			WindowStart:        feat.WindowStart,
+			WindowEnd:          feat.WindowEnd,
+			Type:               alert.TypeXmasScanIndicator,
+			Severity:           alert.SeverityHigh,
+			MitreAttackID:      "T1046",
+			MitreTactic:        "Discovery",
+			MitreTechniqueName: "Network Service Discovery (Stealth XMAS Scan)",
+			Protocol:           "TCP",
 			Reason: fmt.Sprintf(
 				"Stealth TCP XMAS scan detected (%d packet(s) with FIN+PSH+URG flags set). Used for firewall probing and OS fingerprinting.",
 				len(feat.XmasScanPackets),
@@ -75,12 +83,16 @@ func (r *StealthScanRule) Evaluate(feat *features.WindowFeatures) []alert.Alert 
 	// 3. FIN Scan Evaluation (FIN flag only without established connection)
 	if len(feat.FinScanPackets) >= minPackets {
 		alerts = append(alerts, alert.Alert{
-			Timestamp:   time.Now(),
-			WindowStart: feat.WindowStart,
-			WindowEnd:   feat.WindowEnd,
-			Type:        alert.TypeFinScanIndicator,
-			Severity:    alert.SeverityMedium,
-			Protocol:    "TCP",
+			Timestamp:          time.Now(),
+			WindowIndex:        feat.WindowIndex,
+			WindowStart:        feat.WindowStart,
+			WindowEnd:          feat.WindowEnd,
+			Type:               alert.TypeFinScanIndicator,
+			Severity:           alert.SeverityMedium,
+			MitreAttackID:      "T1046",
+			MitreTactic:        "Discovery",
+			MitreTechniqueName: "Network Service Discovery (Stealth FIN Scan)",
+			Protocol:           "TCP",
 			Reason: fmt.Sprintf(
 				"Stealth TCP FIN scan pattern detected (%d isolated FIN packet(s) without ACK). Used to bypass SYN packet filters.",
 				len(feat.FinScanPackets),

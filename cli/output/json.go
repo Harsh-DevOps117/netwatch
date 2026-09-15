@@ -10,11 +10,16 @@ import (
 )
 
 type WindowRecord struct {
-	WindowStart     string                   `json:"window_start"`
-	WindowEnd       string                   `json:"window_end"`
-	DurationSeconds float64                  `json:"duration_seconds"`
-	Features        *features.WindowFeatures `json:"features"`
-	Alerts          []alert.Alert            `json:"alerts"`
+	SchemaVersion       string                   `json:"schema_version"`
+	WindowIndex         int                      `json:"window_index"`
+	WindowStart         string                   `json:"window_start"`
+	WindowEnd           string                   `json:"window_end"`
+	DurationSeconds     float64                  `json:"duration_seconds"`
+	Features            *features.WindowFeatures `json:"features"`
+	ActiveFlows         []features.FlowRecord    `json:"active_flows,omitempty"`
+	Graph               features.NetworkGraph    `json:"graph"`
+	DeterministicAlerts []alert.Alert            `json:"deterministic_alerts"`
+	GroundTruthLabel    string                   `json:"ground_truth_label,omitempty"`
 }
 
 func ExportJSON(path string, records []WindowRecord) error {

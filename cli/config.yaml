@@ -1,5 +1,15 @@
 window_seconds: 10
 
+flow_tracking:
+  enabled: true
+  idle_timeout_seconds: 30
+  max_active_flows: 10000
+
+graph_tracking:
+  enabled: true
+  max_nodes: 5000
+  max_edges: 20000
+
 rules:
   port_scan:
     enabled: true

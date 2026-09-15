@@ -100,9 +100,12 @@ func runPipeline(reader capture.PacketReader, sourceDesc string, isLive bool) {
 	var totalPackets int
 
 	windowDuration := time.Duration(cfg.WindowSeconds) * time.Second
+	flowIdleTimeout := time.Duration(cfg.FlowTracking.IdleTimeoutSeconds) * time.Second
 
 	windowMgr := window.NewManager(
 		windowDuration,
+		flowIdleTimeout,
+		cfg.FlowTracking.MaxActiveFlows,
 		func(feat *features.WindowFeatures) {
 			recordsMu.Lock()
 			defer recordsMu.Unlock()
@@ -117,11 +120,16 @@ func runPipeline(reader capture.PacketReader, sourceDesc string, isLive bool) {
 			windowIndex++
 
 			records = append(records, output.WindowRecord{
-				WindowStart:     feat.WindowStart.Format(time.RFC3339Nano),
-				WindowEnd:       feat.WindowEnd.Format(time.RFC3339Nano),
-				DurationSeconds: feat.DurationSeconds,
-				Features:        feat,
-				Alerts:          alerts,
+				SchemaVersion:       feat.SchemaVersion,
+				WindowIndex:         feat.WindowIndex,
+				WindowStart:         feat.WindowStart.Format(time.RFC3339Nano),
+				WindowEnd:           feat.WindowEnd.Format(time.RFC3339Nano),
+				DurationSeconds:     feat.DurationSeconds,
+				Features:            feat,
+				ActiveFlows:         feat.ActiveFlows,
+				Graph:               feat.Graph,
+				DeterministicAlerts: alerts,
+				GroundTruthLabel:    "",
 			})
 		},
 	)

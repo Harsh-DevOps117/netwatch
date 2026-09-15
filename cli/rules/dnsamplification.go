@@ -32,12 +32,16 @@ func (r *DnsAmplificationRule) Evaluate(feat *features.WindowFeatures) []alert.A
 	if rateBreached || byteBreached {
 		return []alert.Alert{
 			{
-				Timestamp:   time.Now(),
-				WindowStart: feat.WindowStart,
-				WindowEnd:   feat.WindowEnd,
-				Type:        alert.TypeDnsAmplificationIndicator,
-				Severity:    alert.SeverityHigh,
-				Protocol:    "UDP/DNS",
+				Timestamp:          time.Now(),
+				WindowIndex:        feat.WindowIndex,
+				WindowStart:        feat.WindowStart,
+				WindowEnd:          feat.WindowEnd,
+				Type:               alert.TypeDnsAmplificationIndicator,
+				Severity:           alert.SeverityHigh,
+				MitreAttackID:      "T1498.002",
+				MitreTactic:        "Impact",
+				MitreTechniqueName: "Network Denial of Service: Reflection Amplification",
+				Protocol:           "UDP/DNS",
 				Reason: fmt.Sprintf(
 					"Unusually high DNS traffic detected (%.1f pkts/sec, %.1f KB/sec). Potential DNS Amplification or Flood attack.",
 					feat.DNSPacketsPerSecond, feat.DNSBytesPerSecond/1024.0,
