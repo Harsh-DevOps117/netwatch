@@ -29,12 +29,16 @@ func (r *UdpFloodRule) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 	if feat.UDPPacketsPerSecond >= r.cfg.UdpPacketsPerSecond && r.cfg.UdpPacketsPerSecond > 0 {
 		return []alert.Alert{
 			{
-				Timestamp:   time.Now(),
-				WindowStart: feat.WindowStart,
-				WindowEnd:   feat.WindowEnd,
-				Type:        alert.TypeUdpFloodIndicator,
-				Severity:    alert.SeverityHigh,
-				Protocol:    "UDP",
+				Timestamp:          time.Now(),
+				WindowIndex:        feat.WindowIndex,
+				WindowStart:        feat.WindowStart,
+				WindowEnd:          feat.WindowEnd,
+				Type:               alert.TypeUdpFloodIndicator,
+				Severity:           alert.SeverityHigh,
+				MitreAttackID:      "T1498.001",
+				MitreTactic:        "Impact",
+				MitreTechniqueName: "Direct Network Flood (UDP Flood)",
+				Protocol:           "UDP",
 				Reason: fmt.Sprintf(
 					"Unusually high UDP packet rate (%.1f/sec exceeds threshold %.1f/sec).",
 					feat.UDPPacketsPerSecond, r.cfg.UdpPacketsPerSecond,

@@ -29,12 +29,16 @@ func (r *ConnectionBurstRule) Evaluate(feat *features.WindowFeatures) []alert.Al
 	if feat.SYNPerSecond >= r.cfg.SynPerSecond && r.cfg.SynPerSecond > 0 {
 		return []alert.Alert{
 			{
-				Timestamp:   time.Now(),
-				WindowStart: feat.WindowStart,
-				WindowEnd:   feat.WindowEnd,
-				Type:        alert.TypeConnectionBurstIndicator,
-				Severity:    alert.SeverityMedium,
-				Protocol:    "TCP",
+				Timestamp:          time.Now(),
+				WindowIndex:        feat.WindowIndex,
+				WindowStart:        feat.WindowStart,
+				WindowEnd:          feat.WindowEnd,
+				Type:               alert.TypeConnectionBurstIndicator,
+				Severity:           alert.SeverityMedium,
+				MitreAttackID:      "T1071",
+				MitreTactic:        "Command and Control",
+				MitreTechniqueName: "Application Layer Protocol: Connection Spike",
+				Protocol:           "TCP",
 				Reason: fmt.Sprintf(
 					"Unusually high number of new TCP connection attempts (%.1f SYN/sec in window).",
 					feat.SYNPerSecond,

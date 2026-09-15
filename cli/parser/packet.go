@@ -14,17 +14,43 @@ type TCPFlags struct {
 	RST bool `json:"rst"`
 	FIN bool `json:"fin"`
 	PSH bool `json:"psh"`
+	URG bool `json:"urg"`
+	ECE bool `json:"ece"`
+	CWR bool `json:"cwr"`
+	NS  bool `json:"ns"`
+}
+
+func (f TCPFlags) IsZero() bool {
+	return !f.SYN && !f.ACK && !f.RST && !f.FIN && !f.PSH && !f.URG && !f.ECE && !f.CWR && !f.NS
+}
+
+func (f TCPFlags) IsXmas() bool {
+	return f.FIN && f.PSH && f.URG && !f.SYN && !f.ACK && !f.RST
+}
+
+func (f TCPFlags) IsFinOnly() bool {
+	return f.FIN && !f.SYN && !f.ACK && !f.RST && !f.PSH && !f.URG
 }
 
 type ParsedPacket struct {
-	Timestamp time.Time `json:"timestamp"`
-	Length    int       `json:"length"`
-	SrcIP     net.IP    `json:"src_ip,omitempty"`
-	DstIP     net.IP    `json:"dst_ip,omitempty"`
-	SrcPort   uint16    `json:"src_port,omitempty"`
-	DstPort   uint16    `json:"dst_port,omitempty"`
-	Protocol  string    `json:"protocol"`
-	TCPFlags  TCPFlags  `json:"tcp_flags,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+	Length            int       `json:"length"`
+	PayloadLength     int       `json:"payload_length"`
+	SrcIP             net.IP    `json:"src_ip,omitempty"`
+	DstIP             net.IP    `json:"dst_ip,omitempty"`
+	SrcPort           uint16    `json:"src_port,omitempty"`
+	DstPort           uint16    `json:"dst_port,omitempty"`
+	Protocol          string    `json:"protocol"`
+	HasIP             bool      `json:"has_ip"`
+	TTL               uint8     `json:"ttl,omitempty"`
+	IsFragmented      bool      `json:"is_fragmented"`
+	FragOffset        uint16    `json:"frag_offset,omitempty"`
+	TCPFlags          TCPFlags  `json:"tcp_flags,omitempty"`
+	TCPWindowSize     uint16    `json:"tcp_window_size,omitempty"`
+	TCPSeq            uint32    `json:"tcp_seq,omitempty"`
+	TCPAck            uint32    `json:"tcp_ack,omitempty"`
+	IsICMPEchoRequest bool      `json:"is_icmp_echo_request,omitempty"`
+	IsDNS             bool      `json:"is_dns,omitempty"`
 }
 
 func ParsePacket(pkt gopacket.Packet) *ParsedPacket {
@@ -47,31 +73,56 @@ func ParsePacket(pkt gopacket.Packet) *ParsedPacket {
 		parsed.Length = len(pkt.Data())
 	}
 
+	// 1. IP Layer Parsing (IPv4 / IPv6)
 	if ip4Layer := pkt.Layer(layers.LayerTypeIPv4); ip4Layer != nil {
 		if ip4, ok := ip4Layer.(*layers.IPv4); ok {
 			parsed.SrcIP = ip4.SrcIP
 			parsed.DstIP = ip4.DstIP
 			parsed.Protocol = "IPv4"
+			parsed.HasIP = true
+			parsed.TTL = ip4.TTL
+			parsed.FragOffset = ip4.FragOffset
+			if (ip4.Flags&layers.IPv4MoreFragments != 0) || ip4.FragOffset > 0 {
+				parsed.IsFragmented = true
+			}
 		}
 	} else if ip6Layer := pkt.Layer(layers.LayerTypeIPv6); ip6Layer != nil {
 		if ip6, ok := ip6Layer.(*layers.IPv6); ok {
 			parsed.SrcIP = ip6.SrcIP
 			parsed.DstIP = ip6.DstIP
 			parsed.Protocol = "IPv6"
+			parsed.HasIP = true
+			parsed.TTL = uint8(ip6.HopLimit)
 		}
 	}
 
+	if pkt.Layer(layers.LayerTypeIPv6Fragment) != nil {
+		parsed.IsFragmented = true
+	}
+
+	// 2. Transport & Upper Layer Parsing
 	if tcpLayer := pkt.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 		if tcp, ok := tcpLayer.(*layers.TCP); ok {
 			parsed.Protocol = "TCP"
 			parsed.SrcPort = uint16(tcp.SrcPort)
 			parsed.DstPort = uint16(tcp.DstPort)
+			parsed.TCPWindowSize = tcp.Window
+			parsed.TCPSeq = tcp.Seq
+			parsed.TCPAck = tcp.Ack
+			parsed.PayloadLength = len(tcp.Payload)
 			parsed.TCPFlags = TCPFlags{
 				SYN: tcp.SYN,
 				ACK: tcp.ACK,
 				RST: tcp.RST,
 				FIN: tcp.FIN,
 				PSH: tcp.PSH,
+				URG: tcp.URG,
+				ECE: tcp.ECE,
+				CWR: tcp.CWR,
+				NS:  tcp.NS,
+			}
+			if parsed.SrcPort == 53 || parsed.DstPort == 53 {
+				parsed.IsDNS = true
 			}
 		}
 	} else if udpLayer := pkt.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -79,13 +130,36 @@ func ParsePacket(pkt gopacket.Packet) *ParsedPacket {
 			parsed.Protocol = "UDP"
 			parsed.SrcPort = uint16(udp.SrcPort)
 			parsed.DstPort = uint16(udp.DstPort)
+			parsed.PayloadLength = len(udp.Payload)
+			if parsed.SrcPort == 53 || parsed.DstPort == 53 {
+				parsed.IsDNS = true
+			}
 		}
-	} else if pkt.Layer(layers.LayerTypeICMPv4) != nil {
+	} else if icmp4Layer := pkt.Layer(layers.LayerTypeICMPv4); icmp4Layer != nil {
 		parsed.Protocol = "ICMP"
-	} else if pkt.Layer(layers.LayerTypeICMPv6) != nil {
+		if icmp4, ok := icmp4Layer.(*layers.ICMPv4); ok {
+			parsed.PayloadLength = len(icmp4.Payload)
+			if icmp4.TypeCode.Type() == layers.ICMPv4TypeEchoRequest {
+				parsed.IsICMPEchoRequest = true
+			}
+		}
+	} else if icmp6Layer := pkt.Layer(layers.LayerTypeICMPv6); icmp6Layer != nil {
 		parsed.Protocol = "ICMPv6"
+		if icmp6, ok := icmp6Layer.(*layers.ICMPv6); ok {
+			parsed.PayloadLength = len(icmp6.Payload)
+			if icmp6.TypeCode.Type() == layers.ICMPv6TypeEchoRequest {
+				parsed.IsICMPEchoRequest = true
+			}
+		}
 	} else if pkt.Layer(layers.LayerTypeARP) != nil {
 		parsed.Protocol = "ARP"
+	}
+
+	// Fallback for payload length from application layer if available
+	if parsed.PayloadLength == 0 {
+		if appLayer := pkt.ApplicationLayer(); appLayer != nil {
+			parsed.PayloadLength = len(appLayer.Payload())
+		}
 	}
 
 	return parsed

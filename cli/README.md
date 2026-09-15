@@ -1,15 +1,16 @@
-# Deterministic Network Threat Detection Engine
+# Netwatch Deterministic Network Threat Detection Engine
 
 > **Project:** Deterministic Network Traffic Ingestion & Threat Detection  
 > **Problem Statement (NTRO):** *"AI Based Network Attack Forecasting from Network Traffic Data"*  
 > **Language:** Go (1.21+)  
-> **Core Library:** `github.com/google/gopacket`
+> **Core Library:** `github.com/google/gopacket`  
+> **Schema Version:** `2.0`  
 
 ---
 
 ## 1. Executive Summary & Objective
 
-This project provides a standalone, high-performance, deterministic network threat detection engine written in idiomatic Go. It is designed to parse raw PCAP files, segment packets into time-bounded windows, extract statistical and relationship features, and apply deterministic rules to identify attack indicators in real-time or offline forensic mode.
+This project provides a standalone, high-performance, deterministic network threat detection and telemetry extraction engine written in idiomatic Go. It is designed to parse raw PCAP files, segment packets into time-bounded windows, extract deep statistical, packet-level, and relationship graph features, track bidirectional network flows, and apply deterministic rules to identify attack indicators in real-time or offline forensic mode.
 
 ### The NTRO Context & Future World Model
 The ultimate goal of the NTRO problem statement is to build an **Attack Forecasting System** using a **World Model** that predicts how cyberattacks evolve over time.
@@ -19,31 +20,33 @@ The ultimate goal of the NTRO problem statement is to build an **Attack Forecast
 |                      CURRENT PHASE                          |
 |             (Deterministic Detection Engine)                |
 |                                                             |
-|   Network Traffic (PCAP)                                    |
+|   Network Traffic (PCAP / Live Interface)                   |
 |          │                                                  |
 |          ▼                                                  |
-|   Go Deterministic Engine                                   |
+|   Go Deterministic Engine (Zero CGO)                        |
 |          │                                                  |
 |          ▼                                                  |
-|   Window Features + Threat Indicators (JSON Output)         |
+|   Temporal Feature Vectors + Graph Topology                 |
+|   + Bidirectional Flows + Threat Indicators (JSON Schema 2.0|
 +------------------------------┬------------------------------+
                                │ (Clean Boundary)
 +------------------------------▼------------------------------+
 |                       FUTURE PHASE                          |
 |                   (Temporal Forecasting)                    |
 |                                                             |
-|   Window JSON Feature Vectors                               |
+|   Window JSON Feature Sequences & Graph Snapshots           |
 |          │                                                  |
 |          ▼                                                  |
 |   World Model (Predictive ML / Temporal Transition)         |
 |          │                                                  |
 |          ▼                                                  |
-|   Attack Progression & Future State Forecast                |
+|   Attack Progression & Future State Forecast (MITRE ATT&CK) |
 +-------------------------------------------------------------+
 ```
 
-**Key Architectural Rule:**
+**Key Architectural Rules:**
 - **Zero Hallucination / Zero Simulation:** This engine contains no machine learning, mock prediction logic, or simulated attack progressions.
+- **100% Real Packet Telemetry:** Features are mathematically computed from decoded packet headers in each time window.
 - **Independence:** It is a standalone, deterministic telemetry and feature extractor that produces clean, structured JSON data to serve as training or inference input for future World Models.
 
 ---
@@ -53,13 +56,11 @@ The ultimate goal of the NTRO problem statement is to build an **Attack Forecast
 1. **Ground Truth Baseline:** Deterministic rules provide verifiable, reproducible, and explainable evidence without false confidence intervals.
 2. **High Throughput & Low Latency:** Written in compiled Go with zero CGO overhead, processing tens of thousands of packets per second.
 3. **Evidence, Not Proof:** A threshold breach is treated as an *Indicator* (`PORT_SCAN_INDICATOR`, `SYN_FLOOD_INDICATOR`), not absolute mathematical proof of malice.
-4. **Structured Feature Generation:** In addition to alerting, every time window produces structured feature vectors that describe the network state.
+4. **Structured Feature Generation:** Every time window produces structured feature vectors, host relationship graphs, and flow records describing the evolving network state.
 
 ---
 
 ## 3. Architecture Pipeline
-
-Network traffic flows through a strictly decoupled pipeline:
 
 ```
                   ┌──────────────────────┐
@@ -68,28 +69,30 @@ Network traffic flows through a strictly decoupled pipeline:
                              │
                              ▼
                   ┌──────────────────────┐
-                  │    capture/pcap.go   │  Streams raw packets
+                  │    capture/pcap.go   │  Streams raw packets (offline/live/stdin)
                   └──────────┬───────────┘
                              │
                              ▼
                   ┌──────────────────────┐
-                  │   parser/packet.go   │  Extracts IP, Ports, Protocols, TCP Flags
+                  │   parser/packet.go   │  Extracts IP, Ports, 9 TCP Flags, TTL,
+                  └──────────┬───────────┘  Window Size, IP Frag, Seq, Ack, Payload
+                             │
+                             ▼
+                  ┌──────────────────────┐
+                  │   window/window.go   │  Slices stream into indexed time windows
                   └──────────┬───────────┘
                              │
                              ▼
                   ┌──────────────────────┐
-                  │   window/window.go   │  Slices stream into 10-second windows
+                  │ features/features.go │  Calculates stats (TTL, IAT, TCP Win, Retrans),
+                  │  features/flow.go    │  tracks bidirectional flows with state machines,
+                  │  features/graph.go   │  and generates host-to-host topology graphs
                   └──────────┬───────────┘
                              │
                              ▼
                   ┌──────────────────────┐
-                  │ features/features.go │  Aggregates rates, ratios, host/port graphs
-                  └──────────┬───────────┘
-                             │
-                             ▼
-                  ┌──────────────────────┐
-                  │    rules/engine.go   │  Evaluates 7 deterministic threat rules
-                  └──────────┬───────────┘
+                  │    rules/engine.go   │  Evaluates 11 deterministic threat rules
+                  └──────────┬───────────┘  with MITRE ATT&CK classification
                              │
                ┌─────────────┴─────────────┐
                ▼                           ▼
@@ -104,357 +107,228 @@ Network traffic flows through a strictly decoupled pipeline:
 ## 4. Directory Structure & File Functionality
 
 ```
-sih-2026/
-├── main.go                     # Application entry point (delegates to cmd.Execute())
-├── go.mod                      # Go module definition
-├── go.sum                      # Dependency checksums
-├── config.yaml                 # Configurable detection thresholds and rule flags
-├── README.md                   # Complete architectural and usage guide
+cli/
+├── run.sh                  # Universal runner script (live capture, PCAP analysis, builds)
+├── main.go                 # Application entry point (delegates to cmd.Execute())
+├── go.mod                  # Go module definition
+├── go.sum                  # Dependency checksums
+├── config.yaml             # Configurable detection thresholds and rule flags
+├── Makefile                # Fast build and lint automation
+├── README.md               # Complete architectural and usage guide
+├── ARCHITECTURE.md         # Detailed system design & feature specification
 │
-├── cmd/                        # Cobra CLI Commands
-│   ├── root.go                 # Root command, persistent flags & pipeline runner
-│   ├── analyze.go              # 'detector analyze <file>' command
-│   ├── live.go                 # 'detector live' real-time network capture command
-│   ├── generate.go             # 'detector generate [sample|attack]' PCAP generator
-│   └── version.go              # 'detector version' information command
+├── cmd/                    # Cobra CLI Commands
+│   ├── root.go             # Root command, persistent flags & pipeline runner
+│   ├── analyze.go          # 'detector analyze <file>' command
+│   ├── live.go             # 'detector live' real-time network capture command
+│   └── version.go          # 'detector version' information command
 │
 ├── capture/
-│   ├── pcap.go                 # Offline PCAP and PCAP-NG reader
-│   └── pcap_test.go            # Unit tests for capture handles
+│   ├── pcap.go             # Offline PCAP and PCAP-NG reader
+│   └── live.go             # Live network interface streamer (tshark / tcpdump / stdin)
 │
 ├── parser/
-│   ├── packet.go               # Protocol parser & safe field extraction
-│   └── packet_test.go          # Unit tests for IPv4/IPv6, TCP flags, ICMP
+│   └── packet.go           # Protocol parser & safe field extraction (TTL, TCP Win, Frag, Flags)
 │
 ├── window/
-│   ├── window.go               # Sliding / tumbling time window manager
-│   └── window_test.go          # Unit tests for 10-second relative windowing
+│   └── window.go           # Sliding / tumbling indexed time window manager
 │
 ├── features/
-│   └── features.go             # Statistical feature calculation & state aggregation
+│   ├── features.go         # Statistical feature calculation & state aggregation
+│   ├── flow.go             # Bidirectional flow tracker with TCP state machine & memory bounds
+│   └── graph.go            # Host-to-host and host-to-port relationship graph builder
 │
 ├── rules/
-│   ├── engine.go               # Rule coordinator and multi-rule evaluator
-│   ├── portscan.go             # Destination port fan-out detector
-│   ├── hostscan.go             # Destination host fan-out detector
-│   ├── synflood.go             # High SYN rate and SYN/SYN-ACK ratio detector
-│   ├── ackflood.go             # High TCP ACK volume detector
-│   ├── udpflood.go             # High UDP packet/byte rate detector
-│   ├── connectionburst.go      # Burst TCP connection attempt detector
-│   ├── flags.go                # Illegal TCP flag combinations (SYN+FIN, etc.)
-│   └── rules_test.go           # 9 comprehensive unit tests for all rule scenarios
+│   ├── engine.go           # Rule coordinator and multi-rule evaluator
+│   ├── portscan.go         # Destination port fan-out detector (MITRE T1046)
+│   ├── hostscan.go         # Destination host fan-out detector (MITRE T1018)
+│   ├── synflood.go         # High SYN rate & SYN/SYN-ACK ratio detector (MITRE T1498.001)
+│   ├── ackflood.go         # High TCP ACK volume detector (MITRE T1498.001)
+│   ├── rstflood.go         # High TCP RST rate teardown detector (MITRE T1499)
+│   ├── udpflood.go         # High UDP packet/byte rate detector (MITRE T1498.001)
+│   ├── icmpflood.go        # ICMP flood & Ping Sweep detector (MITRE T1498.001 / T1595.001)
+│   ├── dnsamplification.go # High DNS rate amplification detector (MITRE T1498.002)
+│   ├── stealthscan.go      # Stealth TCP scans (NULL, XMAS, FIN scans) (MITRE T1046)
+│   ├── connectionburst.go  # Burst TCP connection attempt detector (MITRE T1071)
+│   └── flags.go            # Illegal TCP flag combinations (SYN+FIN, etc.) (MITRE T1027)
 │
 ├── alert/
-│   └── alert.go                # Alert data structures and severity constants
+│   └── alert.go            # Alert data structures with MITRE ATT&CK taxonomy
 │
 ├── config/
-│   └── config.go               # YAML configuration loader and default fallback
+│   └── config.go           # YAML configuration loader with auto-detection & validation
 │
-├── output/
-│   ├── console.go              # Formatted terminal printing (windows & summary)
-│   └── json.go                 # JSON exporter for window features & alerts
-│
-└── testutil/
-    ├── gensample/main.go       # Generator for normal baseline PCAP
-    └── genattack/main.go       # Generator for synthetic attack PCAP
+└── output/
+    ├── console.go          # Formatted terminal printing (windows, topology & summary)
+    └── json.go             # Schema 2.0 JSON exporter (features, flows, graphs & alerts)
 ```
 
 ---
 
-## 5. Detailed Component & Function Breakdown
+## 5. Comprehensive Feature Breakdown
 
-### `capture/pcap.go`
-- **Purpose:** Opens offline capture files without CGO dependencies.
-- **Key Structs & Functions:**
-  - `type Handle struct`: Wraps an `os.File` and a `*gopacket.PacketSource`.
-  - `OpenPCAP(path string) (*Handle, error)`: Attempts classic PCAP format (`pcapgo.NewReader`), falling back automatically to PCAP-NG (`pcapgo.NewNgReader`).
-  - `(h *Handle) Packets() <-chan gopacket.Packet`: Returns packet stream channel.
-  - `(h *Handle) Close() error`: Cleans up the underlying file descriptor.
+### 5.1 Deep Packet-Level Features
+- **TTL / Hop Limit Statistics**: `TTLMean`, `TTLMin`, `TTLMax`, `TTLStdDev` per window.
+- **TCP Window Size Statistics**: `TCPWindowMean`, `TCPWindowMin`, `TCPWindowMax`, `TCPWindowStdDev`.
+- **IP Fragmentation Tracking**: `FragmentedPacketsCount`, `FragmentedPacketsRatio`.
+- **Payload Distribution**: `PayloadMean`, `PayloadMin`, `PayloadMax`, `PayloadStdDev`, and histogram distribution buckets (`0_64`, `65_512`, `513_1024`, `1025_1500`, `1501_plus`).
+- **Inter-Arrival Time (IAT)**: `IATMeanMicroseconds`, `IATStdDevMicroseconds`, `IATMinMicroseconds`, `IATMaxMicroseconds`.
+- **TCP Retransmissions**: Tracked via sequence number recurrence: `TCPRetransmissionsCount`, `TCPRetransmissionRatio`.
 
-### `parser/packet.go`
-- **Purpose:** Safely extracts network layer, transport layer, and TCP flag metadata from raw packets. Gracefully handles missing layers without panicking.
-- **Key Structs & Functions:**
-  - `type TCPFlags struct`: Holds boolean flags (`SYN`, `ACK`, `RST`, `FIN`, `PSH`).
-  - `type ParsedPacket struct`: Normalized packet representation containing `Timestamp`, `Length`, `SrcIP`, `DstIP`, `SrcPort`, `DstPort`, `Protocol`, `TCPFlags`.
-  - `ParsePacket(pkt gopacket.Packet) *ParsedPacket`: Extracts fields safely from IPv4, IPv6, TCP, UDP, ICMPv4, ICMPv6, and ARP layers.
+### 5.2 Bidirectional Flow Tracking (`features/flow.go`)
+- 5-tuple canonical bidirectional flow key: `SrcIP:SrcPort <-> DstIP:DstPort (Protocol)`.
+- Forward (fwd) and backward (bwd) packets, bytes, payload bytes, and IAT statistics.
+- TCP state machine tracking: `INIT`, `SYN_SENT`, `ESTABLISHED`, `FIN_WAIT`, `CLOSED`, `RESET`.
+- Expiration & bounded memory management: configurable idle timeout (default 30s) and max active flows limit (default 10,000) with automatic LRU eviction.
 
-### `window/window.go`
-- **Purpose:** Segments packets into fixed time slices (default: 10 seconds) measured **relative to the first packet's timestamp**.
-- **Key Structs & Functions:**
-  - `type Manager struct`: Tracks current `windowStart`, `windowEnd`, and delegates packet accumulation to a `features.FeatureAggregator`.
-  - `NewManager(duration time.Duration, onWindowClosed func(*features.WindowFeatures)) *Manager`: Initializes the manager.
-  - `(m *Manager) ProcessPacket(p *parser.ParsedPacket)`: Places the packet into the active window. If the packet's timestamp exceeds `windowEnd`, it computes the current window's features, triggers `onWindowClosed`, and advances the window span.
-  - `(m *Manager) Flush()`: Finalizes and emits the last active window upon reaching EOF.
+### 5.3 Host Relationship & Graph Structure (`features/graph.go`)
+- Node features per host: IP, In-degree, Out-degree, packets sent/received, bytes sent/received, distinct destination ports contacted, incomplete connections initiated.
+- Directed edge features: source/destination IPs, packet counts, byte volumes, protocols used, distinct destination ports, SYN/ACK/RST counts.
+- Graph-level metrics: Total nodes, total edges, density.
 
-### `features/features.go`
-- **Purpose:** Computes comprehensive statistical, temporal, and relational metrics over a time window.
-- **Key Structs & Functions:**
-  - `type WindowFeatures struct`: Holds aggregated features:
-    - **Basic:** `TotalPackets`, `TotalBytes`, `PacketsPerSecond`, `BytesPerSecond`.
-    - **IPs:** `UniqueSourceIPs`, `UniqueDestinationIPs`.
-    - **Ports:** `UniqueSourcePorts`, `UniqueDestinationPorts`.
-    - **TCP:** `TCPPackets`, `SYNCount`, `SYNACKCount`, `ACKCount`, `RSTCount`, `FINCount`, `PSHCount`, `SYNPerSecond`, `ACKPerSecond`, `SYNAckRatio`.
-    - **UDP:** `UDPPackets`, `UDPBytes`, `UDPPacketsPerSecond`, `UDPBytesPerSecond`.
-    - **Connection State:** `ApproxIncompleteConnections` ($\max(0, \text{SYN} - \text{SYN-ACK})$).
-    - **Mappings:** `SrcIPToDstPorts`, `SrcIPToDstIPs`, `SrcIPToPackets`, `SrcIPToSYNs`, `SuspiciousFlagPackets`.
-  - `(a *FeatureAggregator) AddPacket(p *parser.ParsedPacket)`: Updates ongoing counts and relationship maps.
-  - `(a *FeatureAggregator) ComputeFinalFeatures() *WindowFeatures`: Normalizes rates against window duration and computes ratios safely (zero-division guarded).
-
-### `rules/` (Detection Rules)
-- **`rules/engine.go`:**
-  - `type Rule interface`: `Name() string`, `Evaluate(feat *features.WindowFeatures) []alert.Alert`.
-  - `type Engine struct`: Orchestrates and runs all enabled rules against each window.
-- **`rules/portscan.go` (`PORT_SCAN_INDICATOR`):**
-  - Triggers if a single source IP contacts $\ge \text{unique\_ports}$ (default: 20) destination ports within one window.
-  - Severity: `HIGH`.
-- **`rules/hostscan.go` (`HOST_SCAN_INDICATOR`):**
-  - Triggers if a single source IP contacts $\ge \text{unique\_hosts}$ (default: 20) destination IPs within one window.
-  - Severity: `HIGH`.
-- **`rules/synflood.go` (`SYN_FLOOD_INDICATOR`):**
-  - Triggers if `SYNPerSecond >= syn_per_second` (default: 500) OR (`SYNAckRatio >= syn_ack_ratio` (default: 5.0) AND `SYNCount >= min_syn_count`).
-  - Severity: `HIGH`.
-- **`rules/ackflood.go` (`ACK_FLOOD_INDICATOR`):**
-  - Triggers if `ACKPerSecond >= ack_per_second` (default: 1000).
-  - Severity: `HIGH`.
-- **`rules/udpflood.go` (`UDP_FLOOD_INDICATOR`):**
-  - Triggers if `UDPPacketsPerSecond >= udp_packets_per_second` (default: 1000).
-  - Severity: `HIGH`.
-- **`rules/connectionburst.go` (`CONNECTION_BURST_INDICATOR`):**
-  - Triggers on sudden spikes of new TCP connection attempts (`SYNPerSecond >= syn_per_second`).
-  - Severity: `MEDIUM`.
-- **`rules/flags.go` (`SUSPICIOUS_TCP_FLAGS`):**
-  - Identifies illegal TCP flag combinations: `SYN+FIN`, `SYN+RST`, `FIN+RST`.
-  - Severity: `MEDIUM`.
-
-### `alert/alert.go`
-- **Purpose:** Standardized schema for threat indicators.
-- **Fields:**
-  ```go
-  type Alert struct {
-      Timestamp     time.Time              `json:"timestamp"`
-      WindowStart   time.Time              `json:"window_start"`
-      WindowEnd     time.Time              `json:"window_end"`
-      Type          string                 `json:"type"`
-      Severity      string                 `json:"severity"` // LOW, MEDIUM, HIGH
-      SourceIP      string                 `json:"source_ip,omitempty"`
-      DestinationIP string                 `json:"destination_ip,omitempty"`
-      Protocol      string                 `json:"protocol,omitempty"`
-      Reason        string                 `json:"reason"`
-      Features      map[string]interface{} `json:"features,omitempty"`
-  }
-  ```
-
-### `output/console.go` & `output/json.go`
-- **`console.go`:** Prints formatted startup banners, per-window telemetry summaries, alerts, and final completion statistics. If no alerts trigger, explicitly confirms: *"No deterministic threat indicators detected."*
-- **`json.go`:** Exports an array of `WindowRecord` objects containing timestamp bounds, complete `features` payload, and detected `alerts` array.
+### 5.4 Deterministic Threat Detection Rules (11 Rules)
+All rules include full MITRE ATT&CK taxonomy:
+- **Port Scan (`PORT_SCAN_INDICATOR`)**: MITRE T1046 (Network Service Discovery).
+- **Host Scan (`HOST_SCAN_INDICATOR`)**: MITRE T1018 (Remote System Discovery).
+- **SYN Flood (`SYN_FLOOD_INDICATOR`)**: MITRE T1498.001 (Direct Network Flood).
+- **ACK Flood (`ACK_FLOOD_INDICATOR`)**: MITRE T1498.001 (Direct Network Flood).
+- **RST Flood (`RST_FLOOD_INDICATOR`)**: MITRE T1499 (Endpoint DoS: Connection Teardown).
+- **UDP Flood (`UDP_FLOOD_INDICATOR`)**: MITRE T1498.001 (Direct Network Flood).
+- **ICMP Flood & Ping Sweep (`ICMP_FLOOD_INDICATOR` / `PING_SWEEP_INDICATOR`)**: MITRE T1498.001 / T1595.001.
+- **DNS Amplification (`DNS_AMPLIFICATION_INDICATOR`)**: MITRE T1498.002 (Reflection Amplification).
+- **Stealth Scans (`NULL_SCAN_INDICATOR`, `XMAS_SCAN_INDICATOR`, `FIN_SCAN_INDICATOR`)**: MITRE T1046.
+- **Connection Burst (`CONNECTION_BURST_INDICATOR`)**: MITRE T1071 (Application Layer Protocol Spike).
+- **Suspicious Flags (`SUSPICIOUS_TCP_FLAGS`)**: MITRE T1027 (Obfuscated/Abnormal Protocol Signatures).
 
 ---
 
 ## 6. Configuration Guide (`config.yaml`)
 
-Thresholds are decoupled from the Go code and configured via YAML:
-
 ```yaml
-# Time window duration in seconds (relative to capture start)
+# Time window duration in seconds
 window_seconds: 10
+
+flow_tracking:
+  enabled: true
+  idle_timeout_seconds: 30
+  max_active_flows: 10000
+
+graph_tracking:
+  enabled: true
+  max_nodes: 5000
+  max_edges: 20000
 
 rules:
   port_scan:
     enabled: true
-    unique_ports: 20       # Trigger if 1 IP contacts >= 20 destination ports
+    unique_ports: 20
 
   host_scan:
     enabled: true
-    unique_hosts: 20       # Trigger if 1 IP contacts >= 20 destination IPs
+    unique_hosts: 20
 
   syn_flood:
     enabled: true
-    syn_per_second: 500    # Trigger if SYN rate exceeds 500/sec
-    syn_ack_ratio: 5.0     # Trigger if SYN to SYN-ACK ratio exceeds 5.0
-    min_syn_count: 50      # Minimum SYNs required to evaluate ratio
+    syn_per_second: 500
+    syn_ack_ratio: 5.0
+    min_syn_count: 50
 
   ack_flood:
     enabled: true
-    ack_per_second: 1000   # Trigger if ACK rate exceeds 1000/sec
+    ack_per_second: 1000
+
+  rst_flood:
+    enabled: true
+    rst_per_second: 500
 
   udp_flood:
     enabled: true
-    udp_packets_per_second: 1000 # Trigger if UDP packet rate exceeds 1000/sec
+    udp_packets_per_second: 1000
+
+  icmp_flood:
+    enabled: true
+    icmp_per_second: 300
+    ping_sweep_enabled: true
+    unique_targets: 15
+
+  dns_flood:
+    enabled: true
+    dns_packets_per_second: 500
+    dns_bytes_per_second: 500000
+
+  stealth_scan:
+    enabled: true
+    min_packets: 3
 
   connection_burst:
     enabled: true
-    syn_per_second: 500    # Trigger on burst connection attempts
+    syn_per_second: 500
 
   suspicious_flags:
-    enabled: true          # Detect SYN+FIN, SYN+RST, FIN+RST
+    enabled: true
 ```
 
 ---
 
 ## 7. How to Run
 
-The engine supports dual operating modes: **Offline PCAP Forensics** and **Real-Time Live Network Monitoring**.
-
-### Mode A: Real-Time Live Monitoring (on Laptop Interface)
+### Using the Runner Script (`cli/run.sh`)
 
 ```bash
-# 1. Automatic Live Mode (auto-detects active Wi-Fi / Ethernet interface, e.g. wlo1)
-go run . --live
+cd cli
 
-# 2. Live capture on a specific network interface
-go run . --interface wlo1
+# 1. Real-time Live Network Monitoring (auto-detects active Wi-Fi / Ethernet interface)
+./run.sh live
 
-# 3. Live capture with BPF packet filter
-go run . --interface wlo1 --bpf "tcp or udp"
+# 2. Live Monitoring on specific interface (e.g. eth0, wlo1)
+./run.sh live eth0
 
-# 4. Live capture with custom 5-second aggregation windows & JSON export
-go run . --live --window 5 --output live_telemetry.json
+# 3. Offline PCAP Forensics with JSON Export
+./run.sh analyze capture.pcap -w 10 -o output.json
 
-# (Press Ctrl+C at any time to stop live monitoring and print the audit summary)
-```
+# 4. Stream via standard input pipe
+tshark -i eth0 -F pcap -w - | ./run.sh stdin
 
-### Mode B: Offline PCAP Forensics
-
-```bash
-# 1. Analyze an existing PCAP file
-go run . --pcap laptop_traffic.pcap
-
-# 2. Custom window duration (e.g. 5 seconds)
-go run . --pcap laptop_traffic.pcap --window 5
-
-# 3. Custom configuration thresholds
-go run . --pcap laptop_traffic.pcap --config config.yaml
-
-# 4. Export JSON features & alerts for downstream ML / World Model
-go run . --pcap laptop_traffic.pcap --output alerts.json
-
-# 5. Read PCAP stream from standard input pipe
-tshark -i wlo1 -F pcap -w - | go run . --stdin
+# 5. Build or Clean
+./run.sh build
+./run.sh clean
 ```
 
 ---
 
-## 8. Verification & Synthetic Testing
-
-Two test utilities are provided to test both clean traffic and active threat scenarios:
-
-### 1. Test Clean Traffic
-```bash
-go run ./testutil/gensample
-go run . --pcap sample.pcap
-```
-**Result:** 6 windows processed, 0 threat indicators (clean capture).
-
-### 2. Test Attack Scenarios (Port Scan, SYN Flood, Flag Anomalies)
-```bash
-go run ./testutil/genattack
-go run . --pcap attack_sample.pcap
-```
-**Result:** Detects `PORT_SCAN_INDICATOR`, `SYN_FLOOD_INDICATOR`, and `SUSPICIOUS_TCP_FLAGS` across respective windows.
-
----
-
-## 9. Automated Unit Test Suite
-
-Run all unit tests across the entire codebase:
-
-```bash
-go test -v ./...
-```
-
-The test suite covers:
-1. `TestPortScanTriggersAboveThreshold`
-2. `TestPortScanDoesNotTriggerBelowThreshold`
-3. `TestSynFloodTriggersOnHighRate`
-4. `TestSynFloodTriggersOnAbnormalRatio`
-5. `TestAckFloodTriggersAboveThreshold`
-6. `TestUdpFloodTriggersAboveThreshold`
-7. `TestHostScanTriggersAboveThreshold`
-8. `TestSuspiciousTCPFlagsTrigger`
-9. `TestNormalTrafficProducesZeroAlerts`
-10. `TestWindowManager10SecondWindows`
-11. `TestOpenPCAPAndReadPackets`
-12. `TestParseIPv4TCPPacket`, `TestParseIPv6UDPPacket`, `TestParseICMPPacket`
-
----
-
-## 10. Summary of Output Formats
+## 8. Summary of Output Formats
 
 ### Sample Console Output
 
 ```text
-========================================
-DETERMINISTIC NETWORK THREAT DETECTOR
-========================================
-Input:  attack_sample.pcap
-Window: 10 seconds
+================================================================================
+DETERMINISTIC NETWORK THREAT DETECTION ENGINE
+NTRO Cyber Security & Threat Telemetry
+================================================================================
 
---------------------------------------------------------------------------------
-Window #1: 0s - 10s (10:00:00.100 to 10:00:10.100)
-Packets: 42     | Bytes: 2520       | Packets/sec: 4.2     | Bytes/sec: 252.0     
-TCP: 42         | SYN: 42    | SYN-ACK: 0     | ACK: 0      | RST: 0   
-UDP: 0          | UDP Bytes: 0          | Unique Dst Ports: 36   | Unique Dst IPs: 1   
+  Traffic Source : PCAP File: capture.pcap
+  Operating Mode : Offline PCAP Forensics
+  Time Window    : 10 seconds per aggregation slice
 
-Threat Indicators:
-  [HIGH] PORT_SCAN_INDICATOR
-    Source: 192.168.1.50
-    Reason: One source contacted an unusually large number of destination ports (35 unique ports in 10s window).
-
-========================================
-PROCESSING SUMMARY
-========================================
-Packets processed:        640
-Windows processed:        3
-Threat indicators raised: 4
-
-Conclusion: 4 deterministic threat indicator(s) identified for further inspection.
-```
-
-### Sample JSON Output (`alerts.json`)
-
-```json
-[
-  {
-    "window_start": "2026-09-05T10:00:00.1Z",
-    "window_end": "2026-09-05T10:00:10.1Z",
-    "duration_seconds": 10,
-    "features": {
-      "total_packets": 42,
-      "total_bytes": 2520,
-      "packets_per_second": 4.2,
-      "bytes_per_second": 252,
-      "unique_source_ips": 1,
-      "unique_destination_ips": 1,
-      "unique_source_ports": 35,
-      "unique_destination_ports": 35,
-      "tcp_packets": 42,
-      "syn_count": 42,
-      "syn_ack_count": 0,
-      "ack_count": 0,
-      "rst_count": 0,
-      "fin_count": 0,
-      "psh_count": 0,
-      "syn_per_second": 4.2,
-      "ack_per_second": 0,
-      "syn_ack_ratio": 42,
-      "udp_packets": 0,
-      "udp_bytes": 0,
-      "udp_packets_per_second": 0,
-      "udp_bytes_per_second": 0,
-      "approx_incomplete_connections": 42
-    },
-    "alerts": [
-      {
-        "timestamp": "2026-09-05T11:27:41Z",
-        "window_start": "2026-09-05T10:00:00.1Z",
-        "window_end": "2026-09-05T10:00:10.1Z",
-        "type": "PORT_SCAN_INDICATOR",
-        "severity": "HIGH",
-        "source_ip": "192.168.1.50",
-        "protocol": "TCP/UDP",
-        "reason": "One source contacted an unusually large number of destination ports (35 unique ports in 10s window)."
-      }
-    ]
-  }
-]
+┌── WINDOW #1 (10s duration) ───────────────────────── [10:00:00.100 → 10:00:10.100] ┐
+│  TRAFFIC VOLUME
+│    Packets : 4200     | Volume  : 2.40 MB     | Rate : 420.0 pkts/s (245.8 KB/s)
+│
+│  PROTOCOL & TRAFFIC DYNAMICS
+│    TCP  : 4200   (SYN: 4000 | SYN-ACK: 20 | ACK: 180 | RST: 0 | FIN: 0 | PSH: 0 | URG: 0)
+│    UDP  : 0      (0 B) | DNS: 0    (0 B) | ICMP: 0    (Echo: 0)
+│    Rate : SYN 400.0/s | ACK 18.0/s | RST 0.0/s | Ratio SYN/SYN-ACK: 200.0 | Incomplete: 3980
+│
+│  DEEP PACKET TELEMETRY & STATS
+│    TTL  : Mean 64.0 (Min 64, Max 64, σ=0.0) | TCP Win: Mean 29200 (Min 29200, Max 29200)
+│    IAT  : Mean 2380.5 µs (Min 10.0, Max 12500.0, σ=540.2) | Frag Pkts: 0 | Retrans: 0 (0.00%)
+│
+│  HOST & GRAPH TOPOLOGY
+│    Unique IPs : 15 Src → 2 Dst | Unique Ports: 3500 Src → 80 Dst
+│    Graph View : 17 Nodes | 15 Edges | Density: 0.0551 | Active Flows: 15
+│
+│  DETERMINISTIC THREAT INDICATORS
+│    [▲ HIGH ALARM] SYN_FLOOD_INDICATOR  [T1498.001: Direct Network Flood (SYN Flood)]
+│        Diagnostic Evidence : Abnormal SYN/SYN-ACK ratio (200.0 with 4000 SYNs and 20 SYN-ACKs).
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```

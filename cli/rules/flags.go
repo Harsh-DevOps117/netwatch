@@ -34,12 +34,16 @@ func (r *SuspiciousFlagsRule) Evaluate(feat *features.WindowFeatures) []alert.Al
 
 	for flagCombo, count := range flagCounts {
 		alerts = append(alerts, alert.Alert{
-			Timestamp:   time.Now(),
-			WindowStart: feat.WindowStart,
-			WindowEnd:   feat.WindowEnd,
-			Type:        alert.TypeSuspiciousTCPFlags,
-			Severity:    alert.SeverityMedium,
-			Protocol:    "TCP",
+			Timestamp:          time.Now(),
+			WindowIndex:        feat.WindowIndex,
+			WindowStart:        feat.WindowStart,
+			WindowEnd:          feat.WindowEnd,
+			Type:               alert.TypeSuspiciousTCPFlags,
+			Severity:           alert.SeverityMedium,
+			MitreAttackID:      "T1027",
+			MitreTactic:        "Defense Evasion",
+			MitreTechniqueName: "Obfuscated/Abnormal Protocol Signatures (Illegal TCP Flags)",
+			Protocol:           "TCP",
 			Reason: fmt.Sprintf(
 				"Unusual TCP flag combination observed (%s detected in %d packet(s)).",
 				flagCombo, count,

@@ -31,13 +31,17 @@ func (r *HostScanRule) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 		uniqueHostsCount := len(dstIPs)
 		if uniqueHostsCount >= r.cfg.UniqueHosts {
 			alerts = append(alerts, alert.Alert{
-				Timestamp:   time.Now(),
-				WindowStart: feat.WindowStart,
-				WindowEnd:   feat.WindowEnd,
-				Type:        alert.TypeHostScanIndicator,
-				Severity:    alert.SeverityHigh,
-				SourceIP:    srcIP,
-				Protocol:    "IP",
+				Timestamp:          time.Now(),
+				WindowIndex:        feat.WindowIndex,
+				WindowStart:        feat.WindowStart,
+				WindowEnd:          feat.WindowEnd,
+				Type:               alert.TypeHostScanIndicator,
+				Severity:           alert.SeverityHigh,
+				MitreAttackID:      "T1018",
+				MitreTactic:        "Discovery",
+				MitreTechniqueName: "Remote System Discovery",
+				SourceIP:           srcIP,
+				Protocol:           "IP",
 				Reason: fmt.Sprintf(
 					"One source contacted an unusually large number of destination hosts (%d unique hosts in %.0fs window).",
 					uniqueHostsCount, feat.DurationSeconds,

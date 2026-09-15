@@ -34,8 +34,20 @@ func NewEngine(cfg *config.Config) *Engine {
 	if cfg.Rules.AckFlood.Enabled {
 		activeRules = append(activeRules, NewAckFloodRule(cfg.Rules.AckFlood))
 	}
+	if cfg.Rules.RstFlood.Enabled {
+		activeRules = append(activeRules, NewRstFloodRule(cfg.Rules.RstFlood))
+	}
 	if cfg.Rules.UdpFlood.Enabled {
 		activeRules = append(activeRules, NewUdpFloodRule(cfg.Rules.UdpFlood))
+	}
+	if cfg.Rules.IcmpFlood.Enabled {
+		activeRules = append(activeRules, NewIcmpFloodRule(cfg.Rules.IcmpFlood))
+	}
+	if cfg.Rules.DnsFlood.Enabled {
+		activeRules = append(activeRules, NewDnsAmplificationRule(cfg.Rules.DnsFlood))
+	}
+	if cfg.Rules.StealthScan.Enabled {
+		activeRules = append(activeRules, NewStealthScanRule(cfg.Rules.StealthScan))
 	}
 	if cfg.Rules.ConnectionBurst.Enabled {
 		activeRules = append(activeRules, NewConnectionBurstRule(cfg.Rules.ConnectionBurst))
@@ -61,3 +73,4 @@ func (e *Engine) Evaluate(feat *features.WindowFeatures) []alert.Alert {
 	}
 	return alerts
 }
+
