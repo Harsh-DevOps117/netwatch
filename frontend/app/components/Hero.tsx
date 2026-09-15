@@ -110,9 +110,23 @@ export default function Hero() {
 
           <div className="hero-btn mt-16 flex items-center shadow-[0_4px_20px_rgba(0,51,255,0.15)] hover:shadow-[0_8px_30px_rgba(0,51,255,0.25)] transition-shadow">
             <button className="bg-[#0033FF] hover:bg-[#0022CC] transition-colors text-white text-[10px] sm:text-xs font-semibold tracking-widest uppercase px-6 h-10 border border-[#0033FF]">
-              LET'S FORECAST YOURS
+              <a
+                href="https://github.com/Harsh-DevOps117/netwatch"
+                target="_blank"
+              >
+                LET'S FORECAST YOURS
+              </a>
             </button>
-            <div className="border border-[#0033FF] border-l-0 w-10 h-10 flex items-center justify-center transition-colors hover:bg-[#0033FF] cursor-pointer group">
+            <div
+              onClick={() => {
+                window.open(
+                  "https://github.com/Harsh-DevOps117/netwatch",
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }}
+              className="border border-[#0033FF] border-l-0 w-10 h-10 flex items-center justify-center transition-colors hover:bg-[#0033FF] cursor-pointer group"
+            >
               <svg
                 className="transition-colors stroke-[#0033FF] group-hover:stroke-white"
                 width="14"

@@ -248,11 +248,29 @@ export default function Goal() {
       </div>
 
       <div className="flex justify-center mt-12 mb-8 relative z-10">
-        <button className="flex items-center group gap-[2px]">
+        <button
+          onClick={() => {
+            window.open(
+              "https://github.com/Harsh-DevOps117/netwatch",
+              "_blank",
+              "noopener,noreferrer",
+            );
+          }}
+          className="flex items-center group gap-[2px]"
+        >
           <span className="bg-[#0033FF] text-white text-[10px] font-semibold tracking-widest uppercase px-6 py-4 transition-colors duration-300 group-hover:bg-[#0022cc] shadow-sm">
             LET'S FORECAST YOURS
           </span>
-          <div className="bg-[#0033FF] w-12 h-[46px] flex items-center justify-center transition-all duration-300 group-hover:bg-[#CCFF00] shadow-sm overflow-hidden">
+          <div
+            onClick={() => {
+              window.open(
+                "https://github.com/Harsh-DevOps117/netwatch",
+                "_blank",
+                "noopener,noreferrer",
+              );
+            }}
+            className="bg-[#0033FF] w-12 h-[46px] flex items-center justify-center transition-all duration-300 group-hover:bg-[#CCFF00] shadow-sm overflow-hidden"
+          >
             <svg
               width="12"
               height="12"
