@@ -1,0 +1,84 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # The suite is CPU-only and needs no dataset: every test builds its own
+      # fixtures. TORCH_DISABLE_NATIVE_JIT keeps the torch.jit.script deprecation
+      # path out of the way, matching how the suite is run locally.
+      # The suite is kept out of the published repository, so this step is skipped
+      # there and runs for anyone who has it locally. pytest exits 5 on an empty
+      # collection, which would otherwise fail the job.
+      - name: Run tests
+        env:
+          PYTHONPATH: .
+          TORCH_DISABLE_NATIVE_JIT: "1"
+        run: |
+          if [ -d tests ]; then
+            uv run pytest -q
+          else
+            echo "tests/ is not in this checkout; running the self-checks below instead"
+          fi
+
+      # Each of these carries an assert-based self-check that runs without data.
+      # They cover the serving path, the backend configuration, the threshold
+      # sweep, the reported metrics and the explainability read-out.
+      - name: Module self-checks
+        env:
+          PYTHONPATH: .
+          TORCH_DISABLE_NATIVE_JIT: "1"
+        run: |
+          uv run python models/runtime.py
+          uv run python models/serving/graph.py
+          uv run python models/serving/emitter.py
+          uv run python -m models.evaluation.thresholds --demo
+          uv run python -m models.evaluation --demo
+          uv run python -m models.evaluation.blocks --demo
+          uv run python -m models.explanation --demo
+          uv run python models/training.py
+          uv run python models/serving/cascade.py
+
+      # Traces every checkable claim in docs/*.json to the code that implements
+      # it, so a schema or CLI change cannot silently outrun its contract.
+      - name: Verify contracts
+        env:
+          PYTHONPATH: .
+          TORCH_DISABLE_NATIVE_JIT: "1"
+        run: uv run python tools/repo/verify_contracts.py
+
+      # Every CLI must at least parse its arguments. Cheap, and it catches a
+      # broken import or a renamed module before anyone waits on a long run.
+      - name: Entry points respond
+        env:
+          PYTHONPATH: .
+          TORCH_DISABLE_NATIVE_JIT: "1"
+        run: |
+          for module in models.flow_encoder models.context_encoder models.compressor \
+                        models.detector models.evaluation models.explanation \
+                        models.context_encoder.features models.context_encoder.records \
+                        models.data.splits ingest.cli ingest.verify ingest.build.events; do
+            echo "checking $module"
+            uv run python -m "$module" --help > /dev/null
+          done

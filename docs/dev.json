@@ -1,0 +1,303 @@
+{
+  "contract": "serving API -> frontend / backend / CLI",
+  "version": "2.13",
+  "written": "2026-09-22",
+  "owner": "dev team (frontend, backend, CLI, Block 14 demo)",
+  "implemented_by": "Yug (serving path)",
+  "read_first": "docs/dev.md",
+  "status": "PROPOSED - no server exists yet. Agree this with Yug before building against it.",
+  "principles": [
+    "Two answer types, never merged: detection (per flow) and anticipation (per host).",
+    "A flow produces TWO detection verdicts at different times. The second is a separate observation, not a correction.",
+    "Alerts are events; operators consume incidents. Both are exposed.",
+    "Probabilities are calibrated (ECE 0.0005-0.0036) and safe to display and sort by.",
+    "Every alert names the operating point it was raised at. Alerts from different operating points are not comparable."
+  ],
+  "endpoints": {
+    "GET /health": {
+      "returns": {
+        "status": "ok|degraded",
+        "model_version": "string",
+        "uptime_s": "number",
+        "events_per_second": "number",
+        "state_keys_resident": "integer",
+        "evictions_total": "integer"
+      }
+    },
+    "GET /stream/detections": {
+      "description": "server-sent events, one per detection verdict",
+      "item": {
+        "event_id": "int64",
+        "t": "float64 epoch s, flow's first packet",
+        "t_obs": "float64 epoch s, when this verdict was available",
+        "stage": "observation | flow_close",
+        "stage_note": "observation = the 10 ms verdict. flow_close = a SECOND verdict once the CICFlowMeter record exists, a median 106 s later. Separate observation, own timestamp, never overwrites the first.",
+        "sender_ip": "string",
+        "receiver_ip": "string",
+        "family": "string family name or Benign",
+        "probability": "float 0-1, calibrated",
+        "observation_population": "early_observation | completed_before_budget",
+        "alerted": "bool",
+        "threshold_id": "string, the operating point this was judged at"
+      }
+    },
+    "GET /stream/anticipations": {
+      "description": "server-sent events, one per host-level forecast",
+      "item": {
+        "key": "string host identifier",
+        "key_type": "sender",
+        "t_obs": "float64 epoch s",
+        "horizon_events": "integer, default 20",
+        "horizon_note": "the horizon is in EVENTS not seconds; 20 events spans a median 16 s but 0.36 s at p10. Use lead_seconds for anything shown to a person.",
+        "probability_per_family": "object {family: float 0-1}",
+        "lead_events": "integer",
+        "lead_seconds": "float",
+        "state_age_events": "integer",
+        "evicted_since_last_seen": "bool",
+        "alerted": "bool",
+        "threshold_id": "string"
+      }
+    },
+    "GET /incidents": {
+      "description": "the operator-facing view: alerts on one host with no quiet gap longer than gap_seconds collapsed into one",
+      "query": {
+        "since": "epoch s",
+        "until": "epoch s",
+        "gap_seconds": "integer, default 60",
+        "kind": "detection|anticipation|both"
+      },
+      "item": {
+        "incident_id": "string",
+        "kind": "detection|anticipation",
+        "key": "string host",
+        "opened_at": "float64 epoch s",
+        "last_seen_at": "float64 epoch s",
+        "family": "string, the most probable family across the incident",
+        "peak_probability": "float 0-1",
+        "alert_count": "integer",
+        "event_ids": "array of int64, the raw alerts behind it"
+      },
+      "note": "measured: 30 alert events became 8 incidents for anticipation and 27 for detection at gap_seconds=60"
+    },
+    "GET /operating_points": {
+      "description": "the recall / alert-rate curve, so a UI can show what changing the threshold costs",
+      "item": {
+        "threshold_id": "string",
+        "budget": "float",
+        "recall": "float",
+        "recall_early": "float",
+        "precision": "float",
+        "false_alarms_per_hour": "float",
+        "false_incidents_per_hour": "float",
+        "onsets_caught_early": "string"
+      },
+      "measured_examples": [
+        {
+          "budget": 0.01,
+          "recall_early": 1.0,
+          "false_alarms_per_hour": 8544,
+          "false_incidents_per_hour": 989
+        },
+        {
+          "budget": 0.001,
+          "recall_early": 1.0,
+          "false_alarms_per_hour": 899,
+          "false_incidents_per_hour": 308
+        },
+        {
+          "budget": 0.0001,
+          "recall_early": 0.9969,
+          "false_alarms_per_hour": 81,
+          "false_incidents_per_hour": 22,
+          "recommended": true
+        },
+        {
+          "budget": 0.0001,
+          "extra": "persist-3",
+          "recall_early": 0.9969,
+          "false_alarms_per_hour": 41.9,
+          "false_incidents_per_hour": 11.2,
+          "recommended": true
+        },
+        {
+          "budget": 3e-05,
+          "recall_early": 0.9812,
+          "false_alarms_per_hour": 39,
+          "false_incidents_per_hour": 13
+        }
+      ]
+    },
+    "POST /replay": {
+      "description": "Block 14 demo: run a capture through the pipeline offline and return the timeline",
+      "body": {
+        "source": "pcap|cic_csv",
+        "path": "string",
+        "operating_point": "string threshold_id"
+      },
+      "returns": {
+        "run_id": "string",
+        "events": "integer",
+        "span_seconds": "number",
+        "detections": "array",
+        "anticipations": "array",
+        "incidents": "array",
+        "campaigns": "array"
+      }
+    },
+    "GET /model_card": {
+      "description": "what the system was measured on, so a demo can state its own limits",
+      "returns": {
+        "measured_on": "string",
+        "families_tested": "array",
+        "seeds": "integer",
+        "caveats": "array of string",
+        "blocks_missing": "array of string"
+      }
+    }
+  },
+  "not_available": {
+    "mitre_stage": "Block 12 does not exist. Do not show kill-chain stages.",
+    "feature_attribution": "Block 11 does not exist. Do not show per-feature explanations.",
+    "baseline_comparison": "Block 13 does not exist yet. Do not claim the system beats a baseline.",
+    "countdown_to_impact": "the measured lead is 1 event / ~2.02 s at both median and p90. A countdown would be wrong most of the time."
+  },
+  "caveats_to_surface_in_any_demo": [
+    "measured on one day, one attack family (Bot), one 3M-event slice, two seeds",
+    "cross-day and cross-family generalisation untested",
+    "the anticipation signal may be partly a volume effect: attacking hosts emit 2,582 events/hour against a median of 1.9",
+    "'flagged before the attack began' is accurate; 'minutes of warning' is not"
+  ],
+  "input_files": {
+    "you_consume_the_API_not_files": "Everything below is served by Yug's process. Do not read parquet or checkpoints directly - the formats change with every retrain and you would be coupling to model internals.",
+    "except_for_the_demo": {
+      "data/events/<day>/node_index.parquet": "OPTIONAL, read-only: node_id -> ip. Useful if you want to show host names for a replayed day without waiting on the API.",
+      "a CICFlowMeter CSV \u2014 available now": "data/original_flow_csv/<day>_TrafficForML_CICFlowMeter.csv, one per day. Five days on disk.",
+      "a PCAP \u2014 NOT on disk": "data/raw/ holds only extract.sh. The captures are not extracted; getting them is a separate step (data/raw/extract.sh, tools/dataset/extract_zip.py). Build the demo against the CSV path first and treat PCAP as a later addition."
+    },
+    "served_to_you": {
+      "GET /model_card": "what the system was measured on and its caveats - put this behind an 'about' link in any demo",
+      "GET /operating_points": "the recall / alert-rate curve, so a slider can show what tightening the threshold costs",
+      "GET /stream/detections": "per-flow verdicts",
+      "GET /stream/anticipations": "per-host forecasts",
+      "GET /incidents": "the operator-facing view - build the primary UI on this, not on raw alerts"
+    }
+  },
+  "example": {
+    "description": "what one host looks like across both streams and the incident view",
+    "1_detection_event": {
+      "event_id": 1418233,
+      "t": 1520014466.118,
+      "t_obs": 1520014466.128,
+      "stage": "observation",
+      "sender_ip": "172.31.69.25",
+      "receiver_ip": "172.31.69.28",
+      "family": "Bot",
+      "probability": 0.94,
+      "observation_population": "early_observation",
+      "alerted": true,
+      "threshold_id": "v1.0:bot:early:3e-5"
+    },
+    "2_the_same_flow_later": {
+      "event_id": 1418233,
+      "t_obs": 1520014572.4,
+      "stage": "flow_close",
+      "family": "Bot",
+      "probability": 0.99,
+      "alerted": true,
+      "threshold_id": "v1.0:bot:early:3e-5",
+      "ui_note": "SECOND row in the flow table, 106 s later. Do not replace the first - show both with their own times."
+    },
+    "3_anticipation_event": {
+      "key": "172.31.69.25",
+      "key_type": "sender",
+      "t_obs": 1520014464.1,
+      "horizon_events": 20,
+      "probability_per_family": {
+        "Bot": 0.87
+      },
+      "lead_events": 1,
+      "lead_seconds": 2.02,
+      "state_age_events": 143,
+      "evicted_since_last_seen": false,
+      "alerted": true,
+      "ui_note": "fired BEFORE the detection above. Lead is 2.02 s - say 'flagged before the attack began', never 'minutes of warning'."
+    },
+    "4_incident_view": {
+      "incident_id": "anticip-1622-1520014464",
+      "kind": "anticipation",
+      "key": "172.31.69.25",
+      "opened_at": 1520014464.1,
+      "last_seen_at": 1520014511.7,
+      "family": "Bot",
+      "peak_probability": 0.97,
+      "alert_count": 31,
+      "event_ids": "[31 ids]",
+      "ui_note": "31 alert events, ONE row for the operator. This is the primary view."
+    },
+    "5_what_the_operator_sees_per_hour": {
+      "raw_alert_events": 42,
+      "incidents": 11,
+      "note": "at the recommended operating point. At a 10 s incident gap it is 50/hour instead of 27 - the gap is a UI choice with a real cost, so expose it."
+    }
+  },
+  "source_of_truth": {
+    "this API does not exist yet": "agree it with Yug before building; field names here mirror the model outputs so they will not drift",
+    "family names": "models.detector.head.family_codes, benign first - the same vocabulary both arms use",
+    "node ids to hosts": "data/events/<day>/node_index.parquet: node_id, ip, first_seen_t, n_events",
+    "operating points": "reproduce with tools/world_model/alert_economics.py and tools/world_model/fpr_levers.py"
+  },
+  "timing_you_must_display_correctly": {
+    "two_verdicts_per_flow": "stage='observation' at t_obs and stage='flow_close' later. Show BOTH with their own timestamps; the second never replaces the first.",
+    "they_can_be_simultaneous": "for a flow that finished inside the 10 ms budget, the record's earliest existence time equals the verdict time - so the two rows can carry the same or nearly the same timestamp. That is correct, not a duplicate.",
+    "how_late_the_second_usually_is": "measured on Thursday-15: 54.9% of benign records land after the verdict (median 2.2 s), 100% of DoS-GoldenEye (median 6.8 s), 91.3% of DoS-Slowloris (median 106.3 s). Do not promise the user a fixed delay.",
+    "lead_time_wording": "the anticipation alert fires a median 1 event and 2.02 s before the attack, at BOTH median and p90. Show the measured lead_seconds per alert. Never render a countdown or imply minutes."
+  },
+  "onsets_are_resumptions_not_campaigns": {
+    "headline": "What this project has been calling a 'campaign onset' is mostly an ATTACK RESUMPTION about 2 seconds after a brief benign blip, not the start of a campaign. Measured 2026-09-20.",
+    "the_definition_in_code": "models.world_model_proxy.model.onsets marks an attack event whose PREVIOUS EVENT ON THAT KEY was not an attack. On a host whose benign and attack traffic interleave at sub-second spacing, that fires constantly.",
+    "what_it_actually_counts_on_Bot": {
+      "onsets_reported": 1565,
+      "attacking_hosts": 11,
+      "that_follow_an_earlier_attack_on_the_same_host": 1554,
+      "genuine_first_ever_attacks": 11,
+      "separated_from_the_previous_attack_by_2_events_or_fewer": "1,430 of 1,554 (92%)",
+      "separated_by_more_than_60_s": 0,
+      "max_separation": "11 events / 35.7 s"
+    },
+    "stricter_definitions": "requiring K consecutive non-attack events on the key before the attack: K=1 gives 1,565 onsets (291 in test), K=2 gives 135 (22 in test), K=5 gives 27 (1 in test), K=10 gives 15 (ZERO in test), K=20 gives 11 (ZERO in test).",
+    "the_11_real_campaign_starts": "all 11 Bot hosts begin attacking between t=1520003454.1 and t=1520003455.0 - within 0.9 seconds of each other, a scripted simultaneous launch - and ALL 11 fall in the TRAIN split. There is no genuine campaign onset in the test split at all.",
+    "consequences": [
+      "'275/291 onsets caught early' and '1,565/1,565 campaigns alerted' are real counts of attack RESUMPTION, not of campaign anticipation. Relabel them.",
+      "recall_early 0.9969 remains literally true, on 320 benign events whose attack is at most 2.0 s away.",
+      "cross-host lead on Bot is ~0.9 s, not hours: all hosts launch simultaneously, so 'A is attacking, is B next' has essentially nothing to predict on this day.",
+      "campaign-level lead is unmeasurable on Bot: the 11 real starts are all in train."
+    ],
+    "what_survives_untouched": "detection. 99% recall at 1-2 false alarms, PR-AUC 1.0000 against the Block 13 baseline's 0.9259, and the baseline's collapse to recall 0.0003 at tight thresholds. That is a per-event claim and none of this bears on it.",
+    "how_to_report_it_honestly": "report BOTH: (a) resumption-level onsets under the current K=1 definition, labelled as resumptions; and (b) genuine campaign starts, defined as requiring at least H non-attack events on the key, with the count in each split stated. On Bot (b) is zero in test, and saying so is the honest result.",
+    "open": "whether any other day differs is measured by tools/measure/lead_ceiling_days.py, queued 2026-09-20. Bot alone cannot settle it."
+  },
+  "threshold_provenance": {
+    "where_it_lives": "the serve_threshold field of the head checkpoint written by `models.detector --save`",
+    "who_chooses_it": "an operator, via models/evaluation/thresholds.py --recall-floor X --write <checkpoint>. It is a judgement about acceptable alert volume, not an output of the fit",
+    "threshold_id": "identify it by the checkpoint's day + seed + input + the chosen budget; a threshold is only valid for the exact model that produced it",
+    "what_to_show": "the budget, the realised FPR and the alarms-per-hour that the chosen point was measured at -- all three are in the serve_threshold entry"
+  },
+  "lead_time_correction_2026_09_20": "do not put a seconds figure on anticipation anywhere in the UI yet. The previous '~2 s lead' was an artefact of the 3M-event slice, which excludes every pre-attack row; and the real lead the data contains cannot currently be scored because the train/test split interleaves in time. Show detection confidently; show anticipation as a ranked 'what may be coming' list with no time claim",
+  "arm_labelling": {
+    "why": "Two arms produce alert rates and they are not interchangeable. The detection arm names the family behind a flow; the world model says what is coming. A rate from one is meaningless as a figure for the other.",
+    "detection_arm": {
+      "false_alarms_per_hour": 8.4,
+      "incidents_per_hour": 29.4,
+      "recall": 0.9906,
+      "threshold": 0.9793,
+      "status": "deployable; quote these for detection"
+    },
+    "world_model_arm": {
+      "false_alarms_per_hour": 41.9,
+      "incidents_per_hour": 11.2,
+      "recall_early": 0.9969,
+      "status": "proxy measured on slices; do not present as detection"
+    },
+    "rule": "every rate shown in the UI carries which arm produced it, in the same view as the number. An unlabelled alert rate is the easiest thing in this system to quote wrongly."
+  }
+}

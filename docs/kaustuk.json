@@ -1,0 +1,215 @@
+{
+  "contract": "Kaustuk \u2014 modelling up to Block 9, the detection head, and Block 13",
+  "version": "2.12",
+  "written": "2026-09-21",
+  "read_first": "docs/kaustuk.md, then docs/STATUS_2026-09-20.md for the full measured position",
+  "owns": [
+    "Blocks 0-6 ingest",
+    "Block 7 per-flow encoder",
+    "Block 8 context encoder",
+    "Block 9 autoencoder",
+    "the supervised detection head",
+    "Block 13 baseline",
+    "the full 5-day training run"
+  ],
+  "does_not_own": {
+    "Block 10 and above": "Vedant",
+    "live pipeline and serving": "Yug",
+    "frontend, backend, CLI, Block 14 demo": "dev team"
+  },
+  "input_files": {
+    "raw": {
+      "data/raw/extract.sh": "the captures are NOT extracted; this is how to get them",
+      "data/original_flow_csv/<day>_TrafficForML_CICFlowMeter.csv": "the official CSVs, 5 days. NOT used by the pipeline - ingest builds its own flows from PCAP. Used only by Block 13's baseline for a fair comparison."
+    },
+    "ingested": {
+      "data/processed/<day>/<capture>/flows.parquet": "our own flow extraction - what models.context_encoder.records reads",
+      "data/processed/<day>/<capture>/packets.parquet": "per-packet detail",
+      "data/processed/<day>/<capture>/flow_packet_map.parquet": "which flow each packet belongs to",
+      "data/events/<day>/events.parquet": "the event stream, 33 columns",
+      "data/events/<day>/node_index.parquet": "node_id, ip, first_seen_t, n_events"
+    },
+    "derived": {
+      "data/flow_embeddings/split/<day>/flow_embeddings.parquet": "Block 7 output, 32-wide h per event",
+      "data/context_features/<day>/side_features.parquet": "8 columns: event_id, sender/receiver_node_id, request_packets, response_packets, reply_latency_s, direction_changes, no_reply",
+      "data/context_features/<day>/flow_records.parquet": "71 columns = event_id + record_time + 69 RECORD_COLUMNS. Exists for Thursday-15 and Friday-02-03; generate others with models.context_encoder.records --days <day>"
+    },
+    "checkpoints": {
+      "data/model_cache/context/<run>/best.pt": "Block 8; carries arm, flow_messages, flow_records flags",
+      "data/model_cache/block9/<run>/best.pt": "Block 9; carries encoder, arm, target, d_z, window",
+      "data/model_cache/scores/<variant>/<days>__<heldout>__a_pkt__gnn__relu__s<seed>.pt": "Block 7, leave-one-day-out EXPERIMENT artefacts. NONE is trained on all days - see open_items."
+    }
+  },
+  "done_2026_09_20": {
+    "item_1_calibration_source": {
+      "result": "NEGATIVE - validation alone beats validation+train",
+      "numbers": "1.112% vs 1.300% realised against a 1% budget",
+      "why": "splits are time-ordered and validation sits nearest test",
+      "action": "default set to calibrate=0.0; both numbers recorded in the docstring"
+    },
+    "item_2_incident_gap": {
+      "result": "the 60 s gap was flattering but not egregious",
+      "numbers": "collapse 1.81x at 10 s, 3.42x at 60 s, 5.91x at 300 s",
+      "why_it_is_real": "collapse grows SUB-linearly with gap, so alerts genuinely cluster rather than the window being generous"
+    },
+    "item_4_baseline": {
+      "result": "the pipeline beats the baseline decisively",
+      "numbers": "baseline PR-AUC 0.9259 vs 1.0000; at tight thresholds baseline recall collapses to 0.0003 where ours holds 0.9977",
+      "note": "the baseline was given MORE information - the full 69-column record, available 106 s later - and still lost"
+    },
+    "item_5_block8_lru_cap": {
+      "result": "implemented AND wired through to the CLI",
+      "api": "LinkMemory.reset(n_links, capacity=None); ContextEncoder(..., capacity=N); begin_day(n_links, capacity=N)",
+      "cli": "models.context_encoder --capacity 0.25  (below 1 = fraction of the stream's links)",
+      "travels": "stored in the Block 8 checkpoint, so block9.frozen_block8 and models/detector/head.py --block8 pick it up with no extra flag",
+      "guarantee": "capacity=None leaves the link id AS the slot, so every existing checkpoint and code path is provably unchanged",
+      "verified": "1,000 distinct links through a 250-slot table -> 750 evictions; a Block 8 fit at --capacity 0.25 on Thursday-15 reached validation link PR-AUC 0.9820; test in tests/models/test_context_model.py"
+    },
+    "deployment_artefacts": {
+      "problem": "training produced nothing a live system could load: the supervised head, its feature scaler and every threshold were discarded at process exit, and Block 10 had no checkpoint at all",
+      "supervised_head": "models/detector/head.py --save writes head weights + mean/std + families + budget thresholds + an empty serve_threshold; load_head() rebuilds it. Verified: reload scores identically",
+      "score_blob": "models.detector --save-scores writes the calibration-benign and test score distributions, so the threshold tradeoff can be swept without refitting",
+      "threshold_tool": "models/evaluation/thresholds.py -- sweeps budget -> threshold -> recall/FPR/alarms-per-hour/incidents-per-hour, --recall-floor picks the cheapest point meeting a floor, --write commits it into the checkpoint's serve_threshold",
+      "world_model": "models/world_model_proxy/model.py --save / --load (weights + latent scaler + warm state table + per-horizon thresholds)",
+      "emitter": "models/serving/emitter.py -- AlertEmitter (threshold -> persist-3 -> incident dedup, incremental) and Recalibrator (drift detection + the two-sample calibration the 6x overshoot measurement demands)",
+      "verified_on": "Bot day 3M slice, seed 0, block8 f_norec_s1: threshold 0.932321 -> recall 0.9961 at 28.0 alarms/hour, overshoot 1.07x-2.39x across ten budgets",
+      "evaluation": "models/evaluation/report.py -- one command for every reported metric: tied-rank PR-AUC, Brier/ECE, the operating-point sweep, the emission funnel (events -> above threshold -> after persist-3 -> incidents) and the observation-population split. Replaces reading numbers out of a dozen experiment scripts; tools/collect_final.py only knew the seven final experiments by number",
+      "explainability": "models/explanation/attention.py -- the neighbourhood attention distribution the context encoder was already computing and discarding (need_weights=False), plus gradient x input attribution split into the 32 flow-embedding columns against the 100 context columns. Capture is opt-in and verified to leave the encoding bit-identical",
+      "runtime": "models/runtime.py -- configure() sets the backend flags. Reproducible by default (cudnn.benchmark off, cudnn.deterministic on, TF32 off, use_deterministic_algorithms warn_only); configure(fast=True) opts into autotuning and TF32. torch.compile is exposed through maybe_compile() and falls back to eager when no C compiler is present, which is the case in this environment"
+    }
+  },
+  "remaining": {
+    "item_3_seed2_cascades": {
+      "cost": "2.2 h",
+      "status": "running in tools/run_remaining.sh",
+      "answers": "whether records help early_observation and hurt completed_before_budget, or whether that was seed noise"
+    },
+    "item_9_cpu_only_throughput": {
+      "cost": "20 min",
+      "why": "never validly measured - the old benchmark silently used the GPU",
+      "how": "CUDA_VISIBLE_DEVICES='' on the throughput bench"
+    },
+    "item_10_full_5day_training": {
+      "cost": "8-10 h",
+      "status": "HELD BACK - yours",
+      "why_it_is_a_dependency_not_a_finale": "it is the only thing that produces a SERVABLE Block 7. Every Block 7 checkpoint on disk is a leave-one-day-out experiment artefact; none is trained on all days, so none is defensible to serve. Yug is BLOCKED on this."
+    }
+  },
+  "decisions_only_you_can_make": {
+    "records_one_block8_or_two": {
+      "problem": "records enter at Block 8 and its context feeds BOTH arms",
+      "measured_help": "anticipation: sender false alarms 6,111-8,200 -> 5,686-5,702, seed spread 2,089 -> 16, skill 0.276-0.290 -> 0.300-0.303",
+      "measured_harm": "detection: 1-2 -> 2-4 false alarms at 99% recall; PR-AUC 0.9995 -> 0.9986-0.9991 on completed_before_budget",
+      "options": [
+        "two Block 8 instances - doubles link-memory state and compute",
+        "one WITH records, accept worse detection",
+        "one WITHOUT records, accept worse anticipation"
+      ]
+    },
+    "per_family_budgets": {
+      "problem": "each family gets its own budget, so 9 families across 5 days means the aggregate is 9x what you set",
+      "fix": "for a 0.1% total, each family needs about 0.011%"
+    },
+    "threshold_recalibration_policy": {
+      "problem": "thresholds die on retraining and benign traffic drifts",
+      "yours": "cadence, calibration window, drift response",
+      "yugs": "the implementation"
+    }
+  },
+  "open_items_blocking_others": {
+    "servable Block 7": "blocks Yug. Produced only by the full 5-day run.",
+    "thresholds file format": "blocks Yug. Agree the format with him.",
+    "multi-class verification": "blocks Vedant's Block 10 architecture, and Block 12 after it. Running now as item 6."
+  },
+  "traps": {
+    "checkpoint_code_drift": "three 5-day cascades became unloadable after a refactor (late.flow.* renames, message width 148 -> 216). Land code changes BEFORE long training runs.",
+    "calibration_is_data_dependent": "validation alone won here, validation+train won on the detection arm's subsets. Re-measure per arm; do not inherit a finding across contexts - this caused three wrong claims in one day.",
+    "seed_agreement_is_not_validation": "both seeds shared the scatter_ bug and agreed with disjoint ranges.",
+    "scatter_nondeterminism": "scatter_ with duplicate indices has no defined winner - 16 distinct results in 200 repeats. Use scatter_reduce_(reduce='amax').",
+    "pattern_based_kill": "never pkill/pgrep by pattern to stop a job - the pattern matches your own shell and kills it. Kill by explicit PID. Cost three interruptions in one day.",
+    "sender_vs_src": "events.parquet has src_node_id/dst_node_id from the flow RECORD; side_features.parquet has sender_node_id/receiver_node_id from the FIRST PACKET. They disagree on 11.2-33.5% of rows. Block 8's links use sender/receiver."
+  },
+  "reproduce": {
+    "block8": "uv run python -m models.context_encoder --arm split --days <day> --events 3000000 --family <fam> --flow-messages [--flow-records] --batch-size 512 --epochs 10 --patience 3 --seed <s> --out <b8>",
+    "block9": "uv run python -m models.compressor --encoder mlp --block8 <b8>/best.pt --days <day> --events 3000000 --family <fam> --seed <s> --out <b9>",
+    "export": "uv run python -m models.compressor --encoder mlp --block8 <b8>/best.pt --out <b9> --load <b9>/best.pt --days <day> --events 3000000 --family <fam> --export data/latents/<run>",
+    "detection_head": "uv run python -m models.detector.head --days <day> --events 3000000 --family <fam> --seed <s> --block8 <b8>/best.pt --block9 <b9>/best.pt --out <csv>",
+    "baseline": "uv run python tools/measure/baseline.py --day <day> --family <fam> --events 3000000",
+    "flow_records_for_a_new_day": "uv run python -m models.context_encoder.records --days <day>",
+    "all_tests": "uv run python -m pytest tests/models/ -q"
+  },
+  "lead_time_the_truth": {
+    "headline": "The ~2 second lead is a property of the TARGET DEFINITION, not of the model or the training objective. Measured 2026-09-20 as ground truth, with no model involved.",
+    "what_was_measured": "for every benign TEST event on a host that ever attacks, the unbounded time until that host's next attack - no horizon cap at all",
+    "result": {
+      "n": 320,
+      "p10": "0.1 s",
+      "p25": "0.4 s",
+      "median": "0.8 s",
+      "p75": "1.4 s",
+      "p90": "1.7 s",
+      "p99": "2.0 s",
+      "max": "2.0 s",
+      "events_with_at_least_60s_of_warning": 0,
+      "events_with_at_least_300s_of_warning": 0
+    },
+    "therefore": "the maximum warning available ANYWHERE in this data on the sender key is 2.0 seconds. No training objective can produce lead the data does not contain.",
+    "why_the_data_is_like_this": "an attacking host emits 2,582 events/hour against a median host's 1.9, so its benign traffic is interleaved with its attack traffic at sub-second spacing. 'A benign event on an attacking host' is almost by definition adjacent to an attack. A target phrased as 'attack within H EVENTS on this key' can therefore never span more than a couple of seconds on a busy host.",
+    "what_we_tried_and_abandoned": "a lead-rewarding objective (--lead-steps: roll the dynamics forward during training and supervise each rolled step against the class at that distance). Implemented and tested, then ABANDONED once the ground-truth measurement above showed there is nothing for it to learn. The flag remains in models/world_model_proxy/model.py; it is not a defect, it simply cannot help on this target.",
+    "WHAT WOULD ACTUALLY CREATE LEAD": {
+      "PRINCIPLE": "the rollout predicts STATE -> NEXT STATE. A step is one more event on the key, not a tick of a clock. PREDICT in state transitions; REPORT in seconds. Reporting lead_seconds beside lead_events is right and necessary for an operator; phrasing the TARGET in seconds is not, because it would force the rollout to additionally predict inter-event gaps - a different and harder model that breaks the transition framing.",
+      "rejected_time_based_horizon": "'attack within T SECONDS on this key' was proposed and WITHDRAWN. It asks the rollout to answer in units it does not operate in. Keep the horizon in events.",
+      "still_open_campaign_level": {
+        "target": "will this host attack at all - the state of a host BEFORE it has ever attacked",
+        "why_it_stays_state_shaped": "still per-event, still 'what comes next'. Only the label changes.",
+        "the_lead_it_could_offer": "whatever traffic precedes a host's FIRST attack. Unmeasured until now - the 2.0 s ceiling was measured on benign events that have a LATER attack, which is a different population from events before the first one.",
+        "ceiling_measured_by": "tools/lead_ceiling.py, section 2"
+      },
+      "still_open_cross_host": {
+        "target": "host A is attacking - is host B next",
+        "why_it_stays_state_shaped": "it is a GRAPH rollout, not a time one: the state of A conditioning the state of B. Block 8 already carries that structure - per-link memory plus neighbourhood attention over recent peers - so the machinery exists.",
+        "the_lead_it_could_offer": "the stagger between hosts' first attacks. Topology being a star does NOT rule this out - that conflates topology with timing. If the 10 Bot hosts start at staggered times, the stagger is real lead regardless of them all hitting one hub.",
+        "ceiling_measured_by": "tools/lead_ceiling.py, section 3"
+      },
+      "why_the_2s_ceiling_is_not_a_units_problem": "on an attacking host, benign traffic does not precede attacks by much - measured max 2.0 s unbounded. Re-expressing the same target in seconds cannot create positives that do not exist. The lead has to come from a DIFFERENT KEY or a DIFFERENT POINT IN THE CAMPAIGN."
+    },
+    "correction_note": "earlier versions of these documents called the lead 'the biggest capability gap' and told the Block 10 owner to fix the objective. That was wrong and would have wasted his time. The gap is real but it is a TARGET design question, and on this dataset it may be unanswerable."
+  },
+  "onsets_are_resumptions_not_campaigns": {
+    "headline": "What this project has been calling a 'campaign onset' is mostly an ATTACK RESUMPTION about 2 seconds after a brief benign blip, not the start of a campaign. Measured 2026-09-20.",
+    "the_definition_in_code": "models.world_model_proxy.model.onsets marks an attack event whose PREVIOUS EVENT ON THAT KEY was not an attack. On a host whose benign and attack traffic interleave at sub-second spacing, that fires constantly.",
+    "what_it_actually_counts_on_Bot": {
+      "onsets_reported": 1565,
+      "attacking_hosts": 11,
+      "that_follow_an_earlier_attack_on_the_same_host": 1554,
+      "genuine_first_ever_attacks": 11,
+      "separated_from_the_previous_attack_by_2_events_or_fewer": "1,430 of 1,554 (92%)",
+      "separated_by_more_than_60_s": 0,
+      "max_separation": "11 events / 35.7 s"
+    },
+    "stricter_definitions": "requiring K consecutive non-attack events on the key before the attack: K=1 gives 1,565 onsets (291 in test), K=2 gives 135 (22 in test), K=5 gives 27 (1 in test), K=10 gives 15 (ZERO in test), K=20 gives 11 (ZERO in test).",
+    "the_11_real_campaign_starts": "all 11 Bot hosts begin attacking between t=1520003454.1 and t=1520003455.0 - within 0.9 seconds of each other, a scripted simultaneous launch - and ALL 11 fall in the TRAIN split. There is no genuine campaign onset in the test split at all.",
+    "consequences": [
+      "'275/291 onsets caught early' and '1,565/1,565 campaigns alerted' are real counts of attack RESUMPTION, not of campaign anticipation. Relabel them.",
+      "recall_early 0.9969 remains literally true, on 320 benign events whose attack is at most 2.0 s away.",
+      "cross-host lead on Bot is ~0.9 s, not hours: all hosts launch simultaneously, so 'A is attacking, is B next' has essentially nothing to predict on this day.",
+      "campaign-level lead is unmeasurable on Bot: the 11 real starts are all in train."
+    ],
+    "what_survives_untouched": "detection. 99% recall at 1-2 false alarms, PR-AUC 1.0000 against the Block 13 baseline's 0.9259, and the baseline's collapse to recall 0.0003 at tight thresholds. That is a per-event claim and none of this bears on it.",
+    "how_to_report_it_honestly": "report BOTH: (a) resumption-level onsets under the current K=1 definition, labelled as resumptions; and (b) genuine campaign starts, defined as requiring at least H non-attack events on the key, with the count in each split stated. On Bot (b) is zero in test, and saying so is the honest result.",
+    "open": "whether any other day differs is measured by tools/measure/lead_ceiling_days.py, queued 2026-09-20. Bot alone cannot settle it."
+  },
+  "removed_2026_09_20": {
+    "models/context_encoder/joint.py": "unreachable -- nothing imported it and its documented entry point (models.context_encoder --joint) does not exist",
+    "tools/lead_ceiling.py": "superseded by tools/measure/lead_ceiling_days.py; its slice-based headline (2.0 s) is void",
+    "tools/fuse_latents.py + tests/models/test_fuse_latents.py": "late fusion, measured and rejected; the shipped path has no flag to select it",
+    "tools/attack_chain.py": "its finding (compromise -> callback chain) collapsed as a dataset schedule artefact; no reported number depends on it",
+    "note": "data/model_cache/snapshots/ holds 7 MB of dated copies of this repo. They break pytest collection (now excluded via pyproject.toml) and are NOT deleted -- the repo has no commits, so they may be the only historical copies. Delete them yourself once there is a commit"
+  },
+  "performance_2026_09_21": {
+    "threshold_sweep": "83.8 ms -> 14.0 ms on GPU (6.0x), all budgets in one torch.quantile plus one broadcast compare; CPU and CUDA agree on every metric",
+    "evaluation": "105 ms -> 63.7 ms (1.65x) by transferring only the rows that clear the threshold out of push_batch, instead of the whole batch",
+    "torch_compile": "NOT used. It is a speed optimisation, not a memory one. It cannot run here (no C compiler: cc/gcc/g++/clang all absent, Inductor needs one) and would target 1.6 ms of a 105 ms call -- the bottleneck was 87 ms in the emitter's sequential per-key Python loop and its host transfers, which no graph compiler can absorb",
+    "left_on_cpu": "the per-key run counter, the ip -> id map and the reorder buffer: sequential dict and heap work on a few hundred rows, where tensors are slower"
+  }
+}

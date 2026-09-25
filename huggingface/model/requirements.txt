@@ -1,0 +1,5 @@
+# Inference only. The training pipeline needs more (pyarrow, torch-geometric, psutil);
+# an endpoint that scores pre-extracted features needs just these.
+torch>=2.4
+numpy>=1.26
+safetensors>=0.4
