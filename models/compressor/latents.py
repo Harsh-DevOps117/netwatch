@@ -27,7 +27,7 @@ from models.compressor.autoencoder import (
     ENCODERS, EventAutoencoder, TARGET_WIDTH, anomaly_score, benign_reference, event_targets, squared_error,
     window_structure,
 )
-from models.context_encoder.data import DAYS, attack_slice, load_day, make_stream
+from models.context_encoder.data import DAYS, attack_slice, cache_neighbours, day_cache, load_day, make_stream
 from models.context_encoder.record_arm import day_loader
 from models.context_encoder.model import ContextEncoder, LinkIds, make_batch
 
@@ -41,9 +41,12 @@ def frozen_context_encoder(checkpoint: Path, device: str = "cpu") -> tuple[Conte
     Output: (encoder in eval mode with gradients off, its arm)
     """
     state = torch.load(checkpoint, map_location=device, weights_only=False)
+    # The record encoder's weights are inside state["model"]; its file is only needed to build a trainable copy. Moved
+    # or published elsewhere it is absent, and the frozen model is identical without it (eval, no gradients).
+    record_encoder = Path(state["record_encoder"]) if state.get("record_encoder") else None
     model = ContextEncoder(state["arm"], flow_messages=state.get("flow_messages", False),
                            flow_records=state.get("flow_records", False),
-                           record_encoder=Path(state["record_encoder"]) if state.get("record_encoder") else None,
+                           record_encoder=record_encoder if record_encoder and record_encoder.exists() else None,
                            record_split=state.get("record_split", True),
                            capacity=state.get("capacity")).to(device)
     model.load_state_dict(state["model"])
@@ -68,9 +71,17 @@ def context_vectors(model8: ContextEncoder, stream: dict, arm: str, *, window: i
     model8.begin_day(len(links))
     n = len(stream["sender"])
     out = np.empty((n, model8.out[-1].out_features), np.float32)
+    parts, done = [], 0
     for start in range(0, n, window):
         rows = np.arange(start, min(start + window, n))
-        out[rows] = model8(make_batch(stream, rows, arm, links, device)).cpu().numpy()
+        parts.append(model8(make_batch(stream, rows, arm, links, device)))
+        # Copied back every 64 windows rather than every window: one synchronisation per ~32k events instead of one
+        # per 512, while a full day (7.7M x 100 floats, ~3 GB) never has to sit on a 6 GB GPU at once.
+        if len(parts) == 64 or rows[-1] == n - 1:
+            block = torch.cat(parts).float().cpu().numpy()
+            out[done:done + len(block)] = block
+            done += len(block)
+            parts = []
     return out
 
 
@@ -121,7 +132,7 @@ def export_latents(model8: ContextEncoder, ae: EventAutoencoder, day: dict, arm:
 
     import pyarrow as pa
 
-    stream = make_stream(day, np.ones(len(day["sender"]), bool))
+    stream = cache_neighbours(make_stream(day, np.ones(len(day["sender"]), bool)))
     context = context_vectors(model8, stream, arm, window=window, device=device)
     latents, errors = [], []
     for start in range(0, len(context), window):
@@ -143,6 +154,11 @@ def export_latents(model8: ContextEncoder, ae: EventAutoencoder, day: dict, arm:
         "split": stream["split"], "label": stream["label"].astype(str),
         "observation_population": stream["population"].astype(str),
         "attack": stream["attack"],
+        # Attacker/victim role, from the schedule's named hosts and never from `reversed`. Block 10's ranking head
+        # needs it, and `reversed` answers a different question: on the Bot day it agrees with the true direction for
+        # only 4.1% of attack events. EVALUATION AND SUPERVISION ONLY -- it is derived from the schedule, so it is
+        # ground truth, not an input.
+        "role": _roles_for_stream(day_name, stream),
     })
     pq.write_table(table, out_dir / "event_latents.parquet", compression="zstd")
     manifest = {
@@ -155,10 +171,34 @@ def export_latents(model8: ContextEncoder, ae: EventAutoencoder, day: dict, arm:
         "recon_error": "per-event mean squared reconstruction error of that context, on the benign scale Block 9 was "
                        "fitted with; low means the context looks like benign traffic",
         "label_and_attack": "EVALUATION ONLY -- never an input",
+        "role": "attacker/victim role from the schedule: 0 benign, 1 attacker->victim, 2 victim->attacker, "
+                "3 in an attack window between hosts the schedule does not pair. GROUND TRUTH -- for supervising a "
+                "ranking head and for evaluation, never a model input. Derived from attacker_ips/victim_ips, never "
+                "from `reversed`, which on the Bot day agrees with the true direction only 4.1% of the time",
         "columns": [name for name in table.column_names],
     }
     (out_dir / "latents_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return len(z)
+
+
+def _roles_for_stream(day_name: str, stream: dict) -> "np.ndarray":
+    """Role codes for the rows of one export stream.
+
+    Input:  the day, the stream being exported
+    Output: (N,) int8 role codes, or all-benign when the day has no schedule entry
+
+    Resolved from the stream's own endpoint ids rather than re-read from disk, so a sliced or reordered export gets the
+    role of the rows it actually contains.
+    """
+    from models.data.roles import BENIGN, node_ips, resolve_roles
+
+    try:
+        ips = node_ips(day_name)
+    except (FileNotFoundError, OSError):
+        return np.full(len(stream["event_id"]), BENIGN, dtype=np.int8)
+    sender = ips[np.asarray(stream["sender"], dtype=np.int64)]
+    receiver = ips[np.asarray(stream["receiver"], dtype=np.int64)]
+    return resolve_roles(day_name, sender, receiver, np.asarray(stream["t"], dtype=float))
 
 
 def benign_streams(day: dict, split_id: int, limit: int | None = None) -> dict:
@@ -170,7 +210,8 @@ def benign_streams(day: dict, split_id: int, limit: int | None = None) -> dict:
     keep = (~day["attack"]) & (day["split"] == split_id)
     if limit:
         keep &= np.cumsum(keep) <= limit
-    return make_stream(day, keep)
+    # Real events' neighbourhoods looked up once in large GPU blocks; identical to the per-window lookup.
+    return cache_neighbours(make_stream(day, keep))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -197,14 +238,29 @@ def main(argv: list[str] | None = None) -> int:
                         help="instead of training, write event_latents.parquet and latents_manifest.json for each "
                              "day -- what Block 10 reads")
     parser.add_argument("--load", type=Path, default=None, help="the trained Block 9 to export with")
+    parser.add_argument("--day-cache", type=Path, default=None,
+                        help="keep each loaded day here as .npy and read it back on later epochs and runs (~6 s instead of "
+                             "~3 min per day); unset parses the parquet every time")
+    parser.add_argument("--embeddings-root", type=Path, default=None,
+                        help="where Block 7's exports live, as <root>/<arm export>/<day>/ (default data/flow_embeddings)")
     parser.add_argument("--record-arm", type=Path, default=None,
                         help="run 7: the records-only cascade, matching `models.context_encoder --record-arm`")
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     load = day_loader(args.record_arm, device)      # load_day itself when --record-arm is absent
+    if args.embeddings_root is not None:
+        # A run that exported its own Block 7 embeddings reads those, leaving data/flow_embeddings untouched.
+        base_load = load
+        load = lambda day, arm, *a, **k: base_load(day, arm, *a, embeddings_root=args.embeddings_root, **k)
     torch.manual_seed(args.seed)
     model8, arm = frozen_context_encoder(args.context_encoder, device)
+    # Only the late messages the frozen Block 8 reads; the rest would be loaded, cached and copied for nothing.
+    reads, before_prune = set(model8.late.keys()), load
+    keep_records = "record" in reads or args.record_arm is not None     # the record arm is built from them
+    load = lambda day, arm, *a, **k: before_prune(day, arm, *a, flows="flow" in reads, records=keep_records, **k)
+    if args.day_cache is not None:
+        load = day_cache(load, args.day_cache, f"f{int('flow' in reads)}r{int(keep_records)}")
     if args.export:
         state = torch.load(args.load or (args.out / "best.pt"), map_location=device, weights_only=False)
         width = model8.out[-1].out_features
@@ -271,14 +327,42 @@ def main(argv: list[str] | None = None) -> int:
         state.epoch, state.history = epoch + 1, history
         if args.resume is not None:
             state.save(args.resume, ae, optimiser, schedule)
+        checkpoint = {"encoder": args.encoder, "arm": arm, "target": args.target, "epoch": epoch + 1,
+                      "validation_loss": mean, "d_z": args.d_z, "window": args.window,
+                      "model": ae.state_dict(), "context_encoder": str(args.context_encoder)}
+        torch.save(checkpoint, args.out / f"epoch_{epoch + 1:02d}.pt")        # every epoch kept; ~0.15 MB each
         if improved:
-            torch.save({"encoder": args.encoder, "arm": arm, "target": args.target, "epoch": epoch + 1,
-                        "validation_loss": mean, "d_z": args.d_z, "window": args.window,
-                        "model": ae.state_dict(), "context_encoder": str(args.context_encoder)}, args.out / "best.pt")
+            torch.save(checkpoint, args.out / "best.pt")
         elif state.stale >= args.patience:
             print(f"early stop: best mean validation loss {state.best:.5f}", flush=True)
             break
     board.close()
+    # The best checkpoint on train, validation and -- where a day has one -- test. Train and validation are the best
+    # epoch's own rows; test is scored once here with the saved weights, like validation (benign, no gradient), and
+    # never used to choose anything.
+    best = torch.load(args.out / "best.pt", map_location=device, weights_only=False)
+    ae.load_state_dict(best["model"])
+    rows = [r for r in history if r["epoch"] == best["epoch"]]
+    for day in args.days:
+        data = load(day, arm)
+        if args.events:
+            keep = attack_slice(data, args.events, args.family)
+            data = {name: value[keep] for name, value in data.items() if isinstance(value, np.ndarray)}
+        if not ((~data["attack"]) & (data["split"] == 2)).any():
+            print(f"  test: {day} has no benign test events", flush=True)
+            continue
+        stream = benign_streams(data, 2, args.limit)
+        started = time.perf_counter()
+        with torch.no_grad():
+            out = run_compressor(model8, ae, stream, arm, window=args.window, device=device, target=args.target)
+        seconds = time.perf_counter() - started
+        events = len(stream["sender"])
+        rows.append({"encoder": args.encoder, "arm": arm, "target": args.target, "epoch": best["epoch"], "day": day,
+                     "stage": "test", "events": events, "loss": out["loss"], "seconds": seconds,
+                     "events_per_s": events / max(seconds, 1e-9)})
+        print(f"  test: {day}, {events:,} events, loss {out['loss']:.5f}", flush=True)
+        del data
+    pd.DataFrame(rows).to_csv(args.out / "best_metrics.csv", index=False)
     return 0
 
 
