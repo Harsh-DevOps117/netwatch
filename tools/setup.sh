@@ -6,10 +6,10 @@
 # Env:  NETWATCH_HF_ACCOUNT   the Hugging Face account that hosts the two repositories (default kaustuk000)
 #       NETWATCH_REVISION     the release to fetch (default v1.0.0)
 #
-# The model lands in artifacts/huggingface/download/netwatch-flow-cascade/ and artifacts/current is pointed at it, so
-# every serving command (which reads artifacts/current by default) serves the published model. A local training run
-# already promoted to artifacts/current is never replaced. The dataset lands in
-# artifacts/huggingface/download/netwatch-ids2018-events/ in the repository's own layout. Safe to re-run.
+# Installs only; it starts nothing. The model lands in artifacts/huggingface/download/netwatch-flow-cascade/ and
+# artifacts/current is pointed at it; a local training run already promoted to artifacts/current is never replaced. The
+# dataset lands in artifacts/huggingface/download/netwatch-ids2018-events/ in the repository's own layout. Safe to
+# re-run.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -55,12 +55,11 @@ fi
 mkdir -p artifacts
 if [ ! -e artifacts/current ] && [ ! -L artifacts/current ]; then
 	ln -s "huggingface/download/$MODEL_REPO" artifacts/current
-	echo "artifacts/current -> $DOWNLOADS/$MODEL_REPO (serving now uses the published model)"
+	echo "artifacts/current -> $DOWNLOADS/$MODEL_REPO"
 elif [ "$(readlink artifacts/current 2>/dev/null)" = "huggingface/download/$MODEL_REPO" ]; then
 	echo "artifacts/current already points at the published model"
 else
-	echo "artifacts/current holds a local training run and is kept. To serve the published model instead:"
-	echo "  --registry $DOWNLOADS/$MODEL_REPO/serving.json   (models.serving.live, detect_live --forecast)"
+	echo "artifacts/current holds a local training run and is kept; the published model is in $DOWNLOADS/$MODEL_REPO"
 fi
 
 echo "== 4/4 dataset"
@@ -91,7 +90,4 @@ else
 fi
 
 echo
-echo "Done. Serve the published model:"
-echo "  live detection   uv run python -m models.serving.detect_live --interface <iface> --port 8902"
-echo "  lag forecast     uv run python -m models.serving.live --input <capture folder> --work <work folder> --port 8901"
-echo "  (both read artifacts/current; docs/serving.md has the capture requirements)"
+echo "Done. The model is in $DOWNLOADS/$MODEL_REPO (artifacts/current points at it unless a local run is there)."
