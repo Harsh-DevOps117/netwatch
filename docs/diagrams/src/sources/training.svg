@@ -1,0 +1,96 @@
+<svg viewBox="0 0 1200 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">Training order</title>
+  <desc id="d">tools/train_all.sh trains the flow encoder and exports an embedding for every event; exports flow records and trains the record encoder; trains the detection encoder and the detector heads; trains the forecasting encoder, then the lag tag&#x27;s compressor, latents, world model and calibration; then the live tag&#x27;s compressor, latents, world model and calibration on the detection encoder; writes serving.json and the tolerance reports; records the run and promotes it to artifacts/current.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="520" fill="#0b0e14"/>
+  <rect width="1200" height="520" fill="url(#grid)"/>
+  <rect width="1200" height="520" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">Training order</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">stages run one at a time in the order numbered; each reads the frozen outputs before it · a finished stage is skipped on resume</text>
+  <rect x="28" y="210" width="140" height="66" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="98.0" y="232.0" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700">① Flow encoder</text>
+  <text x="98.0" y="247.0" fill="#e6edf3" font-size="11" text-anchor="middle">fit 320k events/day</text>
+  <text x="98.0" y="262.0" fill="#8b949e" font-size="11" text-anchor="middle">10 epochs</text>
+  <rect x="28" y="360" width="140" height="66" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="98.0" y="382.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">② Flow records</text>
+  <text x="98.0" y="397.0" fill="#e6edf3" font-size="11" text-anchor="middle">and record encoder</text>
+  <text x="98.0" y="412.0" fill="#8b949e" font-size="11" text-anchor="middle">1,000 steps</text>
+  <rect x="200" y="100" width="140" height="66" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="270.0" y="122.0" fill="#bc8cff" font-size="12" text-anchor="middle" font-weight="700">③ Detection encoder</text>
+  <text x="270.0" y="137.0" fill="#e6edf3" font-size="11" text-anchor="middle">event + summary</text>
+  <text x="270.0" y="152.0" fill="#8b949e" font-size="11" text-anchor="middle">5 epochs</text>
+  <rect x="370" y="100" width="140" height="66" rx="8" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <text x="440.0" y="122.0" fill="#e3b341" font-size="12" text-anchor="middle" font-weight="700">④ Detector heads</text>
+  <text x="440.0" y="137.0" fill="#e6edf3" font-size="11" text-anchor="middle">one head per day</text>
+  <text x="440.0" y="152.0" fill="#8b949e" font-size="11" text-anchor="middle">300 steps each</text>
+  <rect x="200" y="360" width="140" height="66" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="270.0" y="382.0" fill="#bc8cff" font-size="12" text-anchor="middle" font-weight="700">⑤ Forecasting enc.</text>
+  <text x="270.0" y="397.0" fill="#e6edf3" font-size="11" text-anchor="middle">+ flow records</text>
+  <text x="270.0" y="412.0" fill="#8b949e" font-size="11" text-anchor="middle">5 epochs</text>
+  <rect x="370" y="360" width="140" height="66" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4"/>
+  <text x="440.0" y="382.0" fill="#39c5bb" font-size="12" text-anchor="middle" font-weight="700">⑥ Compressor</text>
+  <text x="440.0" y="397.0" fill="#e6edf3" font-size="11" text-anchor="middle">s → z (32)</text>
+  <text x="440.0" y="412.0" fill="#8b949e" font-size="11" text-anchor="middle">5 epochs</text>
+  <rect x="540" y="360" width="140" height="66" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4"/>
+  <text x="610.0" y="382.0" fill="#39c5bb" font-size="12" text-anchor="middle" font-weight="700">⑦ Latents</text>
+  <text x="610.0" y="397.0" fill="#e6edf3" font-size="11" text-anchor="middle">z for every event</text>
+  <text x="610.0" y="412.0" fill="#8b949e" font-size="11" text-anchor="middle">latents/</text>
+  <rect x="710" y="360" width="140" height="66" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="780.0" y="382.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">⑧ World model</text>
+  <text x="780.0" y="397.0" fill="#e6edf3" font-size="11" text-anchor="middle">on the latents</text>
+  <text x="780.0" y="412.0" fill="#8b949e" font-size="11" text-anchor="middle">5 epochs</text>
+  <rect x="880" y="360" width="140" height="66" rx="8" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <text x="950.0" y="382.0" fill="#e3b341" font-size="12" text-anchor="middle" font-weight="700">⑨ Calibration</text>
+  <text x="950.0" y="397.0" fill="#e6edf3" font-size="11" text-anchor="middle">served threshold</text>
+  <text x="950.0" y="412.0" fill="#8b949e" font-size="11" text-anchor="middle">budget 10⁻⁴</text>
+  <rect x="370" y="220" width="140" height="66" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="440.0" y="242.0" fill="#39c5bb" font-size="12" text-anchor="middle" font-weight="700">⑩ Compressor</text>
+  <text x="440.0" y="257.0" fill="#e6edf3" font-size="11" text-anchor="middle">on the detection</text>
+  <text x="440.0" y="272.0" fill="#8b949e" font-size="11" text-anchor="middle">encoder · 5 epochs</text>
+  <rect x="540" y="220" width="140" height="66" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="610.0" y="242.0" fill="#39c5bb" font-size="12" text-anchor="middle" font-weight="700">⑪ Latents</text>
+  <text x="610.0" y="257.0" fill="#e6edf3" font-size="11" text-anchor="middle">z for every event</text>
+  <text x="610.0" y="272.0" fill="#8b949e" font-size="11" text-anchor="middle">latents-live/</text>
+  <rect x="710" y="220" width="140" height="66" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="780.0" y="242.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">⑫ World model</text>
+  <text x="780.0" y="257.0" fill="#e6edf3" font-size="11" text-anchor="middle">on those latents</text>
+  <text x="780.0" y="272.0" fill="#8b949e" font-size="11" text-anchor="middle">5 epochs</text>
+  <rect x="880" y="220" width="140" height="66" rx="8" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="950.0" y="242.0" fill="#e3b341" font-size="12" text-anchor="middle" font-weight="700">⑬ Calibration</text>
+  <text x="950.0" y="257.0" fill="#e6edf3" font-size="11" text-anchor="middle">served threshold</text>
+  <text x="950.0" y="272.0" fill="#8b949e" font-size="11" text-anchor="middle">budget 10⁻⁴</text>
+  <text x="370" y="208" fill="#8b949e" font-size="11" text-anchor="start">tag live: the world model on the detection encoder</text>
+  <text x="370" y="348" fill="#8b949e" font-size="11" text-anchor="start">tag lag: the world model on the forecasting encoder</text>
+  <rect x="1050" y="150" width="122" height="90" rx="8" fill="#0b0e14" stroke="#e6edf3" stroke-width="1.4"/>
+  <text x="1111.0" y="176.5" fill="#e6edf3" font-size="12" text-anchor="middle" font-weight="700">⑭ Serving</text>
+  <text x="1111.0" y="191.5" fill="#e6edf3" font-size="11" text-anchor="middle">serving.json</text>
+  <text x="1111.0" y="206.5" fill="#8b949e" font-size="11" text-anchor="middle">lag and live</text>
+  <text x="1111.0" y="221.5" fill="#8b949e" font-size="11" text-anchor="middle">tolerance reports</text>
+  <rect x="1050" y="300" width="122" height="90" rx="8" fill="#0b0e14" stroke="#e6edf3" stroke-width="1.4"/>
+  <text x="1111.0" y="326.5" fill="#e6edf3" font-size="12" text-anchor="middle" font-weight="700">⑮ Record</text>
+  <text x="1111.0" y="341.5" fill="#e6edf3" font-size="11" text-anchor="middle">manifest.json</text>
+  <text x="1111.0" y="356.5" fill="#8b949e" font-size="11" text-anchor="middle">promote to</text>
+  <text x="1111.0" y="371.5" fill="#8b949e" font-size="11" text-anchor="middle">artifacts/current</text>
+  <path d="M168,243 C184,243 184,133 198,133" fill="none" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ah_58a6ff)"/>
+  <path d="M168,243 C184,243 184,380 198,380" fill="none" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ah_58a6ff)"/>
+  <path d="M168,405 L198,405" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <path d="M340,133 L368,133" fill="none" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ah_bc8cff)"/>
+  <path d="M270,166 L270,253 L368,253" fill="none" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_bc8cff)"/>
+  <path d="M510,253 L538,253" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_8b949e)"/>
+  <path d="M510,393 L538,393" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M680,253 L708,253" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_8b949e)"/>
+  <path d="M680,393 L708,393" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M850,253 L878,253" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_8b949e)"/>
+  <path d="M850,393 L878,393" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M340,393 L368,393" fill="none" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ah_bc8cff)"/>
+  <path d="M1020,253 C1034,253 1034,195 1048,195" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M1020,393 C1036,393 1036,215 1048,215" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M1111,240 L1111,298" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <text x="28" y="480" fill="#8b949e" font-size="11" text-anchor="start">each stage keeps best.pt, every epoch&#x27;s model, resume.pt, history.csv and best_metrics.csv (train / validation / test) in ~/netwatch-data/runs/&lt;stamp&gt;/</text>
+  <text x="28" y="500" fill="#8b949e" font-size="11" text-anchor="start">RUN_DIR=&lt;run&gt; tools/train_all.sh resumes a run, or adds stages it does not have yet (⑩–⑬ on an older run)</text>
+</svg>
