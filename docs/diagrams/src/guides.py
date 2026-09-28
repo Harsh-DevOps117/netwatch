@@ -494,10 +494,12 @@ def training():
         f.box(col[2 + i], 220, W, H, color, head, lines, dash=True)
     f.text(col[2], 208, "tag live: the world model on the detection encoder", 11, C["muted"])
     f.text(col[2], 348, "tag lag: the world model on the forecasting encoder", 11, C["muted"])
-    f.box(1050, 150, 122, 90, C["light"], "⑭ Serving", ["serving.json", "lag and live", "tolerance reports"])
-    f.box(1050, 300, 122, 90, C["light"], "⑮ Record", ["manifest.json", "promote to", "artifacts/current"])
-    f.arrow("M168,243 C184,243 184,133 198,133", C["blue"])
-    f.arrow("M168,243 C184,243 184,380 198,380", C["blue"])
+    f.box(1062, 150, 122, 90, C["light"], "⑭ Serving", ["serving.json", "lag and live", "tolerance reports"])
+    f.box(1062, 300, 122, 90, C["light"], "⑮ Record", ["manifest.json", "promote to", "artifacts/current"])
+    # Right-angle arrows that end in a straight run into the middle of a side: a steep curve in a 30 px gap reached the
+    # box almost vertically and some viewers drew its head on the corner.
+    f.arrow("M168,243 L174,243 Q180,243 180,237 L180,139 Q180,133 186,133 L198,133", C["blue"])
+    f.arrow("M168,243 L174,243 Q180,243 180,249 L180,374 Q180,380 186,380 L198,380", C["blue"])
     f.arrow("M168,405 L198,405", C["green"])
     f.arrow("M340,133 L368,133", C["purple"])
     f.arrow("M270,166 L270,253 L368,253", C["purple"], dash=True)
@@ -506,9 +508,9 @@ def training():
         f.arrow(f"M{x},253 L{x + 28},253", C["grey"], dash=True)
         f.arrow(f"M{x},393 L{x + 28},393", C["grey"])
     f.arrow("M340,393 L368,393", C["purple"])
-    f.arrow("M1020,253 C1034,253 1034,195 1048,195", C["grey"])
-    f.arrow("M1020,393 C1036,393 1036,215 1048,215", C["grey"])
-    f.arrow("M1111,240 L1111,298", C["grey"])
+    f.arrow("M1020,253 L1026,253 Q1032,253 1032,247 L1032,206 Q1032,200 1038,200 L1060,200", C["grey"])
+    f.arrow("M1020,393 L1036,393 Q1042,393 1042,387 L1042,231 Q1042,225 1048,225 L1060,225", C["grey"])
+    f.arrow("M1123,240 L1123,298", C["grey"])
     f.text(28, 480, "each stage keeps best.pt, every epoch's model, resume.pt, history.csv and best_metrics.csv "
                     "(train / validation / test) in ~/netwatch-data/runs/<stamp>/", 11, C["muted"])
     f.text(28, 500, "RUN_DIR=<run> tools/train_all.sh resumes a run, or adds stages it does not have yet (⑩–⑬ on an older run)",
