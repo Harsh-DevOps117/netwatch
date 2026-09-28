@@ -9,7 +9,7 @@ from torch import nn
 from ingest.sources.flows import BENIGN_LABEL
 
 BENIGN = BENIGN_LABEL["Label"]          # class 0 everywhere: the order families are numbered against
-FPR_POINTS = (0.001, 0.01, 0.05)
+FPR_POINTS = (0.0001, 0.001, 0.01, 0.05)
 HIDDEN = 64          # the head's hidden width; saved in the checkpoint so a serving process rebuilds the same shape
 
 
