@@ -1,0 +1,53 @@
+{
+  "model_type": "netwatch-flow-cascade",
+  "task": "network-intrusion-detection",
+  "observation_budget_ms": 10.0,
+  "stages": {
+    "flow_encoder": {
+      "file": "flow_encoder.safetensors",
+      "output_width": 32,
+      "frozen": true
+    },
+    "context_encoder": {
+      "file": "context_encoder.safetensors",
+      "output_width": 100,
+      "frozen": true
+    },
+    "compressor": {
+      "file": "compressor.safetensors",
+      "latent_width": 32,
+      "frozen": true
+    },
+    "detector": {
+      "file": "detector.safetensors",
+      "input_width": 132,
+      "hidden": 64
+    },
+    "world_model": {
+      "file": "world_model.safetensors",
+      "reads": "compressor latent z (32) per event, in stream order",
+      "memory_width": 100,
+      "stateful": true,
+      "served_by_handler": false,
+      "serve": "python -m models.world_model.service (replay) or models.serving.live (live capture), from the source repository",
+      "threshold": "world_model.config.json: score, direction, serve_threshold (test recall 0.0 - not a working detector)"
+    }
+  },
+  "input": {
+    "name": "features",
+    "width": 132,
+    "layout": "the flow embedding (columns 0-31) followed by the context vector (columns 32-131)",
+    "dtype": "float32",
+    "note": "standardised inside the model with the scaler in detector.safetensors; send raw values"
+  },
+  "output": {
+    "probabilities": "one per class, benign first, then each family in `families` order",
+    "families": "read from detector.config.json",
+    "alert": "probability >= serve_threshold for that family, when serve_threshold is set"
+  },
+  "decision_rules": {
+    "persist": 3,
+    "incident_gap_seconds": 60,
+    "note": "applied by the caller across consecutive events on one host; the endpoint scores single events"
+  }
+}

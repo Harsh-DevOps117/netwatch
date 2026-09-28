@@ -1,69 +1,117 @@
-# Netwatch - AI based Network Attack Forecasting from Network Traffic Data
+# NetWatch — early network intrusion detection and forecasting
 
-## Description
+NetWatch reads network traffic and answers two questions:
 
-**Background**: This challenge seeks AI systems capable of learning network behaviour, anticipating attacker progression and supporting proactive cyber defence using the emerging concept of World Models. Design and develop a software prototype that learns the evolving state of a computer network from traffic telemetry and predicts the likelihood and progression of malicious activity before compromise is completed. The solution should ingest network traffic, learn temporal behaviour, forecast future attack states and provide interpretable decision support for defenders. Solutions should demonstrate applicability to enterprise environments and Critical Information Infrastructure.
+- **Detection:** is this flow an attack, and which kind? Decided **10 milliseconds** after the flow's first packet,
+  while the connection is still open — not after it has finished and its full statistics are known.
+- **Forecasting:** given what the network is doing, which host is a campaign likely to reach next? A world model keeps a
+  running state of every host and rolls it forward.
 
-- Represent network state using feature vectors or graphs.
-- Learn state-transition dynamics using sequence models (LSTM, Transformer), Graph Neural Networks, latent state models or other AI techniques.
-- Forecast future network states and estimate the probability of attacker progression.
-- Map predicted behaviour to recognised attack stages (e.g. MITRE ATT&CK).
-- Provide explain ability using attention mechanisms, feature attribution or equivalent techniques.
+It is built and evaluated on CSE-CIC-IDS2018, from the raw packet captures.
 
-**Detailed Description**: Participants are encouraged to build world models based AI systems that move beyond static intrusion classification towards predictive cyber defence. The solution may utilise flow records, packet captures, authentication logs or other publicly available cybersecurity telemetry. It should model temporal relationships, infer evolving network state, predict future attack progression and present meaningful explanations for its predictions.
+## How it works
 
-Traditional machine learning classifiers applied to network traffic treat each flow in isolation and map it to a binary benign/malicious label. This discards the temporal and causal structure of an infiltration: the sequence in which ports are probed, the pattern in which SYN flags precede ACK floods, the inter-arrival timing of reconnaissance packets before lateral movement begins. An infiltration is a process unfolding over time, not a single anomalous packet.
+![NetWatch architecture: ingest, the flow encoder, the detection encoder with the detector, the forecasting encoder (which also reads flow records), the compressor and the world model, each drawn as its layers; the compressor and world model are trained a second time on the detection encoder's output for the live serving tag](docs/diagrams/overview.svg)
 
-**World Models** — AI architectures that learn an internal causal simulation of how environment states evolve — offer a fundamentally different approach. Rather than classifying traffic, a world model learns the transition dynamics P(S_t+1 | S_t): given the current observed network state (active flows, flag distributions, port activity, packet timing), what is the probability distribution over future states. This enables forward simulation: roll out K steps ahead and identify whether the current trajectory converges to an infiltration state, before the attacker completes the kill chain.
+Each stage is trained separately and frozen before the next one is trained on its output. Time is never cut into fixed
+windows: one event per flow, processed in the order its information became available, so no decision ever uses
+information that did not exist yet. The full design, stage by stage, is in [docs/architecture.md](docs/architecture.md).
 
-### 1. Input Data — Two Levels of Traffic Feature
+## Results so far, and their limits
 
-Teams must work with both flow-level and packet-level features drawn from open-source network traffic datasets:
+**Detector** — training run of 2026-09-26: one head per day, scored on that day's own test split, at a **0.01%
+false-alarm budget**. Each family has its own threshold: the 99.99th percentile of its scores on benign calibration rows
+(validation plus 20% of training, never test). The rows below are the flows still open at 10 ms (`early_observation`);
+false alarms are benign test flows of that population above the family's threshold, and the rate per hour is over the
+test split's own duration (2.8–3.7 h per day).
 
-- **Flow-level features** (NetFlow / IPFIX format): source and destination IP/port pairs, TCP flag bitmask (SYN, ACK, FIN, RST, PSH, URG), protocol, bytes transferred per flow, packets per flow, flow duration, inter-arrival time (IAT) statistics (mean, variance, max), and bidirectional flow ratios.
-- **Packet-level features** (PCAP-derived): Time-To-Live (TTL) values and their variance across a session, TCP window size, IP fragment flags, payload size distribution, port scan signatures (sequential or randomised port access patterns), and retransmission counts.
+| day | family | threshold | test attacks | recall | precision | false alarms | false-alarm rate | per hour |
+|---|---|---|---|---|---|---|---|---|
+| Friday-16-02-2018 | DoS-Hulk | 0.787 | 256,734 | 0.9986 | 0.9998 | 45 of 736,520 | 0.0061% | 16.2 |
+| Friday-02-03-2018 | Bot | 0.440 | 46,463 | 0.9905 | 0.9978 | 103 of 1,115,611 | 0.0092% | 29.7 |
+| Thursday-15-02-2018 | DoS-GoldenEye | 0.125 | 7,938 | 0.9999 | 0.9935 | 52 of 330,656 | 0.0157% | 14.1 |
+| Thursday-15-02-2018 | DoS-Slowloris | 0.750 | 2,653 | 0.8839 | 0.9433 | 141 of 330,656 | 0.0426% | 38.2 |
+| Thursday-01-03-2018 | Infiltration | 0.793 | 2,139 | 0.7737 | 0.9533 | 81 of 1,145,074 | 0.0071% | 24.9 |
+| Friday-23-02-2018 | Brute Force -Web | 0.672 | 34 | 0.9412 | 0.1928 | 134 of 896,078 | 0.0150% | 41.5 |
+| Friday-23-02-2018 | Brute Force -XSS | 0.321 | 19 | 0.8421 | 0.1684 | 79 of 896,078 | 0.0088% | 24.5 |
+| Friday-23-02-2018 | SQL Injection | 0.203 | 11 | 0.4545 | 0.0685 | 68 of 896,078 | 0.0076% | 21.1 |
 
-The combination of both levels is required because flow-level features capture aggregate behaviour (a SYN flood) while packet-level features expose timing and sequencing patterns (a slow reconnaissance scan designed to evade flow-based thresholds).
+The budget is met on calibration rows; on test rows the realised rate ranges from 0.006% to 0.043%. DoS-SlowHTTPTest
+flows all end within 10 ms, so it has no early rows (on the completed ones, threshold 0.266: recall 1.0000, 66 false
+alarms of 501,778, 0.0132%). The web attacks have too few test events to support a claim. After the alert rules
+(3 events in a row per host, 60 s incidents), every family comes to 1.3–6.3 incidents per hour over all test rows, and
+the alerting hosts carry 99.7–100% of the DoS, Bot and Infiltration attack events (`python -m models.evaluation`).
 
-### 2. World Model Architecture
+**Live.** The detector runs on live traffic and gives a verdict about 31 ms after a flow's first packet (median; 47 ms
+at the 99th percentile), reproducing training's inputs and verdicts ([docs/serving.md](docs/serving.md#5-serving-the-detector)).
 
-The core deliverable is a learned model of network state transition dynamics — not a static classifier. The model must:
+**World model** — the checkpoint calibrated on 2026-09-25 caught no test attacks at its operating point (recall 0); it
+serves forecasts and explanations, not detections. It is being retrained, together with a second world model on the
+detection stream that serves forecasts seconds, rather than ~150 s, behind the traffic.
 
-- Represent network state as a structured feature vector or graph encoding active flows at time t.
-- Learn P(S_t+1 | S_t) — the probability distribution over the next network state given the current state — using a sequence model such as an LSTM, Temporal Transformer, or Graph Neural Network (GNN) operating over time-windowed traffic observations.
-- Be trained on labelled open-source datasets using supervised dynamics learning, where ground-truth state transitions are derived from the attack timeline annotations in the dataset.
-- Generalise to unseen attack patterns — not merely memorize signatures from the training set.
+**Not claimed:** every result is within-day (train and test from the same day's traffic); each head knows only its own
+day's families and does not transfer to other days' traffic; forecasts carry no time. The data does contain lead — an
+attacking host reaches its next new target a median of 32 s (Infiltration) to 80 min (Bot) later
+([docs/serving.md §4](docs/serving.md#4-serving-tags)) — but that a world model predicts those targets is not yet shown.
 
-### 3. Infiltration Prediction and Attack Stage Mapping
+## Quick start
 
-The world model must support forward simulation: given current observed traffic, roll out K steps and output:
+Requirements: Python 3.12 via [uv](https://docs.astral.sh/uv/); for ingest and live serving also `tshark`
+(`apt install tshark`) and a JDK 8 for CICFlowMeter. A CUDA GPU is optional.
 
-- A time-series probability score: likelihood of infiltration in the next K time windows.
-- Predicted attack stage: mapping to MITRE ATT&CK phases — Reconnaissance, Initial Access, Lateral Movement, Command & Control, or Exfiltration — based on the predicted future state.
-- Driving features: which specific flags, ports, or flow patterns are contributing most to the infiltration prediction (via attention weights or SHAP values).
+`tools/setup.sh` does the whole setup once after cloning: `uv sync`; CICFlowMeter, a git submodule pinned at the commit
+ingest used, fetched, patched and built by `tools/setup_cicflowmeter.sh`; the published model (release `v1.0.0`) from
+Hugging Face into `artifacts/huggingface/download/netwatch-flow-cascade/`, with `artifacts/current` pointed at it so
+every serving command serves it. It then asks whether to download the dataset, and which set (`processed`, `model` or
+both) and which days; `--dataset none|processed|model|both` answers without asking. The dataset is gated: accept its
+terms on Hugging Face and log in first.
 
-The approaches are provided only as examples and are not mandatory. Teams are free to propose alternative architectures that satisfy the objectives.
+```bash
+git clone --recurse-submodules <repository url> && cd netwatch
+tools/setup.sh
 
-## Expected Solution (Indicative)
+# self-checks: no dataset and no GPU needed
+uv run python -m models.serving.graph
+uv run python -m models.serving.emitter
+uv run python -m models.serving.cascade
+uv run python -m models.serving.registry
+uv run python -m models.serving.parity --demo
+uv run python -m models.evaluation --demo
+uv run python -m models.explanation --demo
+uv run python -m tools.repo.verify_contracts
+```
 
-A software-based, fully open-source solution is expected. The solution may include:
+Then:
 
-- A feature extraction pipeline that ingests CIC-IDS-2018 or CTU-13 CSV flow records and/or raw PCAP files (parsed using Scapy or PyShark) and outputs a timestamped, normalised feature matrix covering both flow-level and packet-level attributes described above.
-- A trained world model (LSTM, Transformer, or GNN architecture) that demonstrably learns traffic state transition dynamics — not a static input-output classifier. Training scripts, model weights, and a reproducible training configuration must be included.
-- An infiltration prediction engine that performs K-step forward simulation from a current traffic snapshot and outputs: infiltration probability score, predicted MITRE ATT&CK stage, and top contributing traffic features.
-- An explainability output for each prediction — using SHAP values or model attention weights — identifying which flags, ports, or flow statistics are driving the prediction. Black-box outputs without interpretability are not acceptable.
-- A working demonstration interface (Streamlit, Flask web app, or CLI) that accepts a PCAP or CSV file as input, runs the world model inference, and displays the infiltration probability timeline, flagged flows, and attack stage annotations. The interface must run fully offline without cloud API dependencies.
-- Benchmark results comparing model performance (F1 score, precision, recall, false positive rate) against a logistic regression baseline trained on the same features, demonstrating that the world model's temporal dynamics learning provides measurable improvement.
+| step | guide |
+|---|---|
+| prepare the data and train every stage (`tools/train_all.sh`) | [docs/training.md](docs/training.md) |
+| run live detection and the forecast services, and read the API | [docs/serving.md](docs/serving.md) |
+| publish the models and data to Hugging Face | [docs/publishing.md](docs/publishing.md) |
 
-## Expected Solution/Deliverables for Evaluation
+## Repository layout
 
-- Source Code Link (GitHub/Drive Link)
-- Readme with Setup Instructions
-- Architecture Document (Max 2 Pages)
-- Demo Video (Max 2 Minutes)
-- Technical Presentation (Max 5 Slides)
+| folder | contents |
+|---|---|
+| [`ingest/`](ingest/README.md) | captures → packets, flows, labels, event stream |
+| [`models/data/`](models/data/README.md) | shared inputs, the 10 ms cut, the splits |
+| [`models/flow_encoder/`](models/flow_encoder/README.md) | flow encoder |
+| [`models/context_encoder/`](models/context_encoder/README.md) | context encoder, side features, flow records |
+| [`models/detector/`](models/detector/README.md) | the detector |
+| [`models/compressor/`](models/compressor/README.md) | compressor |
+| `models/world_model/` | world model (package docstrings; design in [docs/architecture.md §8](docs/architecture.md#8-world-model)) |
+| [`models/explanation/`](models/explanation/README.md) | attention and attribution explanations |
+| [`models/serving/`](models/serving/README.md) | live detection, forecast services and their tags, tolerance test, online graph, alert rules |
+| [`models/evaluation/`](models/evaluation/README.md) | every reported metric |
+| [`tools/`](tools/README.md) | training script, publishing, measurement |
+| `huggingface/` | the Hugging Face model and dataset cards and endpoint |
+| `artifacts/` | git-ignored: every trained model the project serves or publishes (`current/`, `previous/`, `huggingface/`) |
+| [`docs/`](docs/README.md) | architecture, data, training, serving, publishing |
 
-**Organization:** National Technical Research Organisation (NTRO)
-**Department:** National Technical Research Organisation (NTRO)
+## Licence
 
-This Project has a lot of learning.
+The code is MIT — see [LICENSE](LICENSE).
+
+**The dataset is not.** CSE-CIC-IDS2018 is distributed by the Canadian Institute for Cybersecurity under its own terms,
+which require attribution and govern redistribution. Event streams, embeddings and latents produced here are derived
+works of it; check those terms before publishing any of them.

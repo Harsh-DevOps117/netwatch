@@ -1,0 +1,180 @@
+<svg viewBox="0 0 1200 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">The flow encoder</title>
+  <desc id="d">One flow as seen at t_obs, its first 10 milliseconds, becomes a small graph: one node per packet seen (up to 20, each with 13 features and a sender or receiver tag) and one flow node holding the 40-number summary. Contain edges carry the summary from the flow node to every packet. Link edges join each packet to the next packet from the same host (same-side: one chain for the sender, drawn blue, and one for the receiver, drawn orange) and to the answering packet from the other host (reply, drawn purple); each carries the time between the two packets, encoded as 16 numbers, plus 2 numbers for its kind. Two graph layers update the packet nodes. The packets are averaged and max-pooled, joined to the summary, and a small network produces h, 32 numbers. During training only, decoders rebuild the summary, the packet slots and the flow's full 20-packet summary from h, on benign flows.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker>
+    <marker id="ahp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker>
+    <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker>
+    <marker id="aho" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f0883e"/></marker>
+    <path id="c1" d="M540,176 L380,312"/><path id="c2" d="M540,176 L450,312"/><path id="c3" d="M540,176 L520,312"/>
+    <path id="c4" d="M540,176 L590,312"/><path id="c5" d="M540,176 L660,312"/>
+    <path id="r12" d="M398,330 L432,330"/><path id="r23" d="M468,330 L502,330"/><path id="r45" d="M608,330 L642,330"/>
+  </defs>
+
+  <rect width="1200" height="620" fill="#0b0e14"/>
+  <rect width="1200" height="620" fill="url(#grid)"/>
+  <rect width="1200" height="620" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" font-weight="700">Flow encoder</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13">one flow, as seen at t_obs = min(first packet + 10 ms, flow end), encoded into h — no other traffic is read</text>
+
+  <!-- ===== input ===== -->
+  <rect x="20" y="80" width="280" height="440" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="34" y="102" fill="#8b949e" font-size="13" font-weight="700">INPUT AT t_obs</text>
+
+  <text x="34" y="126" fill="#e6edf3" font-weight="600">packets seen   ≤ 20 × 13</text>
+  <g>
+    <rect x="34" y="134" width="252" height="92" fill="#0b0e14" stroke="#30363d"/>
+    <g fill="#1f4f8f"><rect x="36" y="136" width="248" height="16"/></g>
+    <g fill="#6b3510"><rect x="36" y="154" width="248" height="16"/></g>
+    <g fill="#1f4f8f"><rect x="36" y="172" width="248" height="16"/></g>
+    <g fill="#21262d"><rect x="36" y="190" width="248" height="16"/><rect x="36" y="208" width="248" height="16"/></g>
+    <text x="42" y="148" fill="#79c0ff" font-size="11">packet 1 · sender</text>
+    <text x="42" y="166" fill="#ffa657" font-size="11">packet 2 · receiver</text>
+    <text x="42" y="184" fill="#79c0ff" font-size="11">packet 3 · sender</text>
+    <text x="42" y="202" fill="#6e7681" font-size="11">… empty slots up to 20</text>
+  </g>
+  <text x="34" y="244" fill="#8b949e" font-size="11">length · TTL (zeroed) · TCP window · SYN · ACK ·</text>
+  <text x="34" y="258" fill="#8b949e" font-size="11">FIN · RST · PSH · URG · payload length ·</text>
+  <text x="34" y="272" fill="#8b949e" font-size="11">retransmission · fragment · direction</text>
+
+  <text x="34" y="300" fill="#e6edf3" font-weight="600">gaps   ≤ 20</text>
+  <text x="34" y="316" fill="#8b949e" font-size="11">seconds since the flow's previous packet</text>
+
+  <text x="34" y="344" fill="#e6edf3" font-weight="600">summary a_f   40</text>
+  <rect x="34" y="352" width="124" height="24" fill="#1f4f8f" stroke="#58a6ff"/>
+  <rect x="162" y="352" width="124" height="24" fill="#6b3510" stroke="#f0883e"/>
+  <text x="96" y="368" fill="#79c0ff" text-anchor="middle" font-size="11">sender's 20</text>
+  <text x="224" y="368" fill="#ffa657" text-anchor="middle" font-size="11">receiver's 20</text>
+  <text x="34" y="394" fill="#8b949e" font-size="11">count, size / TTL / window / gap statistics,</text>
+  <text x="34" y="408" fill="#8b949e" font-size="11">flag counts, payload, retransmissions, fragments</text>
+  <text x="34" y="422" fill="#8b949e" font-size="11">— recomputed from the packets seen by t_obs</text>
+
+  <rect x="34" y="440" width="252" height="66" rx="8" fill="#0b0e14" stroke="#30363d"/>
+  <text x="44" y="460" fill="#e6edf3" font-size="11">median flow: 2 packets by 10 ms</text>
+  <text x="44" y="476" fill="#e6edf3" font-size="11">inputs scaled with statistics from benign</text>
+  <text x="44" y="492" fill="#e6edf3" font-size="11">training rows, stored inside the checkpoint</text>
+
+  <path d="M300,300 L318,300" stroke="#8b949e" stroke-width="1.8" marker-end="url(#ah)"/>
+
+  <!-- ===== graph ===== -->
+  <rect x="320" y="80" width="440" height="440" rx="12" fill="#0d2545" fill-opacity="0.45" stroke="#58a6ff" stroke-opacity="0.5"/>
+  <text x="334" y="102" fill="#58a6ff" font-size="13" font-weight="700">A SMALL GRAPH PER FLOW</text>
+
+  <rect x="470" y="136" width="140" height="40" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="540" y="153" fill="#e6edf3" text-anchor="middle" font-weight="600">flow node</text>
+  <text x="540" y="169" fill="#8b949e" text-anchor="middle" font-size="11">a_f (40) → 64</text>
+
+  <!-- contain edges -->
+  <g stroke="#6e7681" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ahg)">
+    <line x1="540" y1="176" x2="380" y2="312"/><line x1="540" y1="176" x2="450" y2="312"/><line x1="540" y1="176" x2="520" y2="312"/>
+    <line x1="540" y1="176" x2="590" y2="312"/><line x1="540" y1="176" x2="660" y2="312"/>
+  </g>
+  <g fill="#6e7681">
+    <circle r="4"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#c1"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.4s" begin="0.3s" repeatCount="indefinite"><mpath href="#c2"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.4s" begin="0.6s" repeatCount="indefinite"><mpath href="#c3"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.4s" begin="0.9s" repeatCount="indefinite"><mpath href="#c4"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#c5"/></animateMotion></circle>
+  </g>
+  <text x="748" y="214" fill="#8b949e" font-size="11" text-anchor="end">contain edges:</text>
+  <text x="748" y="228" fill="#8b949e" font-size="11" text-anchor="end">flow → each packet</text>
+  <text x="748" y="242" fill="#8b949e" font-size="11" text-anchor="end">(no edge features)</text>
+
+  <!-- time offsets -->
+  <g fill="#8b949e" font-size="10" text-anchor="middle">
+    <text x="380" y="292" fill="#e6edf3">0 ms</text><text x="450" y="292" fill="#e6edf3">0.3 ms</text><text x="520" y="292" fill="#e6edf3">0.4 ms</text>
+    <text x="590" y="292" fill="#e6edf3">2.1 ms</text><text x="660" y="292" fill="#e6edf3">6.8 ms</text>
+  </g>
+
+  <!-- reply edges (straight, between neighbours with a change of side) -->
+  <g stroke="#bc8cff" stroke-width="2" fill="none">
+    <path d="M398,330 L432,330" marker-end="url(#ahp)"/><path d="M468,330 L502,330" marker-end="url(#ahp)"/><path d="M608,330 L642,330" marker-end="url(#ahp)"/>
+  </g>
+  <!-- same-side chains (arcs below) -->
+  <path d="M384,348 C400,392 506,392 518,350" stroke="#58a6ff" stroke-width="2" fill="none" marker-end="url(#ahb)"/>
+  <path d="M524,348 C536,378 578,378 588,350" stroke="#58a6ff" stroke-width="2" fill="none" marker-end="url(#ahb)"/>
+  <path d="M454,348 C476,414 640,414 657,350" stroke="#f0883e" stroke-width="2" fill="none" marker-end="url(#aho)"/>
+
+  <g>
+    <circle r="4" fill="#bc8cff"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#r12"/></animateMotion></circle>
+    <circle r="4" fill="#bc8cff"><animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite"><mpath href="#r23"/></animateMotion></circle>
+    <circle r="4" fill="#bc8cff"><animateMotion dur="1.8s" begin="1.2s" repeatCount="indefinite"><mpath href="#r45"/></animateMotion></circle>
+  </g>
+
+  <!-- packet nodes -->
+  <g stroke-width="1.8">
+    <circle cx="380" cy="330" r="18" fill="#1f4f8f" stroke="#58a6ff"/><circle cx="450" cy="330" r="18" fill="#6b3510" stroke="#f0883e"/>
+    <circle cx="520" cy="330" r="18" fill="#1f4f8f" stroke="#58a6ff"/><circle cx="590" cy="330" r="18" fill="#1f4f8f" stroke="#58a6ff"/>
+    <circle cx="660" cy="330" r="18" fill="#6b3510" stroke="#f0883e"/>
+  </g>
+  <g font-size="12" text-anchor="middle" font-weight="600">
+    <text x="380" y="334" fill="#79c0ff">π1</text><text x="450" y="334" fill="#ffa657">π2</text><text x="520" y="334" fill="#79c0ff">π3</text>
+    <text x="590" y="334" fill="#79c0ff">π4</text><text x="660" y="334" fill="#ffa657">π5</text>
+  </g>
+
+  <g font-size="11">
+    <rect x="334" y="414" width="412" height="102" rx="8" fill="#0b0e14" stroke="#30363d"/>
+    <line x1="344" y1="428" x2="364" y2="428" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ahg)"/><text x="372" y="432" fill="#e6edf3">contain edge: flow → packet, carries the summary</text>
+    <line x1="344" y1="444" x2="364" y2="444" stroke="#bc8cff" stroke-width="2" marker-end="url(#ahp)"/><text x="372" y="448" fill="#e6edf3">reply edge: next packet comes from the other host</text>
+    <line x1="344" y1="460" x2="364" y2="460" stroke="#58a6ff" stroke-width="2" marker-end="url(#ahb)"/><text x="372" y="464" fill="#e6edf3">same-side edge: the sender's next packet</text>
+    <line x1="344" y1="476" x2="364" y2="476" stroke="#f0883e" stroke-width="2" marker-end="url(#aho)"/><text x="372" y="480" fill="#e6edf3">same-side edge: the receiver's next packet</text>
+    <text x="344" y="496" fill="#8b949e">each reply or same-side edge carries 18 numbers: the time between its</text>
+    <text x="344" y="510" fill="#8b949e">two packets (log(1+Δt) × 8 learned frequencies, sin + cos = 16) + kind (2)</text>
+  </g>
+
+  <text x="690" y="306" fill="#8b949e" font-size="11">packet node:</text>
+  <text x="690" y="320" fill="#8b949e" font-size="11">13 → 64</text>
+  <text x="690" y="334" fill="#8b949e" font-size="11">+ side tag</text>
+  <text x="690" y="356" fill="#79c0ff" font-size="11">● sender</text>
+  <text x="690" y="370" fill="#ffa657" font-size="11">● receiver</text>
+
+  <path d="M760,300 L778,300" stroke="#8b949e" stroke-width="1.8" marker-end="url(#ah)"/>
+
+  <!-- ===== layers + readout ===== -->
+  <rect x="780" y="80" width="400" height="236" rx="12" fill="#0d2545" fill-opacity="0.45" stroke="#58a6ff" stroke-opacity="0.5"/>
+  <text x="794" y="102" fill="#58a6ff" font-size="13" font-weight="700">2 GRAPH LAYERS, THEN READOUT</text>
+  <text x="794" y="126" fill="#e6edf3">each layer updates every packet node:</text>
+  <text x="806" y="144" fill="#e6edf3">from link edges → GINEConv (reads the 18 edge numbers)</text>
+  <text x="806" y="160" fill="#e6edf3">from contain edges → SAGEConv (the flow summary)</text>
+  <text x="806" y="176" fill="#e6edf3">packet ← ReLU(packet + sum of both), width 64</text>
+  <text x="794" y="198" fill="#8b949e" font-size="11">the flow node only sends: nothing points into it, so it is never updated</text>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle">
+    <rect x="796" y="216" width="88" height="26" rx="6" fill="#0b0e14" stroke="#58a6ff"/><text x="840" y="233" fill="#58a6ff">mean · 64</text>
+    <rect x="890" y="216" width="88" height="26" rx="6" fill="#0b0e14" stroke="#58a6ff"/><text x="934" y="233" fill="#58a6ff">max · 64</text>
+    <rect x="984" y="216" width="88" height="26" rx="6" fill="#0b0e14" stroke="#8b949e"/><text x="1028" y="233" fill="#8b949e">a_f · 40</text>
+  </g>
+  <text x="1082" y="233" fill="#8b949e">= 168</text>
+  <path d="M934,242 L934,262" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="870" y="264" width="128" height="26" rx="6" fill="#0b0e14" stroke="#8b949e"/>
+  <text x="934" y="281" fill="#e6edf3" text-anchor="middle" font-size="11">MLP 168 → 32</text>
+  <path d="M998,277 L1044,277" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="1046" y="262" width="84" height="30" rx="15" fill="#0b0e14" stroke="#58a6ff" stroke-width="2">
+    <animate attributeName="stroke-opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+  </rect>
+  <text x="1088" y="282" fill="#58a6ff" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">h · 32</text>
+
+  <!-- ===== training decoders ===== -->
+  <rect x="780" y="332" width="400" height="188" rx="12" fill="#3a1215" stroke="#ff7b72" stroke-dasharray="5 4"/>
+  <text x="794" y="354" fill="#ff7b72" font-size="13" font-weight="700">TRAINING ONLY · DECODERS REBUILD FROM h</text>
+  <g font-size="12" fill="#e6edf3">
+    <text x="806" y="378" fill="#e6edf3">→ a_f (40): the summary it was given</text>
+    <text x="806" y="398" fill="#e6edf3">→ packet slots (20 × 15): 13 features + log gap</text>
+    <text x="818" y="414" fill="#e6edf3">+ "a packet is here" flag, per slot</text>
+    <text x="806" y="434" fill="#e6edf3">→ a_future (20): the flow's FULL 20-packet summary,</text>
+    <text x="818" y="450" fill="#e6edf3">which does not exist yet at t_obs (a forecast)</text>
+  </g>
+  <text x="794" y="476" fill="#ff7b72">loss: mean squared error per target, averaged</text>
+  <text x="794" y="494" fill="#ff7b72">benign training flows only · best epoch by validation loss</text>
+  <text x="794" y="512" fill="#8b949e" font-size="11">the full summary is a target only; the encoder never reads it</text>
+
+  <!-- ===== output ===== -->
+  <rect x="20" y="536" width="1160" height="68" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text x="36" y="560" fill="#e6edf3" font-weight="700">Output, for every event of every day:</text>
+  <text x="290" y="560" fill="#e6edf3">h (32) and its reconstruction error → flow_embeddings.parquet — the event feature both context encoders read,</text>
+  <text x="290" y="578" fill="#e6edf3">and 32 of the detector's 132 inputs.   Fitted on 320,000 sampled events per day; the export embeds all 35.9M.</text>
+  <text x="36" y="594" fill="#8b949e" font-size="11">models/flow_encoder/encoder.py · 65k parameters in the encoder, 124k with decoders</text>
+</svg>

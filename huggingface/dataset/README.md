@@ -1,0 +1,202 @@
+<!-- BEGIN GENERATED: front matter and inventory, rewritten by tools/publish/huggingface.py -->
+---
+license: other
+license_name: cse-cic-ids2018
+license_link: https://www.unb.ca/cic/datasets/ids-2018.html
+gated: true
+task_categories:
+  - tabular-classification
+tags:
+  - network-traffic
+  - intrusion-detection
+  - cybersecurity
+configs:
+  - config_name: processed_events
+    data_files:
+      - split: Friday_02_03_2018
+        path: "processed/events/Friday-02-03-2018/**/*.parquet"
+      - split: Friday_16_02_2018
+        path: "processed/events/Friday-16-02-2018/**/*.parquet"
+      - split: Friday_23_02_2018
+        path: "processed/events/Friday-23-02-2018/**/*.parquet"
+      - split: Thursday_01_03_2018
+        path: "processed/events/Thursday-01-03-2018/**/*.parquet"
+      - split: Thursday_15_02_2018
+        path: "processed/events/Thursday-15-02-2018/**/*.parquet"
+  - config_name: processed_node_index
+    data_files:
+      - split: Friday_02_03_2018
+        path: "processed/node_index/Friday-02-03-2018/**/*.parquet"
+      - split: Friday_16_02_2018
+        path: "processed/node_index/Friday-16-02-2018/**/*.parquet"
+      - split: Friday_23_02_2018
+        path: "processed/node_index/Friday-23-02-2018/**/*.parquet"
+      - split: Thursday_01_03_2018
+        path: "processed/node_index/Thursday-01-03-2018/**/*.parquet"
+      - split: Thursday_15_02_2018
+        path: "processed/node_index/Thursday-15-02-2018/**/*.parquet"
+  - config_name: processed_flow_records
+    data_files:
+      - split: Friday_02_03_2018
+        path: "processed/flow_records/Friday-02-03-2018/**/*.parquet"
+      - split: Thursday_15_02_2018
+        path: "processed/flow_records/Thursday-15-02-2018/**/*.parquet"
+  - config_name: processed_side_features
+    data_files:
+      - split: Friday_02_03_2018
+        path: "processed/side_features/Friday-02-03-2018/**/*.parquet"
+      - split: Friday_16_02_2018
+        path: "processed/side_features/Friday-16-02-2018/**/*.parquet"
+      - split: Friday_23_02_2018
+        path: "processed/side_features/Friday-23-02-2018/**/*.parquet"
+      - split: Thursday_01_03_2018
+        path: "processed/side_features/Thursday-01-03-2018/**/*.parquet"
+      - split: Thursday_15_02_2018
+        path: "processed/side_features/Thursday-15-02-2018/**/*.parquet"
+  - config_name: model_flow_embeddings
+    data_files:
+      - split: Friday_02_03_2018
+        path: "model/flow_embeddings/Friday-02-03-2018/**/*.parquet"
+      - split: Friday_16_02_2018
+        path: "model/flow_embeddings/Friday-16-02-2018/**/*.parquet"
+      - split: Friday_23_02_2018
+        path: "model/flow_embeddings/Friday-23-02-2018/**/*.parquet"
+      - split: Thursday_01_03_2018
+        path: "model/flow_embeddings/Thursday-01-03-2018/**/*.parquet"
+      - split: Thursday_15_02_2018
+        path: "model/flow_embeddings/Thursday-15-02-2018/**/*.parquet"
+  - config_name: model_latents
+    data_files:
+      - split: Thursday_15_02_2018
+        path: "model/latents/Thursday-15-02-2018/**/*.parquet"
+---
+
+| set | portion | config to load | days | size |
+|---|---|---|---|---|
+| `processed` | `events` | `processed_events` | 5 | 1.5 GB |
+| `processed` | `node_index` | `processed_node_index` | 5 | 3.0 MB |
+| `processed` | `flow_records` | `processed_flow_records` | 2 | 1.1 GB |
+| `processed` | `side_features` | `processed_side_features` | 5 | 229.2 MB |
+| `model` | `flow_embeddings` | `model_flow_embeddings` | 5 | 6.1 GB |
+| `model` | `latents` | `model_latents` | 1 | 41.8 MB |
+<!-- END GENERATED -->
+
+# NetWatch IDS2018 Events — v1.0.0
+
+| version | released | produced by | contents |
+|---|---|---|---|
+| **v1.0.0** | 2026-09-28 | training run `20260926-2337` | five CSE-CIC-IDS2018 days as events, node indexes, flow records and side features (set `processed`); flow embeddings and latents of model v1.0.0 (set `model`) |
+
+The `model` set belongs to one model version: it is regenerated with every retrained cascade. Pin a version with
+`revision="v1.0.0"`.
+
+CSE-CIC-IDS2018 rebuilt as a **continuous-time event stream**: one row per network flow, ordered by the microsecond at
+which it became observable, with every flow cut to the first **10 milliseconds** of its life. Time is never binned.
+
+It is published as **two sets, chosen independently**, so nobody downloads six gigabytes of embeddings to read labels.
+
+## Set 1 — `processed`: model-agnostic
+
+The event stream and the per-flow tables. Useful with any model, including one that has nothing to do with this project.
+
+| portion | config | what it is |
+|---|---|---|
+| `events` | `processed_events` | the labelled event stream: times, endpoints, per-host history, 20-packet aggregates, labels |
+| `node_index` | `processed_node_index` | per day, `node_id` → `ip`: names the hosts in every other table and in world-model output |
+| `flow_records` | `processed_flow_records` | CICFlowMeter's own 69 columns per event, at the earliest time that record could exist |
+| `side_features` | `processed_side_features` | per-event request/response features at the observation time, and who sent which side |
+
+## Set 2 — `model`: produced by this cascade
+
+Learned representations. These are only meaningful with the model that produced them — see the companion model
+repository.
+
+| portion | config | what it is |
+|---|---|---|
+| `flow_embeddings` | `model_flow_embeddings` | a 32-wide embedding per flow from its early packets, **no network context** |
+| `latents` | `model_latents` | a 32-wide latent `z` summarising each event's network context, plus `recon_error`; **the world model's input** (the `lag` tag's) |
+
+When staged from a training run (`--bundle`), `latents` are exactly the ones the published world model was trained and
+calibrated on. To name its hosts, map `sender_node_id` / `receiver_node_id` through that day's `node_index` (in
+`processed_node_index`).
+
+Every table ships with the JSON manifest that records which checkpoint produced it. **Two files whose manifests disagree
+are on different scales and must not be mixed**, however similar their configuration looks.
+
+## Loading
+
+Each day is a split, so one day can be loaded without fetching the rest.
+
+```python
+from datasets import load_dataset
+
+events  = load_dataset("<account>/<repo>", "processed_events",  split="Friday_02_03_2018")
+latents = load_dataset("<account>/<repo>", "model_latents",     split="Friday_02_03_2018")
+```
+
+Or read the parquet directly, which suits a table this wide:
+
+```python
+import pyarrow.parquet as pq
+from huggingface_hub import hf_hub_download
+
+path = hf_hub_download("<account>/<repo>", "model/latents/Friday-02-03-2018/event_latents.parquet",
+                       repo_type="dataset")
+table = pq.read_table(path)
+```
+
+## What one row is
+
+One flow, observed for 10 ms from its first packet. The key columns, and the tables that carry them:
+
+| column | meaning | in |
+|---|---|---|
+| `event_id` | the row's identity; joins every table in both sets | every table |
+| `t` | the flow's first packet, epoch seconds | `events`, `flow_embeddings`, `latents` |
+| `t_obs` | when the decision had to be made: `min(t + 0.010, flow end)` | `latents`; `flow_embeddings` as `observation_time` |
+| `sender_node_id`, `receiver_node_id` | endpoints, keyed on the flow's **first captured packet**, not the record's src/dst | `side_features`, `latents` (`events` has the record's `src_node_id` / `dst_node_id`) |
+| `observation_population` | `early_observation` or `completed_before_budget` — see below | `flow_embeddings`, `latents` |
+| `split` | 0 train, 1 validation, 2 test, -1 inside a 120 s gap between splits | `latents` |
+| `label`, `attack` | ground truth. **Evaluation only** | `events` (`label`), `flow_embeddings` (`attack`), `latents` (both) |
+
+Set-specific: `flow_embeddings` adds `h`, `packets_seen` and `recon_error`; `latents` adds `z` and `recon_error`.
+
+### Two populations, never pooled
+
+| population | meaning |
+|---|---|
+| `early_observation` | the flow was still running when the budget expired, so a decision here is genuinely early |
+| `completed_before_budget` | the flow had already finished; nothing was predicted ahead of time |
+
+Only the first supports any claim about acting early. Pooling them is the most common way to overstate a result on this
+data, which is why the column exists rather than being dropped after slicing.
+
+### Columns that must never be an input
+
+`label` and `attack` are ground truth for scoring. So is anything describing a flow's **full** duration: at 10
+milliseconds that information does not exist yet, so using it is leakage rather than a feature. The `flow_records`
+portion is the place to be careful — it carries CICFlowMeter's complete-flow statistics, and it is included so the
+10 ms-budget setting can be compared against the conventional one, not so both can be fed to the same model.
+
+## Splits interleave in wall-clock time
+
+Train, validation and test are cut **inside every attack window and every benign stretch separately**, so each split
+contains attack rows; a whole-day cut leaves validation and test with none.
+
+The consequence has to be understood before using them. Because each segment is cut independently, the splits interleave
+in real time: on one measured day, **1,677,561 of 1,680,628 test benign rows occur before the latest train attack**. That
+is harmless for detection, which scores a row that is itself an attack. It makes any "will this host attack later"
+target unsound, because training has already seen that host attacking at a later real-world time. Use cross-day holdout
+for that question.
+
+## Node ids are per day
+
+`sender_node_id` and `receiver_node_id` are assigned by first appearance **within a single day**, so the same host is a
+different integer on another day. Do not join them across days, and do not carry per-host state between days without
+remapping through each day's `node_index`.
+
+## Licence and attribution
+
+Derived from **CSE-CIC-IDS2018**, distributed by the Canadian Institute for Cybersecurity, whose terms govern
+redistribution and require attribution. This repository is gated for that reason. Cite the original dataset in any work
+that uses these files.

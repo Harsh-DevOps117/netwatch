@@ -1,0 +1,150 @@
+<svg viewBox="0 0 1200 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">The world model</title>
+  <desc id="d">Every host has a memory of 100 numbers. Events arrive in availability order in chunks of 512, each with a sender, a receiver, z from the compressor and the time since each host was last seen. After a chunk is scored, a message built from both memories, z and both time gaps (432 numbers) passes through a small network and a GRU into both hosts' memories. A host is read in two layers: its memory plus attention over up to 20 recent peers, then two learned global queries pooling over recently active hosts. The next-event head scores whether two hosts interact next; its error on the real event is the surprise. The ranking head compares each candidate host with both global queries and ranks the next target. Training uses the next-event loss, each real pair against one negative (its initiator with another event's responder from the same chunk), plus the ranking loss on attacker and victim roles, the true target against five negative candidates. A rollout imagines six events forward, the ranking head choosing each target. Calibration picks the served score on validation and sets its threshold at a 1-in-10,000 false-alarm budget.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker>
+    <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker>
+    <path id="upd" d="M200,200 L200,262 L200,330 L200,400"/>
+  </defs>
+  <rect width="1200" height="720" fill="#0b0e14"/>
+  <rect width="1200" height="720" fill="url(#grid)"/>
+  <rect width="1200" height="720" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" font-weight="700">World model</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13">a running memory of every host, updated by each event; read in two layers; two heads; rolled forward to forecast next targets</text>
+
+  <!-- ============ left: memory and update ============ -->
+  <rect x="20" y="80" width="360" height="430" rx="12" fill="#0f2d19" fill-opacity="0.5" stroke="#3fb950" stroke-opacity="0.5"/>
+  <text x="34" y="102" fill="#3fb950" font-size="13" font-weight="700">MEMORY AND ITS UPDATE</text>
+  <text x="34" y="124" fill="#e6edf3" font-weight="700">events, in t_obs order, 512 at a time</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="34" y="134" width="56" height="24" fill="#0b0e14" stroke="#8b949e"/><text x="62" y="150" fill="#e6edf3">i → j</text>
+    <rect x="90" y="134" width="70" height="24" fill="#0b3036" stroke="#39c5bb"/><text x="125" y="150" fill="#e6edf3">z · 32</text>
+    <rect x="160" y="134" width="80" height="24" fill="#21262d" stroke="#6e7681"/><text x="200" y="150" fill="#e6edf3">dt_i, dt_j</text>
+    <rect x="240" y="134" width="58" height="24" fill="#21262d" stroke="#6e7681"/><text x="269" y="150" fill="#e6edf3">t_obs</text>
+  </g>
+  <text x="304" y="150" fill="#8b949e" font-size="10.5">z ← compressor</text>
+
+  <text x="34" y="184" fill="#e6edf3" font-weight="700">host memory table (100 per host)</text>
+  <g font-size="11">
+    <text x="34" y="206" fill="#e6edf3" font-weight="700">host i</text><rect x="90" y="196" width="276" height="14" rx="3" fill="#2e6b3f" stroke="#3fb950"/>
+    <text x="34" y="226" fill="#e6edf3" font-weight="700">host j</text><rect x="90" y="216" width="276" height="14" rx="3" fill="#2e6b3f" stroke="#3fb950"/>
+    <text x="34" y="246" fill="#6e7681">host k</text><rect x="90" y="236" width="276" height="14" rx="3" fill="#21262d"/>
+    <text x="34" y="266" fill="#6e7681">…</text><rect x="90" y="256" width="276" height="14" rx="3" fill="#21262d"/>
+  </g>
+  <text x="34" y="290" fill="#8b949e" font-size="11">starts at zero every day (host ids are per day) · also keeps</text>
+  <text x="34" y="304" fill="#8b949e" font-size="11">each host's last-seen time</text>
+
+  <text x="34" y="334" fill="#e6edf3" font-weight="700">update, after the chunk has been scored</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="34" y="344" width="60" height="24" fill="#2e6b3f" stroke="#3fb950"/><text x="64" y="360" fill="#e6edf3">m_i 100</text>
+    <rect x="94" y="344" width="60" height="24" fill="#2e6b3f" stroke="#3fb950"/><text x="124" y="360" fill="#e6edf3">m_j 100</text>
+    <rect x="154" y="344" width="46" height="24" fill="#0b3036" stroke="#39c5bb"/><text x="177" y="360" fill="#e6edf3">z 32</text>
+    <rect x="200" y="344" width="82" height="24" fill="#21262d" stroke="#6e7681"/><text x="241" y="360" fill="#e6edf3">Φ(dt_i) 100</text>
+    <rect x="282" y="344" width="84" height="24" fill="#21262d" stroke="#6e7681"/><text x="324" y="360" fill="#e6edf3">Φ(dt_j) 100</text>
+  </g>
+  <text x="200" y="384" fill="#8b949e" font-size="11" text-anchor="middle">= 432</text>
+  <path d="M200,388 L200,402" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="110" y="404" width="180" height="24" rx="6" fill="#0b0e14" stroke="#8b949e"/><text x="200" y="420" text-anchor="middle" font-size="11" fill="#e6edf3">message MLP 432 → 128 → 100</text>
+  <path d="M200,428 L200,442" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="110" y="444" width="180" height="24" rx="6" fill="#0b0e14" stroke="#3fb950"/><text x="200" y="460" text-anchor="middle" font-size="11" fill="#e6edf3">GRU → new m_i and new m_j</text>
+  <text x="34" y="488" fill="#8b949e" font-size="11">same message, same GRU for both hosts · within a chunk the</text>
+  <text x="34" y="502" fill="#8b949e" font-size="11">latest event per host wins (same result on every run)</text>
+
+  <!-- ============ middle: reading ============ -->
+  <rect x="400" y="80" width="380" height="430" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="414" y="102" fill="#8b949e" font-size="13" font-weight="700">READING A HOST v</text>
+
+  <rect x="414" y="114" width="352" height="170" rx="10" fill="#0b0e14" stroke="#3fb950"/>
+  <text x="426" y="134" fill="#3fb950" font-weight="700">layer 1 · neighbourhood</text>
+  <text x="426" y="152" fill="#e6edf3" font-size="11">query: m_v · keys: for each of ≤ 20 recent peers u,</text>
+  <text x="426" y="166" fill="#e6edf3" font-size="11">Linear([m_u 100, Φ(age of u) 100] → 100) · attention, 2 heads</text>
+  <g>
+    <circle cx="500" cy="228" r="16" fill="#2e6b3f" stroke="#3fb950"/><text x="500" y="232" text-anchor="middle" font-weight="700" fill="#7ee787">v</text>
+    <g stroke="#3fb950" stroke-linecap="round">
+      <line x1="516" y1="222" x2="600" y2="190" stroke-width="5"><animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/></line>
+      <line x1="516" y1="226" x2="610" y2="222" stroke-width="2.5"><animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="3s" begin="0.6s" repeatCount="indefinite"/></line>
+      <line x1="516" y1="234" x2="600" y2="258" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="3s" begin="1.2s" repeatCount="indefinite"/></line>
+    </g>
+    <circle cx="610" cy="186" r="10" fill="#0b0e14" stroke="#6e7681"/><circle cx="620" cy="222" r="10" fill="#0b0e14" stroke="#6e7681"/><circle cx="610" cy="262" r="10" fill="#0b0e14" stroke="#6e7681"/>
+  </g>
+  <text x="640" y="214" fill="#e6edf3" font-size="11">h_v = m_v +</text>
+  <text x="640" y="230" fill="#e6edf3" font-size="11">attended peers</text>
+  <text x="640" y="250" fill="#8b949e" font-size="10">(memory added back:</text>
+  <text x="640" y="263" fill="#8b949e" font-size="10">format v2)</text>
+
+  <rect x="414" y="296" width="352" height="116" rx="10" fill="#0b0e14" stroke="#3fb950"/>
+  <text x="426" y="316" fill="#3fb950" font-weight="700">layer 2 · global readout</text>
+  <text x="426" y="334" fill="#e6edf3" font-size="11">2 learned queries attend over h of recently active hosts</text>
+  <text x="426" y="348" fill="#e6edf3" font-size="11">(serving: ≤ 64 seen in the last 4,096 events) → G, 2 × 100</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="440" y="362" width="140" height="36" rx="8" fill="#0f2d19" stroke="#3fb950"/><text x="510" y="378" fill="#e6edf3">query 1</text><text x="510" y="392" fill="#8b949e" font-size="10">meant for fast bursts</text>
+    <rect x="600" y="362" width="140" height="36" rx="8" fill="#0f2d19" stroke="#3fb950"/><text x="670" y="378" fill="#e6edf3">query 2</text><text x="670" y="392" fill="#8b949e" font-size="10">meant for slow, quiet activity</text>
+  </g>
+  <text x="414" y="436" fill="#e6edf3" font-weight="700">outputs of reading</text>
+  <text x="414" y="454" fill="#e6edf3" font-size="11">h_v (100) for any host · G (2 × 100) for the whole network</text>
+  <text x="414" y="476" fill="#8b949e" font-size="11">layer-1 attention weights are what the forecast's</text>
+  <text x="414" y="490" fill="#8b949e" font-size="11">explanation reports ("the model attended to")</text>
+
+  <!-- ============ right: heads ============ -->
+  <rect x="800" y="80" width="380" height="430" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="814" y="102" fill="#8b949e" font-size="13" font-weight="700">TWO HEADS</text>
+  <rect x="814" y="114" width="352" height="140" rx="10" fill="#0b0e14" stroke="#3fb950"/>
+  <text x="826" y="134" fill="#3fb950" font-weight="700">next-event head · "will i and j interact next?"</text>
+  <text x="826" y="154" fill="#e6edf3" font-size="11">MLP [h_i 100, h_j 100] → 128 → 1 logit</text>
+  <text x="826" y="174" fill="#e6edf3" font-size="11">surprise = its error on the event that did happen</text>
+  <text x="826" y="194" fill="#e6edf3" font-size="11">uses no labels: learns how normal traffic unfolds,</text>
+  <text x="826" y="208" fill="#e6edf3" font-size="11">so an unusual event scores as surprising</text>
+  <text x="826" y="236" fill="#ff7b72" font-size="11">trained: real pair vs one negative (the initiator with another</text>
+  <text x="826" y="250" fill="#ff7b72" font-size="11">event's responder, same chunk) · binary cross-entropy</text>
+
+  <rect x="814" y="266" width="352" height="150" rx="10" fill="#0b0e14" stroke="#3fb950"/>
+  <text x="826" y="286" fill="#3fb950" font-weight="700">ranking head · "which host does it reach next?"</text>
+  <text x="826" y="306" fill="#e6edf3" font-size="11">each candidate host c: h_c cross-attends to query 1 and</text>
+  <text x="826" y="320" fill="#e6edf3" font-size="11">to query 2 separately (+ h_c) → concatenate 200 →</text>
+  <text x="826" y="334" fill="#e6edf3" font-size="11">project 100 → score MLP → one score per candidate</text>
+  <text x="826" y="354" fill="#e6edf3" font-size="11">softmax over active candidates → next-target probability</text>
+  <text x="826" y="382" fill="#ff7b72" font-size="11">trained: cross-entropy on the attacker's real next victim</text>
+  <text x="826" y="396" fill="#ff7b72" font-size="11">(roles from the labels, on days that have them)</text>
+
+  <rect x="814" y="428" width="352" height="70" rx="10" fill="#3a1215" stroke="#ff7b72" stroke-dasharray="5 4"/>
+  <text x="826" y="448" fill="#ff7b72" font-weight="700">loss = next-event + 1.0 × ranking</text>
+  <text x="826" y="466" fill="#e6edf3" font-size="11">best epoch: lowest validation next-event loss</text>
+  <text x="826" y="482" fill="#e6edf3" font-size="11">memory reset at each day boundary</text>
+
+  <!-- ============ bottom: rollout + calibration ============ -->
+  <rect x="20" y="526" width="760" height="178" rx="12" fill="#0b0e14" stroke="#3fb950"/>
+  <text x="34" y="548" fill="#3fb950" font-size="13" font-weight="700">ROLLOUT · the forecast (6 imagined events)</text>
+  <text x="34" y="566" fill="#8b949e" font-size="11">from the latest state and its most surprising events: the ranking head picks the next target, the imagined event</text>
+  <text x="34" y="580" fill="#8b949e" font-size="11">(with the seed's z) updates memory, and the next step starts there. Nothing observed is fed back; the state is restored after.</text>
+  <g font-size="12" font-weight="700" text-anchor="middle">
+    <circle cx="80" cy="640" r="18" fill="#2e6b3f" stroke="#3fb950" stroke-width="2"/><text x="80" y="645" fill="#7ee787">seed</text>
+  </g>
+  <g>
+    <g opacity="0"><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.08;0.1;0.94;1"/>
+      <path d="M100,640 L180,640" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ahg)"/><circle cx="200" cy="640" r="16" fill="#0b0e14" stroke="#3fb950" stroke-dasharray="4 3" stroke-width="2"/><text x="200" y="645" text-anchor="middle" font-size="11" fill="#e6edf3">t+1</text></g>
+    <g opacity="0"><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.22;0.24;0.94;1"/>
+      <path d="M218,640 L298,640" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ahg)"/><circle cx="318" cy="640" r="16" fill="#0b0e14" stroke="#3fb950" stroke-dasharray="4 3" stroke-width="2"/><text x="318" y="645" text-anchor="middle" font-size="11" fill="#e6edf3">t+2</text></g>
+    <g opacity="0"><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.36;0.38;0.94;1"/>
+      <path d="M336,640 L416,640" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ahg)"/><circle cx="436" cy="640" r="16" fill="#0b0e14" stroke="#3fb950" stroke-dasharray="4 3" stroke-width="2"/><text x="436" y="645" text-anchor="middle" font-size="11" fill="#e6edf3">t+3</text></g>
+    <g opacity="0"><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.5;0.52;0.94;1"/>
+      <path d="M454,640 L534,640" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ahg)"/><circle cx="554" cy="640" r="16" fill="#0b0e14" stroke="#3fb950" stroke-dasharray="4 3" stroke-width="2"/><text x="554" y="645" text-anchor="middle" font-size="11" fill="#e6edf3">t+4</text></g>
+    <g opacity="0"><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.64;0.66;0.94;1"/>
+      <path d="M572,640 L652,640" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ahg)"/><circle cx="672" cy="640" r="16" fill="#0b0e14" stroke="#3fb950" stroke-dasharray="4 3" stroke-width="2"/><text x="672" y="645" text-anchor="middle" font-size="11" fill="#e6edf3">t+5</text></g>
+    <g opacity="0"><animate attributeName="opacity" dur="9s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.78;0.8;0.94;1"/>
+      <path d="M690,640 L736,640" stroke="#3fb950" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ahg)"/><text x="758" y="645" text-anchor="middle" font-size="11" fill="#3fb950" font-weight="700">t+6</text></g>
+  </g>
+  <text x="34" y="690" fill="#8b949e" font-size="11">each step is one imagined EVENT, not a unit of time — dashed = predicted, has not happened · useful only while still ahead (serving.md §4)</text>
+
+  <rect x="800" y="526" width="380" height="178" rx="12" fill="#0b0e14" stroke="#d29922"/>
+  <text x="814" y="548" fill="#d29922" font-size="13" font-weight="700">CALIBRATION · after training</text>
+  <text x="814" y="570" fill="#e6edf3" font-size="11">served score: surprise or target probability, whichever</text>
+  <text x="814" y="584" fill="#e6edf3" font-size="11">catches more at the budget on VALIDATION; its tail too</text>
+  <text x="814" y="604" fill="#e6edf3" font-size="11">threshold: quantile of benign scores (validation + 20% of</text>
+  <text x="814" y="618" fill="#e6edf3" font-size="11">training benign) at a 1-in-10,000 false-alarm budget</text>
+  <text x="814" y="638" fill="#e6edf3" font-size="11">stored in the checkpoint with recall and false alarms</text>
+  <text x="814" y="652" fill="#e6edf3" font-size="11">measured on TEST; belongs to this one trained model</text>
+  <text x="814" y="680" fill="#8b949e" font-size="11">served as GET /forecast (tags lag and live, and replay)</text>
+  <text x="814" y="694" fill="#8b949e" font-size="10">models/world_model/{model,training,calibration}.py</text>
+</svg>

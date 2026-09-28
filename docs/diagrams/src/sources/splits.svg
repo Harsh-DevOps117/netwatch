@@ -1,0 +1,62 @@
+<svg viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">How a day is split</title>
+  <desc id="d">Each segment of a day, an attack window or a benign stretch, is split by time into 60 percent train, 10 percent validation and 30 percent test, with a 120 second gap at every boundary so no flow straddles two splits. Every split therefore contains every attack family. Measured over five days the events fall 69.4 percent train, 6.0 percent validation, 20.2 percent test and 4.3 percent in gaps.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="400" fill="#0b0e14"/>
+  <rect width="1200" height="400" fill="url(#grid)"/>
+  <rect width="1200" height="400" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">How a day is split</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">every attack window and every benign stretch is split by its own time: 60% train · 10% validation · 30% test, 120 s unused at each boundary</text>
+  <rect x="40" y="128" width="470" height="44" rx="6" fill="none" stroke="#8b949e" stroke-width="1.2"/>
+  <text x="275.0" y="118" fill="#8b949e" font-size="12" text-anchor="middle" font-weight="700">benign stretch</text>
+  <rect x="42" y="134" width="263.8" height="32" rx="4" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="173.9" y="155" fill="#58a6ff" font-size="11.5" text-anchor="middle" font-weight="700">train</text>
+  <rect x="306.8" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="316.8" y="134" width="42.300000000000004" height="32" rx="4" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <rect x="360.1" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="370.1" y="134" width="130.9" height="32" rx="4" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="435.55" y="155" fill="#3fb950" font-size="11.5" text-anchor="middle" font-weight="700">test</text>
+  <rect x="502.0" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="530" y="128" width="260" height="44" rx="6" fill="none" stroke="#ff7b72" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="660.0" y="118" fill="#ff7b72" font-size="12" text-anchor="middle" font-weight="700">attack window</text>
+  <rect x="532" y="134" width="137.79999999999998" height="32" rx="4" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="600.9" y="155" fill="#58a6ff" font-size="11.5" text-anchor="middle" font-weight="700">train</text>
+  <rect x="670.8" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="680.8" y="134" width="21.3" height="32" rx="4" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <rect x="703.0999999999999" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="713.0999999999999" y="134" width="67.89999999999999" height="32" rx="4" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="747.05" y="155" fill="#3fb950" font-size="11.5" text-anchor="middle" font-weight="700">test</text>
+  <rect x="781.9999999999999" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="810" y="128" width="350" height="44" rx="6" fill="none" stroke="#8b949e" stroke-width="1.2"/>
+  <text x="985.0" y="118" fill="#8b949e" font-size="12" text-anchor="middle" font-weight="700">benign stretch</text>
+  <rect x="812" y="134" width="191.79999999999998" height="32" rx="4" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="907.9" y="155" fill="#58a6ff" font-size="11.5" text-anchor="middle" font-weight="700">train</text>
+  <rect x="1004.8" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="1014.8" y="134" width="30.300000000000004" height="32" rx="4" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <rect x="1046.1" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <rect x="1056.1" y="134" width="94.89999999999999" height="32" rx="4" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="1103.55" y="155" fill="#3fb950" font-size="11.5" text-anchor="middle" font-weight="700">test</text>
+  <rect x="1152.0" y="134" width="7" height="32" fill="url(#hatch)"/>
+  <path d="M40,190 L1160,190" stroke="#6e7681" stroke-width="1.3" marker-end="url(#ah_8b949e)"/>
+  <text x="1160" y="208" fill="#8b949e" font-size="11" text-anchor="end">time in the day</text>
+  <rect x="40" y="222" width="18" height="12" fill="url(#hatch)" stroke="#8b949e" stroke-width="0.8"/>
+  <text x="66" y="232" fill="#e6edf3" font-size="11.5" text-anchor="start">120 s gap: unused, so no flow crosses a boundary (a flow ends within 120 s)</text>
+  <text x="620" y="232" fill="#e6edf3" font-size="11.5" text-anchor="start">why per segment: every split then holds every attack family</text>
+  <text x="40" y="282" fill="#8b949e" font-size="13" text-anchor="start" font-weight="700">Measured share of events, five days</text>
+  <rect x="40" y="296" width="774.28" height="30" rx="4" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="427.14" y="316" fill="#58a6ff" font-size="11.5" text-anchor="middle" font-weight="700">train 69.4%</text>
+  <rect x="817.28" y="296" width="64.2" height="30" rx="4" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <text x="849.38" y="316" fill="#e3b341" font-size="11.5" text-anchor="middle" font-weight="700">6.0%</text>
+  <text x="849.38" y="344" fill="#e3b341" font-size="11" text-anchor="middle">validation</text>
+  <rect x="884.48" y="296" width="223.24" height="30" rx="4" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="996.1" y="316" fill="#3fb950" font-size="11.5" text-anchor="middle" font-weight="700">test 20.2%</text>
+  <rect x="1110.72" y="296" width="48.16" height="30" rx="4" fill="url(#hatch)" stroke="#8b949e"/>
+  <text x="1133.3" y="316" fill="#8b949e" font-size="11.5" text-anchor="middle" font-weight="700">4.3%</text>
+  <text x="1133.3" y="344" fill="#8b949e" font-size="11" text-anchor="middle">gaps</text>
+  <text x="40" y="380" fill="#8b949e" font-size="11.5" text-anchor="start">Event shares differ from 60/10/30 because traffic is uneven across a day and short attack windows lose much of their validation band to the gaps.</text>
+</svg>

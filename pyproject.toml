@@ -1,0 +1,34 @@
+[project]
+name = "sih-2026"
+version = "0.1.0"
+description = "Event-based network intrusion dataset pipeline for CSE-CIC-IDS2018"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pyarrow>=16.0",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "psutil>=5.9",
+    "torch>=2.14",
+    "torch-geometric>=2.8",
+    # Publishing format: tensors only, no pickle, so loading a downloaded model cannot execute code.
+    "safetensors>=0.4",
+    # Training telemetry. torch.utils.tensorboard is a thin wrapper and needs the writer itself.
+    "tensorboard>=2.21.0",
+    "scikit-learn>=1.9.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+# A single test root mirroring the source layout: tests/models/ and tests/ingest/.
+testpaths = ["tests"]
+norecursedirs = ["data", ".venv", "tools/CICFlowMeter", "references"]

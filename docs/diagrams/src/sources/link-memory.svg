@@ -1,0 +1,151 @@
+<svg viewBox="0 0 1200 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">Link memory and its three messages</title>
+  <desc id="d">A link is one direction between two hosts, from the host that sent the flow's first packet to the other. Each link keeps a memory of 100 numbers. Three messages update it, each only once it exists: the event at 10 milliseconds after the first packet, the 20-packet summary when the 20th packet arrives, and the flow record when the flow closes (forecasting encoder only). To read an event, the context encoder combines the event's features with the memory of both link directions and attends over the latest events of up to 20 recent peers, producing s, 100 numbers.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/>
+    </marker>
+    <marker id="arrowLink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/>
+    </marker>
+    <path id="upEvent" d="M330,458 C330,380 470,330 500,262"/>
+    <path id="upSummary" d="M560,458 C560,380 530,330 520,262"/>
+    <path id="upRecord" d="M900,458 C860,405 650,415 600,365 C570,335 550,300 545,262"/>
+    <radialGradient id="glow" cx="45%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#1f6feb" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#1f6feb" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="560" fill="#0b0e14"/>
+  <rect width="1200" height="560" fill="url(#grid)"/>
+  <rect width="1200" height="560" fill="url(#glow)"/>
+
+  <text x="28" y="42" fill="#e6edf3" font-size="20" font-weight="700">Link memory: when each message arrives</text>
+  <text x="28" y="64" fill="#8b949e" font-size="13">three messages per flow update the link's memory, each only at the moment it exists — never before</text>
+
+  <!-- the link -->
+  <g font-size="13" text-anchor="middle">
+    <circle cx="80" cy="190" r="30" fill="#0b0e14" stroke="#8b949e"/>
+    <text x="80" y="195" fill="#e6edf3" font-weight="600">A</text>
+    <text x="80" y="242" fill="#8b949e">sender</text>
+    <circle cx="260" cy="190" r="30" fill="#0b0e14" stroke="#8b949e"/>
+    <text x="260" y="195" fill="#e6edf3" font-weight="600">B</text>
+    <text x="260" y="242" fill="#8b949e">receiver</text>
+    <path d="M112,190 L226,190" stroke="#8b949e" stroke-width="2" fill="none" marker-end="url(#arrowLink)"/>
+    <text x="170" y="178" fill="#8b949e" font-size="12">link A → B</text>
+    <text x="170" y="274" fill="#8b949e" font-size="12">one memory per direction;</text>
+    <text x="170" y="290" fill="#8b949e" font-size="12">the sender sent the first packet</text>
+  </g>
+  <path d="M292,190 L352,190" stroke="#8b949e" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- the memory -->
+  <g>
+    <rect x="360" y="128" width="330" height="134" rx="12" fill="#0b0e14" stroke="#30363d"/>
+    <text x="525" y="154" fill="#e6edf3" font-size="15" font-weight="700" text-anchor="middle">memory of A → B · 100 numbers</text>
+    <g>
+      <rect x="380" y="170" width="26" height="40" rx="4" fill="#3b2a63"/>
+      <rect x="409" y="170" width="26" height="40" rx="4" fill="#45307a"/>
+      <rect x="438" y="170" width="26" height="40" rx="4" fill="#352558"/>
+      <rect x="467" y="170" width="26" height="40" rx="4" fill="#4d3585"/>
+      <rect x="496" y="170" width="26" height="40" rx="4" fill="#3b2a63"/>
+      <rect x="525" y="170" width="26" height="40" rx="4" fill="#402d6e"/>
+      <rect x="554" y="170" width="26" height="40" rx="4" fill="#382860"/>
+      <rect x="583" y="170" width="26" height="40" rx="4" fill="#553a91"/>
+      <rect x="612" y="170" width="26" height="40" rx="4" fill="#3b2a63"/>
+      <rect x="641" y="170" width="26" height="40" rx="4" fill="#45307a"/>
+    </g>
+    <!-- flashes when a message is folded in: event (blue), summary (amber), record (green) -->
+    <rect x="380" y="170" width="287" height="40" rx="4" fill="#58a6ff" opacity="0">
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;0.55;0;0" keyTimes="0;0.34;0.36;0.44;1"/>
+    </rect>
+    <rect x="380" y="170" width="287" height="40" rx="4" fill="#e3b341" opacity="0">
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;0.55;0;0" keyTimes="0;0.54;0.56;0.64;1"/>
+    </rect>
+    <rect x="380" y="170" width="287" height="40" rx="4" fill="#3fb950" opacity="0">
+      <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;0.55;0;0" keyTimes="0;0.83;0.85;0.93;1"/>
+    </rect>
+    <text x="525" y="236" fill="#8b949e" font-size="12" text-anchor="middle">each message is 32 numbers, kept in its own slot with a</text>
+    <text x="525" y="252" fill="#8b949e" font-size="12" text-anchor="middle">presence flag; a GRU folds them into the memory</text>
+  </g>
+
+  <!-- reading an event: query from event + memory of both directions, attention over recent peers -->
+  <path d="M690,190 L762,190" stroke="#8b949e" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="726" y="178" fill="#8b949e" font-size="12" text-anchor="middle">read</text>
+  <text x="726" y="212" fill="#8b949e" font-size="10" text-anchor="middle">+ event features</text>
+  <text x="726" y="225" fill="#8b949e" font-size="10" text-anchor="middle">+ memory B → A</text>
+  <g>
+    <g stroke="#bc8cff" stroke-linecap="round">
+      <line x1="800" y1="190" x2="960" y2="100" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.3;0.8;0.3" dur="3s" repeatCount="indefinite"/></line>
+      <line x1="800" y1="190" x2="1000" y2="145" stroke-width="5"><animate attributeName="stroke-opacity" values="0.4;1;0.4" dur="3s" begin="0.4s" repeatCount="indefinite"/></line>
+      <line x1="800" y1="190" x2="1010" y2="195" stroke-width="3"><animate attributeName="stroke-opacity" values="0.35;0.9;0.35" dur="3s" begin="0.8s" repeatCount="indefinite"/></line>
+      <line x1="800" y1="190" x2="995" y2="245" stroke-width="2"><animate attributeName="stroke-opacity" values="0.3;0.85;0.3" dur="3s" begin="1.2s" repeatCount="indefinite"/></line>
+      <line x1="800" y1="190" x2="955" y2="285" stroke-width="1"><animate attributeName="stroke-opacity" values="0.25;0.7;0.25" dur="3s" begin="1.6s" repeatCount="indefinite"/></line>
+    </g>
+    <circle cx="800" cy="190" r="26" fill="#0b0e14" stroke="#bc8cff"/>
+    <text x="800" y="187" fill="#e6edf3" font-size="11" text-anchor="middle">this</text>
+    <text x="800" y="201" fill="#e6edf3" font-size="11" text-anchor="middle">event</text>
+    <g fill="#0b0e14" stroke="#6e7681">
+      <circle cx="960" cy="100" r="12"/><circle cx="1000" cy="145" r="12"/><circle cx="1010" cy="195" r="12"/>
+      <circle cx="995" cy="245" r="12"/><circle cx="955" cy="285" r="12"/>
+    </g>
+    <g font-size="12" fill="#8b949e">
+      <text x="1030" y="118" fill="#e6edf3">latest event with each</text>
+      <text x="1030" y="134" fill="#e6edf3">of up to 20 recent peers</text>
+      <text x="1030" y="150" fill="#e6edf3">of A and of B</text>
+      <text x="1030" y="222" fill="#e6edf3">line width =</text>
+      <text x="1030" y="238" fill="#e6edf3">attention weight</text>
+    </g>
+    <path d="M800,216 L800,322" stroke="#8b949e" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <rect x="730" y="326" width="140" height="44" rx="10" fill="#0b0e14" stroke="#bc8cff"/>
+    <text x="800" y="353" fill="#bc8cff" font-size="14" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">s · 100</text>
+    <text x="890" y="344" fill="#8b949e" font-size="12">→ detector, or compressor → world model</text>
+  </g>
+
+  <!-- timeline -->
+  <g font-size="12">
+    <line x1="80" y1="470" x2="1120" y2="470" stroke="#30363d" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="1128" y="474" fill="#8b949e">time</text>
+    <line x1="150" y1="460" x2="150" y2="480" stroke="#6e7681" stroke-width="2"/>
+    <text x="150" y="500" fill="#8b949e" text-anchor="middle">first packet</text>
+    <text x="150" y="516" fill="#6e7681" text-anchor="middle">t</text>
+
+    <circle cx="330" cy="470" r="7" fill="#58a6ff"/>
+    <text x="330" y="500" fill="#58a6ff" text-anchor="middle">event message</text>
+    <text x="330" y="516" fill="#8b949e" text-anchor="middle">t + 10 ms (or the flow's end)</text>
+
+    <circle cx="560" cy="470" r="7" fill="#e3b341"/>
+    <text x="560" y="500" fill="#e3b341" text-anchor="middle">20-packet summary</text>
+    <text x="560" y="516" fill="#8b949e" text-anchor="middle">when the 20th packet arrives</text>
+
+    <circle cx="900" cy="470" r="7" fill="#3fb950"/>
+    <text x="900" y="500" fill="#3fb950" text-anchor="middle">flow record</text>
+    <text x="900" y="516" fill="#8b949e" text-anchor="middle">when the flow closes · forecasting encoder only</text>
+
+    <!-- "now" moves along the timeline -->
+    <g>
+      <line x1="80" y1="448" x2="80" y2="484" stroke="#e6edf3" stroke-width="2" stroke-opacity="0.8"/>
+      <text x="80" y="442" fill="#e6edf3" font-size="11" text-anchor="middle">now</text>
+      <animateTransform attributeName="transform" type="translate" dur="10s" repeatCount="indefinite"
+                        values="0,0;0,0;1040,0;1040,0" keyTimes="0;0.05;0.95;1"/>
+    </g>
+  </g>
+
+  <!-- each message rises to the memory once "now" has passed its time -->
+  <circle r="7" fill="#58a6ff" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.27;0.35;1" calcMode="linear"><mpath href="#upEvent"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.269;0.27;0.35;0.36;1"/>
+  </circle>
+  <circle r="7" fill="#e3b341" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.47;0.55;1" calcMode="linear"><mpath href="#upSummary"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.469;0.47;0.55;0.56;1"/>
+  </circle>
+  <circle r="7" fill="#3fb950" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.76;0.84;1" calcMode="linear"><mpath href="#upRecord"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.759;0.76;0.84;0.85;1"/>
+  </circle>
+
+  <text x="28" y="545" fill="#8b949e" font-size="12">A message is held until the batch being processed has reached its time, so it can only affect later events on the link — never the flow's own 10 ms decision.</text>
+</svg>

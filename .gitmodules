@@ -1,0 +1,4 @@
+[submodule "tools/CICFlowMeter"]
+	path = tools/CICFlowMeter
+	url = https://github.com/UNBCIC/CICFlowMeter.git
+	ignore = dirty
