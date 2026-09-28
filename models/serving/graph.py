@@ -252,7 +252,7 @@ class OnlineNeighbours:
                 role.move_to_end(node)
             table[peer] = position
             table.move_to_end(peer)
-            if len(table) > self.size:
+            if len(table) > self.size + 1:        # one more than shown: the queried link's own peer is left out
                 table.popitem(last=False)
 
 
