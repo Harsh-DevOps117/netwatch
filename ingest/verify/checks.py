@@ -31,7 +31,7 @@ The official CIC CSVs deliberately play no part here. They cannot serve as
 ground truth: the Friday file is truncated at Excel's 1,048,576-row limit, has
 no Src IP / Dst IP columns at all, writes 13:45:27 as "01:45:27" (12-hour clock
 with the AM/PM marker stripped), and duplicates every SlowHTTPTest flow for 24
-minutes. See docs/LABELING_VERIFICATION.md.
+minutes. See docs/dev/validation/labeling-audit.md (local).
 
 Exit status is non-zero if any check fails, so this can gate a pipeline run.
 """
