@@ -10,6 +10,7 @@ import torch
 
 from models.context_encoder.data import DAYS
 from models.runtime import configure
+from models.data.splits import band_hours
 from models.detector.checkpoint import save_calibration, save_head
 from models.detector.features import benign_gate, combine, load_features, standardise
 from models.detector.model import (
@@ -21,7 +22,8 @@ from models.detector.report import multiclass_matrix, report
 def run_day(day: str, fprs=FPR_POINTS, device: str = "cpu", seed: int = 0,
             calibrate: float = 0.2, context: Path | None = None, events: int | None = None,
             family: str | None = None, compressor: Path | None = None, save: Path | None = None,
-            save_scores: Path | None = None) -> tuple[list[dict], pd.DataFrame]:
+            save_scores: Path | None = None,
+            embeddings_root: Path = Path("data/flow_embeddings")) -> tuple[list[dict], pd.DataFrame]:
     """Fit on a day's train split, calibrate on rows the head never saw, report its test split.
 
     Input:  day, budgets, device, seed, the share of train held back for calibration
@@ -32,7 +34,7 @@ def run_day(day: str, fprs=FPR_POINTS, device: str = "cpu", seed: int = 0,
     its budget six-fold on the test segment (benign traffic differs by time of day). The held-back slice is drawn at
     random across the whole training period, so the calibration rows span the day instead of one stretch of it.
     """
-    data, feature_name = load_features(day, context, device, events, family)
+    data, feature_name = load_features(day, context, device, events, family, embeddings_root)
     code, families = family_codes(data["label"])
     train, val, test = (data["split"] == 0), (data["split"] == 1), (data["split"] == 2)
     # A narrow --events slice can land entirely inside one segment, leaving nothing to report on. Said here rather
@@ -61,7 +63,9 @@ def run_day(day: str, fprs=FPR_POINTS, device: str = "cpu", seed: int = 0,
     if save_scores is not None:
         save_calibration(save_scores, families=families, day=day, calib_benign=calib_scores[benign_calib],
                          test=test_scores, test_code=code[test], test_attack=data["attack"][test],
-                         t_obs=data["t_obs"][test], sender=data["sender"][test])
+                         t_obs=data["t_obs"][test], sender=data["sender"][test],
+                         population=data["population"][test],
+                         test_hours=band_hours(data["t_obs"], data["split"]))
     gated = None
     if compressor is not None:
         if data["context"] is None:
@@ -89,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--events", type=int, default=None,
                         help="use a contiguous slice of this many events, centred on the day's attacks: the quick "
-                             "proxy for a full-day run (validated against it -- see docs/TESTS.md)")
+                             "proxy for a full-day run (validated against it -- see docs/dev/validation/experiment-record.md)")
     parser.add_argument("--compressor", type=Path, default=None,
                         help="a Block 9 checkpoint: its reconstruction error becomes a second condition on every "
                              "alert, which is Block 9's false-positive job (design.md, Block 9)")
@@ -104,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--context-encoder", type=Path, default=None,
                         help="a Block 8 checkpoint: puts its context s beside the embedding, which is the only way "
                              "link memory, the neighbourhood and the flow messages reach the supervised arm")
+    parser.add_argument("--embeddings-root", type=Path, default=Path("data/flow_embeddings"),
+                        help="Block 7 exports to read; must be the ones the Block 8 checkpoint was trained on")
     args = parser.parse_args(argv)
     configure(fast=getattr(args, "fast", False))
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -113,7 +119,8 @@ def main(argv: list[str] | None = None) -> int:
         stem = (lambda p: p.with_name(f"{p.stem}_{day}{p.suffix or '.pt'}") if p else None)
         day_rows, matrix = run_day(day, device=device, seed=args.seed, context=args.context_encoder,
                                    events=args.events, family=args.family, compressor=args.compressor,
-                                   save=stem(args.save), save_scores=stem(args.save_scores))
+                                   save=stem(args.save), save_scores=stem(args.save_scores),
+                                   embeddings_root=args.embeddings_root)
         rows += day_rows
         print(f"\n=== {day}: named family against truth, at the 1% budget (rows true, columns named)")
         print(matrix.to_string())
