@@ -1,0 +1,220 @@
+<svg viewBox="0 0 1200 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">The context encoder</title>
+  <desc id="d">For an event from host A (the sender of the first packet) to host B, the context encoder builds 67 event features: h from the flow encoder (32), the time since A and since B last appeared (16 each) and three port and direction features. It reads the memory of link A to B and of link B to A (100 numbers each) and turns the 267 numbers into a query. Keys come from up to 20 neighbour events: The latest event with each recent distinct peer of A and of B, excluding earlier A to B events, each described by its features and how long ago it happened, plus whether A launched it or B received it. Two-head attention combines them; The query and the attended vector give s, 100 numbers. After each batch of 512 events, messages update link memories through a GRU. The context encoder is trained to tell the real link from a fake one on benign events.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker>
+    <path id="flow1" d="M574,146 L574,184 L574,238 L574,300 L574,388 L574,440"/>
+  </defs>
+
+  <rect width="1200" height="880" fill="#0b0e14"/>
+  <rect width="1200" height="880" fill="url(#grid)"/>
+  <rect width="1200" height="880" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" font-weight="700">Context encoder</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13">places one event A → B in its network context: what this link has been doing, and what A and B have been doing with everyone else</text>
+
+  <!-- ===================== left: inputs ===================== -->
+  <rect x="20" y="80" width="360" height="560" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="34" y="102" fill="#8b949e" font-size="13" font-weight="700">EVENT FEATURES  x_e · 67</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="34" y="112" width="144" height="26" fill="#1f4f8f" stroke="#58a6ff"/><text x="106" y="129" fill="#79c0ff">h (flow encoder) · 32</text>
+    <rect x="178" y="112" width="72" height="26" fill="#21262d" stroke="#6e7681"/><text x="214" y="129" fill="#e6edf3">Φ(dt A) 16</text>
+    <rect x="250" y="112" width="72" height="26" fill="#21262d" stroke="#6e7681"/><text x="286" y="129" fill="#e6edf3">Φ(dt B) 16</text>
+    <rect x="322" y="112" width="44" height="26" fill="#3b2e0a" stroke="#e3b341"/><text x="344" y="129" fill="#e3b341">3</text>
+  </g>
+  <text x="34" y="156" fill="#8b949e" font-size="11">Φ(dt): seconds since A / B last appeared, as 16 learned</text>
+  <text x="34" y="170" fill="#8b949e" font-size="11">sine/cosine numbers; a new host gets a learned "never seen"</text>
+  <text x="34" y="184" fill="#8b949e" font-size="11">vector · 3 = port_delta, dst_port_new, reversed</text>
+
+  <text x="34" y="214" fill="#8b949e" font-size="13" font-weight="700">LINK MEMORY TABLE</text>
+  <text x="34" y="230" fill="#8b949e" font-size="11">one row per direction A → B · 100 numbers · learned start state</text>
+  <g font-size="11">
+    <text x="34" y="256" fill="#e6edf3" font-weight="700">A → B</text>
+    <text x="34" y="280" fill="#e6edf3" font-weight="700">B → A</text>
+    <text x="34" y="304" fill="#6e7681">A → C</text>
+    <text x="34" y="328" fill="#6e7681">D → B</text>
+    <text x="34" y="352" fill="#6e7681">…</text>
+  </g>
+  <g>
+    <rect x="80" y="244" width="286" height="16" rx="3" fill="#5b3a99" stroke="#bc8cff"><animate attributeName="fill-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/></rect>
+    <rect x="80" y="268" width="286" height="16" rx="3" fill="#5b3a99" stroke="#bc8cff"><animate attributeName="fill-opacity" values="0.5;1;0.5" dur="2s" begin="0.3s" repeatCount="indefinite"/></rect>
+    <rect x="80" y="292" width="286" height="16" rx="3" fill="#21262d"/>
+    <rect x="80" y="316" width="286" height="16" rx="3" fill="#21262d"/>
+  </g>
+  <text x="34" y="376" fill="#8b949e" font-size="11">read before this batch's own messages are applied ·</text>
+  <text x="34" y="390" fill="#8b949e" font-size="11">a link unused for 1 h restarts · at most 25% of links kept</text>
+
+  <text x="34" y="420" fill="#8b949e" font-size="13" font-weight="700">MEMORY UPDATE · one state per direction</text>
+  <g font-size="10.5" text-anchor="middle">
+    <rect x="34" y="432" width="64" height="24" rx="4" fill="#5b3a99" stroke="#bc8cff"/><text x="66" y="448" fill="#e6edf3">old state</text>
+    <rect x="100" y="432" width="30" height="24" rx="4" fill="#21262d" stroke="#6e7681"/><text x="115" y="448" fill="#e6edf3">Φ</text>
+    <rect x="132" y="432" width="66" height="24" rx="4" fill="#0d2545" stroke="#58a6ff"/><text x="165" y="448" fill="#e6edf3">event</text>
+    <rect x="200" y="432" width="66" height="24" rx="4" fill="#3b2e0a" stroke="#e3b341"/><text x="233" y="448" fill="#e6edf3">summary</text>
+    <rect x="268" y="432" width="66" height="24" rx="4" fill="#0f2d19" stroke="#3fb950" stroke-dasharray="4 3"/><text x="301" y="448" fill="#e6edf3">record*</text>
+    <rect x="336" y="432" width="30" height="24" rx="4" fill="#21262d" stroke="#6e7681"/><text x="351" y="448" fill="#e6edf3">flags</text>
+  </g>
+  <g font-size="9.5" text-anchor="middle" fill="#8b949e">
+    <text x="66" y="469">100</text><text x="115" y="469">16</text><text x="165" y="469">32 + gap 16</text>
+    <text x="233" y="469">32 + gap 16</text><text x="301" y="469">32 + gap 16</text><text x="351" y="469">2 / kind</text>
+    <text x="165" y="482">h at t_obs</text><text x="233" y="482">20th packet</text><text x="301" y="482">69 → 32, flow end</text>
+  </g>
+  <path d="M200,488 L200,498" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="140" y="500" width="120" height="22" rx="5" fill="#161b22" stroke="#8b949e"/>
+  <text x="200" y="515" fill="#e6edf3" font-size="11" text-anchor="middle">MLP → 100</text>
+  <path d="M200,522 L200,532" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="150" y="534" width="100" height="22" rx="5" fill="#3d1a33" stroke="#f778ba"/>
+  <text x="200" y="549" fill="#f778ba" font-size="11" font-weight="700" text-anchor="middle">GRU</text>
+  <path d="M40,456 L40,545 L148,545" fill="none" stroke="#bc8cff" stroke-width="1.3" marker-end="url(#ah)"/>
+  <text x="46" y="530" fill="#8b949e" font-size="9.5">old state</text>
+  <path d="M200,556 L200,566" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="80" y="568" width="286" height="16" rx="3" fill="#5b3a99" stroke="#bc8cff"/>
+  <text x="223" y="580" fill="#e6edf3" font-size="10.5" text-anchor="middle">new state of A → B · 100</text>
+  <g font-size="10.5" fill="#8b949e">
+    <text x="34" y="602">both encoders: event and summary slots; * record slot: forecasting only</text>
+    <text x="34" y="616">several messages of one kind in a batch: averaged in its slot</text>
+    <text x="34" y="630">each waits until the batch reaches its time (link-memory figure)</text>
+  </g>
+
+  <!-- ===================== middle: encoding ===================== -->
+  <rect x="400" y="80" width="360" height="560" rx="12" fill="#2a1a45" fill-opacity="0.6" stroke="#bc8cff" stroke-opacity="0.5"/>
+  <text x="414" y="102" fill="#bc8cff" font-size="13" font-weight="700">ENCODING ONE EVENT</text>
+
+  <g>
+    <circle r="5" fill="#bc8cff"><animateMotion dur="4s" repeatCount="indefinite"><mpath href="#flow1"/></animateMotion></circle>
+  </g>
+
+  <g font-size="11" text-anchor="middle">
+    <rect x="414" y="120" width="80" height="26" fill="#0b0e14" stroke="#8b949e"/><text x="454" y="137" fill="#e6edf3">x_e · 67</text>
+    <rect x="494" y="120" width="120" height="26" fill="#5b3a99" stroke="#bc8cff"/><text x="554" y="137" fill="#e6edf3">memory A→B · 100</text>
+    <rect x="614" y="120" width="120" height="26" fill="#5b3a99" stroke="#bc8cff"/><text x="674" y="137" fill="#e6edf3">memory B→A · 100</text>
+  </g>
+  <text x="742" y="137" fill="#8b949e" font-size="11" text-anchor="end"> </text>
+  <text x="574" y="162" fill="#8b949e" font-size="11" text-anchor="middle">= 267</text>
+  <path d="M574,166 L574,184" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="504" y="186" width="140" height="26" rx="6" fill="#0b0e14" stroke="#8b949e"/><text x="574" y="203" fill="#e6edf3" text-anchor="middle" font-size="11">Linear 267 → 100</text>
+  <path d="M574,212 L574,230" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="524" y="232" width="100" height="26" rx="13" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.5"/><text x="574" y="249" fill="#bc8cff" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">query · 100</text>
+
+  <path d="M574,258 L574,286" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="440" y="288" width="268" height="76" rx="10" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="574" y="310" fill="#e6edf3" text-anchor="middle" font-weight="700">attention, 2 heads</text>
+  <text x="574" y="328" fill="#e6edf3" text-anchor="middle" font-size="11">query vs keys of ≤ 20 neighbour events →</text>
+  <text x="574" y="344" fill="#e6edf3" text-anchor="middle" font-size="11">weighted sum · 100 (zero when no neighbours)</text>
+  <text x="574" y="358" fill="#8b949e" text-anchor="middle" font-size="10">weights kept for explanations</text>
+  <path d="M760,326 L710,326" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="735" y="318" fill="#8b949e" font-size="10" text-anchor="middle">keys</text>
+
+  <path d="M574,364 L574,388" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="470" y="390" width="208" height="26" rx="6" fill="#0b0e14" stroke="#8b949e"/><text x="574" y="407" fill="#e6edf3" text-anchor="middle" font-size="11">MLP [query 100, attended 100] → 100</text>
+  <path d="M574,416 L574,438" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah)"/>
+  <rect x="514" y="440" width="120" height="32" rx="16" fill="#0b0e14" stroke="#bc8cff" stroke-width="2.5">
+    <animate attributeName="stroke-opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+  </rect>
+  <text x="574" y="461" fill="#bc8cff" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">s · 100</text>
+  <text x="574" y="494" fill="#e6edf3" text-anchor="middle" font-size="11">detection encoder → detector input [h, s]</text>
+  <text x="574" y="510" fill="#e6edf3" text-anchor="middle" font-size="11">forecasting encoder → compressor → world model</text>
+
+  <rect x="414" y="530" width="332" height="96" rx="10" fill="#3a1215" stroke="#ff7b72" stroke-dasharray="5 4"/>
+  <text x="426" y="550" fill="#ff7b72" font-weight="700">TRAINING · real link or fake?</text>
+  <text x="426" y="568" fill="#e6edf3" font-size="11">s for the real A → B, and s for the same event sent</text>
+  <text x="426" y="582" fill="#e6edf3" font-size="11">to another event's receiver → scorer MLP (100→100→1)</text>
+  <text x="426" y="598" fill="#e6edf3" font-size="11">→ binary cross-entropy · benign training events only</text>
+  <text x="426" y="614" fill="#8b949e" font-size="11">best epoch: highest validation link PR-AUC</text>
+
+  <!-- ===================== right: neighbourhood ===================== -->
+  <rect x="780" y="80" width="400" height="560" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="794" y="102" fill="#8b949e" font-size="13" font-weight="700">NEIGHBOURHOOD · ≤ 20 EVENTS</text>
+  <text x="794" y="120" fill="#8b949e" font-size="11">the latest event with each recent distinct peer of A (events A</text>
+  <text x="794" y="134" fill="#8b949e" font-size="11">launched) and of B (events B received); earlier A → B events left out</text>
+
+  <!-- mini graph -->
+  <g font-size="12" font-weight="700" text-anchor="middle">
+    <circle cx="880" cy="250" r="20" fill="#1f4f8f" stroke="#58a6ff" stroke-width="1.5"/><text x="880" y="255" fill="#79c0ff">A</text>
+    <circle cx="1080" cy="250" r="20" fill="#6b3510" stroke="#f0883e" stroke-width="1.5"/><text x="1080" y="255" fill="#ffa657">B</text>
+  </g>
+  <path d="M902,250 L1056,250" stroke="#e6edf3" stroke-width="2.5" marker-end="url(#ah)"/>
+  <text x="980" y="242" fill="#e6edf3" text-anchor="middle" font-weight="700">this event</text>
+  <g stroke="#58a6ff" stroke-width="1.6" fill="none">
+    <path d="M870,230 L830,175" marker-end="url(#ah)"/><path d="M880,228 L905,170" marker-end="url(#ah)"/><path d="M862,262 L822,300" marker-end="url(#ah)"/>
+  </g>
+  <g stroke="#f0883e" stroke-width="1.6" fill="none">
+    <path d="M1050,168 L1070,226" marker-end="url(#ah)"/><path d="M1130,180 L1096,232" marker-end="url(#ah)"/><path d="M1134,306 L1100,266" marker-end="url(#ah)"/>
+  </g>
+  <g font-size="11" text-anchor="middle" fill="#e6edf3">
+    <circle cx="824" cy="164" r="12" fill="#0b0e14" stroke="#6e7681"/><text x="824" y="168" fill="#e6edf3">C</text>
+    <circle cx="910" cy="158" r="12" fill="#0b0e14" stroke="#6e7681"/><text x="910" y="162" fill="#e6edf3">D</text>
+    <circle cx="814" cy="310" r="12" fill="#0b0e14" stroke="#6e7681"/><text x="814" y="314" fill="#e6edf3">E</text>
+    <circle cx="1046" cy="156" r="12" fill="#0b0e14" stroke="#6e7681"/><text x="1046" y="160" fill="#e6edf3">F</text>
+    <circle cx="1138" cy="170" r="12" fill="#0b0e14" stroke="#6e7681"/><text x="1138" y="174" fill="#e6edf3">G</text>
+    <circle cx="1142" cy="318" r="12" fill="#0b0e14" stroke="#6e7681"/><text x="1142" y="322" fill="#e6edf3">H</text>
+  </g>
+  <text x="820" y="344" fill="#79c0ff" font-size="11">events A launched</text>
+  <text x="1170" y="344" fill="#ffa657" font-size="11" text-anchor="end">events B received</text>
+
+  <text x="794" y="378" fill="#e6edf3" font-weight="700">key for each neighbour event j</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="794" y="388" width="80" height="24" fill="#0b0e14" stroke="#8b949e"/><text x="834" y="404" fill="#e6edf3">x_j · 67</text>
+    <rect x="874" y="388" width="100" height="24" fill="#21262d" stroke="#6e7681"/><text x="924" y="404" fill="#e6edf3">Φ(age of j) 16</text>
+  </g>
+  <text x="984" y="404" fill="#e6edf3" font-size="11">→ Linear → 100</text>
+  <text x="794" y="432" fill="#e6edf3" font-size="11">+ a learned tag: "launched by A" or "received by B"</text>
+
+  <text x="794" y="462" fill="#e6edf3" font-weight="700">attention weights (line width)</text>
+  <g stroke="#bc8cff" stroke-linecap="round">
+    <line x1="800" y1="486" x2="1000" y2="486" stroke-width="7"><animate attributeName="stroke-opacity" values="0.35;1;0.35" dur="3s" repeatCount="indefinite"/></line>
+    <line x1="800" y1="506" x2="940" y2="506" stroke-width="4"><animate attributeName="stroke-opacity" values="0.35;1;0.35" dur="3s" begin="0.5s" repeatCount="indefinite"/></line>
+    <line x1="800" y1="526" x2="890" y2="526" stroke-width="2.5"><animate attributeName="stroke-opacity" values="0.35;1;0.35" dur="3s" begin="1s" repeatCount="indefinite"/></line>
+    <line x1="800" y1="546" x2="850" y2="546" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.35;1;0.35" dur="3s" begin="1.5s" repeatCount="indefinite"/></line>
+  </g>
+  <g font-size="11" fill="#e6edf3">
+    <text x="1010" y="490" fill="#e6edf3">A → D, 2 s ago</text><text x="950" y="510" fill="#e6edf3">G → B, 40 s ago</text>
+    <text x="900" y="530" fill="#e6edf3">A → C, 3 min ago</text><text x="860" y="550" fill="#e6edf3">H → B, 20 min ago</text>
+  </g>
+  <text x="794" y="580" fill="#8b949e" font-size="11">why distinct peers: a flood fills "the 20 most recent events"</text>
+  <text x="794" y="594" fill="#8b949e" font-size="11">with copies of itself; one event per peer still shows who</text>
+  <text x="794" y="608" fill="#8b949e" font-size="11">else each host talks to</text>
+  <text x="794" y="628" fill="#8b949e" font-size="10">models/context_encoder/model.py · stream.py</text>
+
+  <!-- ===================== bottom: message encoders ===================== -->
+  <rect x="20" y="656" width="1160" height="210" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="34" y="678" fill="#8b949e" font-size="13" font-weight="700">MESSAGE ENCODERS · how each kind becomes a 32-number message</text>
+  <text x="1166" y="678" fill="#8b949e" font-size="11" text-anchor="end">each then gets its own gap Φ(16) and lands in its kind's slot of the update</text>
+<rect x="34" y="700" width="156" height="24" rx="6" fill="#0d2545" stroke="#58a6ff"/><text x="112.0" y="716" fill="#e6edf3" font-size="11" text-anchor="middle">event · h · 32</text>
+<path d="M190,712 L208,712" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="210" y="700" width="150" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="285.0" y="716" fill="#e6edf3" font-size="11" text-anchor="middle">+ learned request marker</text>
+<path d="M360,712 L974,712" stroke="#58a6ff" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+<text x="667" y="706" fill="#8b949e" font-size="10.5" text-anchor="middle">already a 32-number embedding from the flow encoder</text>
+<rect x="976" y="700" width="80" height="24" rx="6" fill="#0d2545" stroke="#58a6ff"/><text x="1016.0" y="716" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="700">message · 32</text>
+<text x="1066" y="716" fill="#8b949e" font-size="11">at t_obs</text>
+<rect x="34" y="746" width="156" height="24" rx="6" fill="#3b2e0a" stroke="#e3b341"/><text x="112.0" y="762" fill="#e6edf3" font-size="11" text-anchor="middle">20-packet summary · 20</text>
+<path d="M190,758 L208,758" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="210" y="746" width="90" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="255.0" y="762" fill="#e6edf3" font-size="11" text-anchor="middle">signed log</text>
+<path d="M300,758 L314,758" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="316" y="746" width="90" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="361.0" y="762" fill="#e6edf3" font-size="11" text-anchor="middle">LayerNorm</text>
+<path d="M406,758 L420,758" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="422" y="746" width="150" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="497.0" y="762" fill="#e6edf3" font-size="11" text-anchor="middle">MLP 20 → 128 → 32</text>
+<path d="M572,758 L586,758" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="588" y="746" width="150" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="663.0" y="762" fill="#e6edf3" font-size="11" text-anchor="middle">+ learned summary marker</text>
+<path d="M738,758 L974,758" stroke="#e3b341" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+<rect x="976" y="746" width="80" height="24" rx="6" fill="#3b2e0a" stroke="#e3b341"/><text x="1016.0" y="762" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="700">message · 32</text>
+<text x="1066" y="762" fill="#8b949e" font-size="11">at the 20th packet</text>
+<rect x="34" y="792" width="156" height="60" rx="6" fill="#0f2d19" stroke="#3fb950" stroke-dasharray="4 3"/><text x="112" y="814" fill="#e6edf3" font-size="11" text-anchor="middle">flow record · 69 columns</text><text x="112" y="830" fill="#3fb950" font-size="10.5" text-anchor="middle">forecasting encoder only</text><text x="112" y="845" fill="#8b949e" font-size="10" text-anchor="middle">signed log first</text>
+<path d="M190,804 L208,804" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="210" y="792" width="150" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="285.0" y="808" fill="#e6edf3" font-size="11" text-anchor="middle">sender 22 · receiver 22</text>
+<path d="M360,804 L374,804" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="376" y="792" width="226" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="489.0" y="808" fill="#e6edf3" font-size="11" text-anchor="middle">one shared MLP 22 → 128 → 32 + side tag</text>
+<path d="M190,840 L208,840" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="210" y="828" width="150" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="285.0" y="844" fill="#e6edf3" font-size="11" text-anchor="middle">flow-level 25</text>
+<path d="M360,840 L374,840" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="376" y="828" width="226" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="489.0" y="844" fill="#e6edf3" font-size="11" text-anchor="middle">MLP 25 → 128 → 32</text>
+<path d="M602,804 L618,816" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<path d="M602,840 L618,828" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="620" y="810" width="170" height="24" rx="6" fill="#0f2d19" stroke="#3fb950"/><text x="705.0" y="826" fill="#e6edf3" font-size="11" text-anchor="middle">concat 96 → MLP → 32</text>
+<path d="M790,822 L804,822" stroke="#8b949e" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="806" y="810" width="154" height="24" rx="6" fill="#161b22" stroke="#6e7681"/><text x="883.0" y="826" fill="#e6edf3" font-size="11" text-anchor="middle">+ learned record marker</text>
+<path d="M960,822 L974,822" stroke="#3fb950" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="976" y="810" width="80" height="24" rx="6" fill="#0f2d19" stroke="#3fb950"/><text x="1016.0" y="826" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="700">message · 32</text>
+<text x="1066" y="826" fill="#8b949e" font-size="11">at flow end</text>
+<text x="800" y="852" fill="#8b949e" font-size="10" text-anchor="middle">record encoder: frozen, pre-trained on benign records</text>
+</svg>
