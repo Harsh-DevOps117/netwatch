@@ -18,7 +18,8 @@ pipeline output. `--stage` moves it anywhere, including outside the repository.
 LICENSING. The code in this repository is MIT. **The dataset is not.** CSE-CIC-IDS2018 is distributed by the Canadian
 Institute for Cybersecurity under its own terms, which require attribution and govern redistribution. Event streams,
 flow embeddings and latents are derived works of it. Check those terms before making a dataset repository public, and
-default to private or gated access. This tool writes `gated: true` into the dataset card for that reason.
+default to private or gated access: upload it with --private, and gate it with `hf repos settings <repo> --repo-type
+dataset --gated auto` before making it public (gating is a repository setting, not card metadata).
 
 SIZE. The full derived tree is tens of gigabytes; a single day of latents is a few hundred megabytes. `--days` selects
 what to stage and the summary prints the total before anything is copied.
@@ -30,7 +31,8 @@ import json
 import shutil
 from pathlib import Path
 
-BEGIN = "<!-- BEGIN GENERATED: front matter and inventory, rewritten by tools/publish/huggingface.py -->"
+BEGIN = "<!-- BEGIN GENERATED: inventory, rewritten by tools/publish/huggingface.py -->"
+OLD_BEGIN = "<!-- BEGIN GENERATED: front matter and inventory, rewritten by tools/publish/huggingface.py -->"
 END = "<!-- END GENERATED -->"
 
 STAGE = Path("artifacts/huggingface")   # release staging, beside every other model artefact; override with --stage
@@ -223,7 +225,6 @@ def dataset_front_matter(staged: dict) -> str:
              "license: other",
              "license_name: cse-cic-ids2018",
              "license_link: https://www.unb.ca/cic/datasets/ids-2018.html",
-             "gated: true",
              "task_categories:",
              "  - tabular-classification",
              "tags:",
@@ -430,25 +431,27 @@ def refresh_dataset_card(out: Path, staged: dict, sizes: dict) -> None:
     """Rewrite only the generated part of the dataset card, leaving the written explanation alone.
 
     Input:  the dataset staging directory, the staged plan, sizes by (set, portion)
-    Output: none; rewrites <out>/README.md between its markers
+    Output: none; rewrites the front matter and the block between the markers of <out>/README.md
 
     The front matter and the inventory must match the files present, so they are generated. Everything else -- what a
     row is, which columns are evaluation only, why the splits interleave -- is prose that a tool should never touch.
+    The front matter is written first in the file: Hugging Face reads metadata only from a `---` block on the very first
+    line, and a card that began with the marker comment had its licence, tags and configs ignored.
     """
     card = out / "README.md"
-    generated = dataset_front_matter(staged) + "\n\n" + dataset_inventory(staged, sizes) + "\n"
+    front, inventory = dataset_front_matter(staged) + "\n", dataset_inventory(staged, sizes) + "\n"
     if not card.exists():
-        card.write_text(f"{BEGIN}\n{generated}{END}\n")
+        card.write_text(f"{front}{BEGIN}\n{inventory}{END}\n")
         print(f"  wrote a new card at {card}; add the explanation below the markers")
         return
-    text = card.read_text()
+    text = card.read_text().replace(OLD_BEGIN, BEGIN)
     if BEGIN not in text or END not in text:
         print(f"  {card} has no generated block; leaving it untouched")
         return
-    head, rest = text.split(BEGIN, 1)
+    _, rest = text.split(BEGIN, 1)
     _, tail = rest.split(END, 1)
-    card.write_text(f"{head}{BEGIN}\n{generated}{END}{tail}")
-    print(f"  refreshed the generated block in {card}")
+    card.write_text(f"{front}{BEGIN}\n{inventory}{END}{tail}")
+    print(f"  refreshed the front matter and the generated block in {card}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -484,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.what in ("dataset", "both"):
         stage_dataset(args.user, args.dataset_repo, args.days, args.include, args.dry_run, args.stage, args.bundle)
     print("\nReminder: the dataset is a derived work of CSE-CIC-IDS2018 and carries its terms, not this repo's MIT "
-          "licence. The dataset card is gated by default.")
+          "licence. Upload it private; gate it before making it public.")
     return 0
 
 
