@@ -153,11 +153,12 @@ class Resume:
 
 
 def load_resume(path: "str | Path | None", model=None, optimiser=None, scheduler=None,
-                higher_is_better: bool = False, device: str = "cpu") -> Resume:
+                higher_is_better: bool = False, device: str = "cpu", runtime: "tuple[str, ...]" = ()) -> Resume:
     """Restore a run's position, or start a fresh one.
 
     Input:  the resume file (None or missing starts fresh), the model, optimiser and schedule to restore into,
-            whether a higher metric is better, device
+            whether a higher metric is better, device, the model's runtime buffers (state rather than weights, e.g.
+            the world model's per-day memory table, which is reset before use and sized per day) -- not restored
     Output: a Resume
 
     A missing file is a fresh start rather than an error, so `--resume` can be passed unconditionally in a script that
@@ -168,7 +169,10 @@ def load_resume(path: "str | Path | None", model=None, optimiser=None, scheduler
         return fresh
     state = torch.load(path, map_location=device, weights_only=False)
     if model is not None and "model" in state:
-        model.load_state_dict(state["model"])
+        weights = {k: v for k, v in state["model"].items() if k not in runtime}
+        missing, unexpected = model.load_state_dict(weights, strict=not runtime)
+        if set(missing) - set(runtime) or unexpected:
+            raise RuntimeError(f"{path}: weights do not match the model: missing {missing}, unexpected {unexpected}")
     if optimiser is not None and "optimiser" in state:
         optimiser.load_state_dict(state["optimiser"])
     if scheduler is not None and "scheduler" in state:
