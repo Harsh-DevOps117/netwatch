@@ -31,7 +31,10 @@ def run_compressor(model8: ContextEncoder, ae: EventAutoencoder, stream: dict, a
     links = LinkIds(stream["sender"], stream["receiver"])
     model8.begin_day(len(links))
     n = len(stream["sender"])
-    total, scores, errors, kept = 0.0, (np.empty(n, np.float32) if reference is not None else None), [], 0
+    # The loss stays on the device, and a window's per-column error is read back only while it is still wanted:
+    # reading both every window forced a CPU<->GPU synchronisation per window.
+    total = torch.zeros((), device=device, dtype=torch.float64)
+    scores, errors, kept = (np.empty(n, np.float32) if reference is not None else None), [], 0
     for start in range(0, n, window):
         rows = np.arange(start, min(start + window, n))
         with torch.no_grad():
@@ -49,14 +52,13 @@ def run_compressor(model8: ContextEncoder, ae: EventAutoencoder, stream: dict, a
                 optimiser.zero_grad()
                 loss.backward()
                 optimiser.step()
-        total += float(loss.detach()) * len(rows)
-        columns = error.detach().cpu().numpy()
+        total += loss.detach().double() * len(rows)
         if reference is not None:
-            scores[rows] = anomaly_score(columns, reference)
+            scores[rows] = anomaly_score(error.detach().cpu().numpy(), reference)
         elif kept < collect:
-            errors.append(columns)
+            errors.append(error.detach().cpu().numpy())
             kept += len(rows)
-    out = {"loss": total / max(n, 1)}
+    out = {"loss": float(total) / max(n, 1)}
     if reference is not None:
         out["scores"] = scores
     else:
