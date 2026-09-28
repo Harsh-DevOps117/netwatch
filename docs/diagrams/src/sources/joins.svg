@@ -1,0 +1,92 @@
+<svg viewBox="0 0 1200 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">How the tables join</title>
+  <desc id="d">Packets join the map on frame_no and the map joins flows on flow_uid. Joining packets to flows on flow_key is wrong, because CICFlowMeter reuses one 5-tuple key for many flows. Per day, events carry flow_uid back to flows, node ids map to IPs through that day&#x27;s node index, and every other event table joins on event_id. Links are keyed on the first packet&#x27;s sender, not on CICFlowMeter&#x27;s source.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="470" fill="#0b0e14"/>
+  <rect width="1200" height="470" fill="url(#grid)"/>
+  <rect width="1200" height="470" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">How the tables join</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">per capture, packets reach flows only through the map · per day, every event table joins on event_id</text>
+  <rect x="20" y="84" width="560" height="366" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="34" y="106" fill="#8b949e" font-size="13" text-anchor="start" font-weight="700">PER CAPTURE</text>
+  <rect x="40" y="124" width="160" height="95" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="52" y="146" fill="#58a6ff" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">packets</text>
+  <line x1="41" y1="156" x2="199" y2="156" stroke="#58a6ff" stroke-opacity="0.4"/>
+  <text x="52" y="174" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">frame_no</text>
+  <text x="52" y="191" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_key</text>
+  <text x="52" y="208" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">timestamp, …</text>
+  <rect x="230" y="124" width="170" height="95" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="242" y="146" fill="#bc8cff" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_packet_map</text>
+  <line x1="231" y1="156" x2="399" y2="156" stroke="#bc8cff" stroke-opacity="0.4"/>
+  <text x="242" y="174" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">frame_no</text>
+  <text x="242" y="191" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_uid</text>
+  <text x="242" y="208" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_key</text>
+  <rect x="420" y="124" width="140" height="95" rx="8" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <text x="432" y="146" fill="#e3b341" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flows</text>
+  <line x1="421" y1="156" x2="559" y2="156" stroke="#e3b341" stroke-opacity="0.4"/>
+  <text x="432" y="174" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_uid</text>
+  <text x="432" y="191" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_key</text>
+  <text x="432" y="208" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">76 statistics</text>
+  <path d="M200,183 L228,183" fill="none" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ah_bc8cff)"/>
+  <text x="214" y="174" fill="#bc8cff" font-size="10" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">frame_no</text>
+  <path d="M400,200 L418,200" fill="none" stroke="#e3b341" stroke-width="1.5" marker-end="url(#ah_e3b341)"/>
+  <text x="410" y="222" fill="#e3b341" font-size="10" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_uid</text>
+  <path d="M120,210 C120,300 490,300 490,210" fill="none" stroke="#ff7b72" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <g stroke="#ff7b72" stroke-width="2.4"><line x1="296" y1="276" x2="316" y2="296"/><line x1="316" y1="276" x2="296" y2="296"/></g>
+  <text x="306" y="322" fill="#ff7b72" font-size="12" text-anchor="middle" font-weight="700">never join packets to flows on flow_key:</text>
+  <text x="306" y="338" fill="#e6edf3" font-size="11" text-anchor="middle">CICFlowMeter closes and reopens a 5-tuple, so one key</text>
+  <text x="306" y="353" fill="#e6edf3" font-size="11" text-anchor="middle">names many flows and rows multiply</text>
+  <text x="40" y="392" fill="#e6edf3" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">packets.merge(flow_packet_map, on=&quot;frame_no&quot;)</text>
+  <text x="40" y="410" fill="#e6edf3" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">       .merge(flows, on=&quot;flow_uid&quot;)</text>
+  <text x="40" y="432" fill="#8b949e" font-size="10.5" text-anchor="start">the map comes from an interval join, so a packet&#x27;s label always equals its flow&#x27;s</text>
+  <rect x="600" y="84" width="580" height="366" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="614" y="106" fill="#3fb950" font-size="13" text-anchor="start" font-weight="700">PER DAY</text>
+  <rect x="620" y="124" width="170" height="111" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="632" y="146" fill="#3fb950" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">events</text>
+  <line x1="621" y1="156" x2="789" y2="156" stroke="#3fb950" stroke-opacity="0.4"/>
+  <text x="632" y="174" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_id</text>
+  <text x="632" y="191" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_uid</text>
+  <text x="632" y="208" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">src/dst_node_id</text>
+  <text x="632" y="227" fill="#8b949e" font-size="10.5" text-anchor="start">sorted by t</text>
+  <rect x="620" y="302" width="170" height="94" rx="8" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4"/>
+  <text x="632" y="324" fill="#8b949e" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">node_index</text>
+  <line x1="621" y1="334" x2="789" y2="334" stroke="#8b949e" stroke-opacity="0.4"/>
+  <text x="632" y="352" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">node_id</text>
+  <text x="632" y="369" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">ip</text>
+  <text x="632" y="388" fill="#8b949e" font-size="10.5" text-anchor="start">ids are per day</text>
+  <rect x="980" y="110" width="184" height="78" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4"/>
+  <text x="992" y="132" fill="#39c5bb" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">side_features</text>
+  <line x1="981" y1="142" x2="1163" y2="142" stroke="#39c5bb" stroke-opacity="0.4"/>
+  <text x="992" y="160" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_id</text>
+  <text x="992" y="177" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">sender_node_id</text>
+  <path d="M790,150 C872,150 866,152 960,152 L978,152" fill="none" stroke="#39c5bb" stroke-width="1.5" marker-end="url(#ah_39c5bb)"/>
+  <rect x="980" y="192" width="184" height="78" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4"/>
+  <text x="992" y="214" fill="#39c5bb" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_records</text>
+  <line x1="981" y1="224" x2="1163" y2="224" stroke="#39c5bb" stroke-opacity="0.4"/>
+  <text x="992" y="242" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_id</text>
+  <text x="992" y="259" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">record_time</text>
+  <path d="M790,150 C872,150 866,234 960,234 L978,234" fill="none" stroke="#39c5bb" stroke-width="1.5" marker-end="url(#ah_39c5bb)"/>
+  <rect x="980" y="274" width="184" height="78" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="992" y="296" fill="#58a6ff" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_embeddings</text>
+  <line x1="981" y1="306" x2="1163" y2="306" stroke="#58a6ff" stroke-opacity="0.4"/>
+  <text x="992" y="324" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_id</text>
+  <text x="992" y="341" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">h (32)</text>
+  <path d="M790,150 C872,150 866,316 960,316 L978,316" fill="none" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ah_58a6ff)"/>
+  <rect x="980" y="356" width="184" height="78" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="992" y="378" fill="#bc8cff" font-size="12.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_latents</text>
+  <line x1="981" y1="388" x2="1163" y2="388" stroke="#bc8cff" stroke-opacity="0.4"/>
+  <text x="992" y="406" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_id</text>
+  <text x="992" y="423" fill="#8b949e" font-size="11.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">z (32), t_obs order</text>
+  <path d="M790,150 C872,150 866,398 960,398 L978,398" fill="none" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ah_bc8cff)"/>
+  <text x="820" y="140" fill="#3fb950" font-size="10.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">event_id</text>
+  <path d="M705,240 L705,300" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <text x="713" y="274" fill="#8b949e" font-size="10.5" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">node ids</text>
+  <text x="620" y="410" fill="#e6edf3" font-size="11.5" text-anchor="start" font-weight="700">links are keyed on the first packet&#x27;s sender</text>
+  <text x="620" y="425" fill="#8b949e" font-size="11" text-anchor="start">(sender_node_id), never on src/dst_node_id: CICFlowMeter&#x27;s</text>
+  <text x="620" y="439" fill="#8b949e" font-size="11" text-anchor="start">Src disagrees with it on 11–30% of events</text>
+</svg>
