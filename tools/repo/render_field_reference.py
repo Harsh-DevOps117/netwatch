@@ -1,4 +1,4 @@
-"""Render the field-by-field reference in yug.md and vedant.md from their JSON contracts.
+"""Render the field-by-field reference in the live-pipeline and world-model guides from their JSON contracts.
 
 Run: uv run python tools/repo/render_field_reference.py
 
@@ -39,9 +39,9 @@ def flatten(prefix: str, value, rows: list[tuple[str, str]]) -> None:
         rows.append((prefix, value))
 
 
-def render_yug(d: dict) -> str:
+def render_live_sensor(d: dict) -> str:
     parts = ["## Field reference\n",
-             "*Generated from [yug.json](yug.json). Every field you send or emit, with its meaning and the mistake it "
+             "*Generated from [live-sensor-schema.json](live-sensor-schema.json). Every field you send or emit, with its meaning and the mistake it "
              "invites.*\n"]
     for m in d["messages"]:
         rows: list[tuple[str, str]] = []
@@ -54,7 +54,7 @@ def render_yug(d: dict) -> str:
         parts.append(f"\n### Output — {name}\n")
         for v in d["outputs"][key]:
             parts.append(f"\n**`stage = {v['stage']}`** — emitted at {v['emitted_at']}\n")
-            parts.append(table([(f, "") for f in v["fields"]], ("field", "")).replace("|  |", "| see dev.json |"))
+            parts.append(table([(f, "") for f in v["fields"]], ("field", "")).replace("|  |", "| see api-schema.json |"))
             if v.get("note"):
                 parts.append(f"\n> {v['note']}\n")
     for key, title in (("anticipation", "Output — anticipation"), ("incidents", "Output — incidents")):
@@ -76,9 +76,9 @@ def render_yug(d: dict) -> str:
     return "\n".join(parts)
 
 
-def render_vedant(d: dict) -> str:
+def render_latents(d: dict) -> str:
     parts = ["## Field reference\n",
-             "*Generated from [vedant.json](vedant.json). Every column you read and every field you emit.*\n"]
+             "*Generated from [latents-schema.json](latents-schema.json). Every column you read and every field you emit.*\n"]
     rows = []
     flatten("", d["input"]["columns"], rows)
     parts.append("\n### Input — `event_latents.parquet`\n")
@@ -111,10 +111,15 @@ def splice(path: Path, body: str) -> None:
 
 
 def main() -> int:
-    docs = Path("docs")
-    splice(docs / "yug.md", render_yug(json.loads((docs / "yug.json").read_text())))
-    splice(docs / "vedant.md", render_vedant(json.loads((docs / "vedant.json").read_text())))
-    print("field reference rendered into docs/yug.md and docs/vedant.md")
+    docs = Path("docs/dev")                    # the team's local documentation; not in the published repository
+    if not docs.is_dir():
+        print(f"{docs} is not in this checkout; nothing to render")
+        return 0
+    splice(docs / "guides/live-pipeline.md",
+           render_live_sensor(json.loads((docs / "contracts/live-sensor-schema.json").read_text())))
+    splice(docs / "guides/world-model.md",
+           render_latents(json.loads((docs / "contracts/latents-schema.json").read_text())))
+    print("field reference rendered into docs/dev/guides/live-pipeline.md and docs/dev/guides/world-model.md")
     return 0
 
 
