@@ -1,72 +1,74 @@
-# `models/context_encoder` — the context encoder (Block 8)
+# `models/context_encoder` — context encoder
 
-## Purpose
+Places one event A → B in its network context — what this link has been doing, and what A and B have been doing with
+everyone else — and returns `s`: 100 numbers. Design and figures: [docs/architecture.md §5](../../docs/architecture.md#5-context-encoder).
 
-Give each event the context its flow embedding cannot carry: what this link has been doing, and what the hosts at each
-end have been doing with everyone else. Output is a 100-wide context vector `s`.
+Two copies are trained from the same code:
 
-## Function
+| copy | messages into link memory | used by |
+|---|---|---|
+| **detection encoder** (`b8det`) | event, 20-packet summary | the detector, and the `live` tag's compressor and world model |
+| **forecasting encoder** (`b8`) | event, 20-packet summary, flow record | the `lag` tag's compressor and world model |
 
-Two mechanisms over the availability-ordered event stream:
+## How it works
 
-1. **Link memory** — one GRU state per directed link, reset after a time-to-live of 3600 s without an update.
-2. **Neighbourhood attention** — attention over up to 20 neighbouring events, being the latest event per distinct peer
-   of each endpoint.
-
-Trained by **link prediction** on benign training events: predict which receiver an event belongs to against sampled
-negatives. It is then frozen; the compressor and the detector both read it without passing gradient back.
-
-Optionally, two further message kinds reach link memory at the time they become available: a 20-packet summary, and the
-CICFlowMeter record. These are merged into memory as separate message kinds with a presence bit and a per-message time
-gap (early fusion, not concatenation).
+- **Link memory** — one GRU state of 100 numbers per link direction, reset after 3,600 s without an update. Each message
+  kind has its own slot in the update, and a message is applied only once it exists.
+- **Neighbourhood attention** — the event's query attends over up to 20 neighbour events: the latest event with each
+  recent distinct peer of A and of B, excluding earlier A → B events.
+- **Training** — link prediction on benign events: tell the real receiver from a sampled fake one. The encoder is then
+  frozen.
 
 ## Files
 
 | file | role |
 |---|---|
-| `__main__.py` | CLI: the day loop, checkpoint selection |
-| `train.py` | the objective: `LinkPredictor`, `run_stream`, `negative_receivers`, `link_ap` |
-| `model.py` | `ContextEncoder`, `LinkMemory`, `LinkIds`, `make_batch`, attention capture |
-| `stream.py` | `NeighbourIndex`, `availability_order` |
-| `data.py` | `load_day`, `make_stream`, `attack_slice`, the `DAYS` list |
-| `features.py` | per-event side features at the observation time |
-| `records.py` | the CICFlowMeter record as a message, and its frozen encoder |
-| `record_arm.py` | the records-only cascade, on the records' own timeline |
+| `__main__.py` | command line: the day loop, checkpoints, metrics |
+| `model.py` | `ContextEncoder`, `LinkMemory`, the message encoders, `make_batch` |
+| `train.py` | the link-prediction objective and its metric |
+| `stream.py` | `NeighbourIndex` (latest event per distinct peer), availability order |
+| `data.py` | loading a day, streams, the day cache |
+| `features.py` | per-event side features at `t_obs` (writes `side_features.parquet`) |
+| `records.py` | flow records (writes `flow_records.parquet`) and the record encoder |
+| `record_arm.py` | a comparison arm (late fusion): the flow record as the event's own representation, on the record's timeline |
 
 ## Inputs and outputs
 
-**In:** `data/events/<day>/`, `data/context_features/<day>/side_features.parquet`, `data/flow_embeddings/split/<day>/`
-**Out:** `<out>/best.pt` (selected on mean validation link PR-AUC) and `<out>/history.csv`
+| | path |
+|---|---|
+| in | `data/events/<day>/`, `data/context_features/<day>/side_features.parquet`, `<run>/embeddings/split/<day>/`; forecasting copy also `data/context_features/<day>/flow_records.parquet` and `<run>/record_encoder.pt` |
+| out | `<run>/b8det/` or `<run>/b8/`: `best.pt` (best mean validation link PR-AUC), `epoch_NN.pt`, `resume.pt`, `history.csv`, `best_metrics.csv` |
 
 ## Running
 
+The training script runs both copies ([docs/training.md](../../docs/training.md)). To run one alone:
+
 ```bash
-uv run python -m models.context_encoder --arm split --days <days...> \
-  --out data/model_cache/block8_10d \
-  --epochs 10 --patience 2 --batch-size 200 --lr 1e-3 --capacity 0.25
+# side features, once per day
+uv run python -m models.context_encoder.features --days <day>
+
+# detection encoder
+uv run python -m models.context_encoder --arm split --days <days...> --embeddings-root <run>/embeddings \
+  --out <run>/b8det --epochs 5 --batch-size 512 --lr 1e-3 --capacity 0.25 --lr-schedule cosine --flow-messages
+
+# forecasting encoder: add the flow records and the frozen record encoder
+uv run python -m models.context_encoder --arm split --days <days...> --embeddings-root <run>/embeddings \
+  --out <run>/b8 --epochs 5 --batch-size 512 --lr 1e-3 --capacity 0.25 --lr-schedule cosine \
+  --flow-messages --flow-records --record-encoder <run>/record_encoder.pt
 ```
 
-Add `--flow-records --flow-messages --record-encoder <path>` to enable the extra message kinds, which requires
-`models.context_encoder.records` to have produced `flow_records.parquet` for every day being trained on.
+## Settings
 
-## Settings that matter
-
-| setting | value | reason |
+| setting | value | why |
 |---|---|---|
-| `--capacity` | **0.25** for live | Caps link memory and recycles the least-recently-used slot. Omitted, the table holds one row per link, which no live stream can do. Measured: 1,000 distinct links through a 250-slot table produced 750 evictions and validation link PR-AUC 0.9820. The value is stored in the checkpoint, so the compressor and detector honour it with no extra flag. |
-| `--events` | omit for a real run | It takes a contiguous slice centred on one family, for quick iteration only — see below. |
-| TTL | 3600 s | A constructor default in `model.py`, not a CLI flag. |
+| `--batch-size` | 512 | memory is updated once per batch, so the batch size is part of what the model learned; serving uses the same |
+| `--capacity` | 0.25 | caps link memory at 25% of a day's links, recycling the least recently used; stored in the checkpoint. The live detector, which has no finished day to count, uses a fixed 250,000 slots (`--capacity`) |
+| `--flow-messages` | on | adds the 20-packet summary message |
+| `--flow-records`, `--record-encoder` | forecasting copy only | adds the flow-record message; the detector must not see finished-flow information |
+| time-to-live | 3,600 s | a model constant, not a flag |
 
 ## Notes
 
-**`attack_slice` is for comparing arms, not for absolute numbers.** It centres on the attack span, so on the Bot day it
-begins 3,446 s *after* the first Bot attack and contains none of that day's 1,239,249 pre-attack rows. It also
-calibrates thresholds on fewer benign rows. A slice narrower than about 3M events on the Bot day contains no test rows
-at all.
-
-**Attention activations are available for explainability** via `encoder.explain = True`, which is verified to leave the
-encoding bit-identical. Default is off, so training pays nothing. See `models/explanation/README.md`.
-
-**The neighbourhood excludes an event's own link.** Link memory already carries that link's history; the neighbourhood
-exists to supply the surrounding context. The live implementation reproduces this exactly — see
-`models/serving/README.md`.
+- Set `encoder.explain = True` to keep the attention weights for explanations; results are unchanged, and it is off by
+  default so training pays nothing ([models/explanation](../explanation/README.md)).
+- `--events` and `--family` train on a slice of a day; use them for quick checks only, never for reported numbers.
