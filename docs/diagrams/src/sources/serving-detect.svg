@@ -1,0 +1,81 @@
+<svg viewBox="0 0 1200 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">Fast live detection</title>
+  <desc id="d">Packets from an interface or dumpcap&#x27;s stream go through tshark with ingest&#x27;s field list, then a flow tracker with CICFlowMeter&#x27;s rules. At first packet plus 10 ms each flow becomes an event: its packets so far, its host history and its sender. The flow encoder gives h, the detection encoder, streamed in training&#x27;s 512-event batches with link memory and neighbours, gives s, and every detector head scores [h, s]; the alert rules turn scores into incidents, served at GET /detections. With --forecast the same stream feeds the live world model, served at GET /forecast. A verdict comes about 31 ms after a flow&#x27;s first packet.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="560" fill="#0b0e14"/>
+  <rect width="1200" height="560" fill="url(#grid)"/>
+  <rect width="1200" height="560" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">Fast live detection</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">every flow scored 10 ms after its first packet, with the trained models unchanged</text>
+  <rect x="28" y="96" width="250" height="80" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="153.0" y="125.0" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700">packets</text>
+  <text x="153.0" y="140.0" fill="#e6edf3" font-size="11" text-anchor="middle">an interface, or dumpcap&#x27;s pcap stream</text>
+  <text x="153.0" y="155.0" fill="#8b949e" font-size="11" text-anchor="middle">IPv4 TCP and UDP</text>
+  <rect x="313" y="96" width="250" height="80" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="438.0" y="125.0" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700">tshark</text>
+  <text x="438.0" y="140.0" fill="#e6edf3" font-size="11" text-anchor="middle">ingest&#x27;s field list and options</text>
+  <text x="438.0" y="155.0" fill="#8b949e" font-size="11" text-anchor="middle">state reset every 250,000 packets</text>
+  <rect x="598" y="96" width="250" height="80" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="723.0" y="125.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">flow tracker</text>
+  <text x="723.0" y="140.0" fill="#e6edf3" font-size="11" text-anchor="middle">CICFlowMeter&#x27;s rules: a 5-tuple both ways,</text>
+  <text x="723.0" y="155.0" fill="#8b949e" font-size="11" text-anchor="middle">ends at a FIN or 120 s after its start</text>
+  <rect x="883" y="96" width="250" height="80" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="1008.0" y="125.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">the event, at t_obs</text>
+  <text x="1008.0" y="140.0" fill="#e6edf3" font-size="11" text-anchor="middle">first packet + 10 ms (earlier at a FIN):</text>
+  <text x="1008.0" y="155.0" fill="#8b949e" font-size="11" text-anchor="middle">packets seen, host history, sender</text>
+  <rect x="883" y="226" width="250" height="80" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="1008.0" y="255.0" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700">flow encoder</text>
+  <text x="1008.0" y="270.0" fill="#e6edf3" font-size="11" text-anchor="middle">prepare → normalise → embed</text>
+  <text x="1008.0" y="285.0" fill="#8b949e" font-size="11" text-anchor="middle">h = 32 numbers</text>
+  <rect x="598" y="226" width="250" height="80" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="723.0" y="255.0" fill="#bc8cff" font-size="12" text-anchor="middle" font-weight="700">detection encoder</text>
+  <text x="723.0" y="270.0" fill="#e6edf3" font-size="11" text-anchor="middle">512-event batches, link memory,</text>
+  <text x="723.0" y="285.0" fill="#8b949e" font-size="11" text-anchor="middle">neighbours, 20-packet summaries → s</text>
+  <rect x="313" y="226" width="250" height="80" rx="8" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <text x="438.0" y="255.0" fill="#e3b341" font-size="12" text-anchor="middle" font-weight="700">detector heads</text>
+  <text x="438.0" y="270.0" fill="#e6edf3" font-size="11" text-anchor="middle">[h, s] = 132 numbers, one head per day</text>
+  <text x="438.0" y="285.0" fill="#8b949e" font-size="11" text-anchor="middle">threshold at the served budget</text>
+  <rect x="28" y="226" width="250" height="80" rx="8" fill="#0b0e14" stroke="#ff7b72" stroke-width="1.4"/>
+  <text x="153.0" y="255.0" fill="#ff7b72" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">GET :8902/detections</text>
+  <text x="153.0" y="270.0" fill="#e6edf3" font-size="11" text-anchor="middle">3 in a row per host → alert</text>
+  <text x="153.0" y="285.0" fill="#8b949e" font-size="11" text-anchor="middle">60 s quiet closes an incident</text>
+  <rect x="598" y="356" width="250" height="70" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="723.0" y="380.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">live world model (--forecast)</text>
+  <text x="723.0" y="395.0" fill="#e6edf3" font-size="11" text-anchor="middle">compressor + world model over a window</text>
+  <text x="723.0" y="410.0" fill="#8b949e" font-size="11" text-anchor="middle">rebuilt every 5 s · 1–4 s behind</text>
+  <rect x="313" y="356" width="250" height="70" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="438.0" y="387.5" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">GET :8902/forecast</text>
+  <text x="438.0" y="402.5" fill="#e6edf3" font-size="11" text-anchor="middle">tag live · the lag tag&#x27;s payload</text>
+  <path d="M278,136 L311,136" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M563,136 L596,136" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M848,136 L881,136" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M1008,176 L1008,224" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M883,266 L850,266" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M598,266 L565,266" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M313,266 L280,266" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M723,306 L723,354" fill="none" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_3fb950)"/>
+  <path d="M598,391 L565,391" fill="none" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_3fb950)"/>
+  <line x1="40" y1="486" x2="790" y2="486" stroke="#8b949e" stroke-width="1.2"/>
+  <line x1="40" y1="480" x2="40" y2="492" stroke="#e6edf3" stroke-width="2"/>
+  <text x="40" y="474" fill="#e6edf3" font-size="11" text-anchor="start">first packet</text>
+  <text x="40" y="508" fill="#8b949e" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">0 ms</text>
+  <line x1="190" y1="480" x2="190" y2="492" stroke="#3fb950" stroke-width="2"/>
+  <text x="190" y="474" fill="#3fb950" font-size="11" text-anchor="middle">t_obs: features cut</text>
+  <text x="190" y="508" fill="#8b949e" font-size="11" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">10 ms</text>
+  <line x1="505" y1="480" x2="505" y2="492" stroke="#e3b341" stroke-width="2"/>
+  <text x="505" y="474" fill="#e3b341" font-size="11" text-anchor="middle">verdict, median</text>
+  <text x="505" y="508" fill="#8b949e" font-size="11" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">31 ms</text>
+  <line x1="745" y1="480" x2="745" y2="492" stroke="#e3b341" stroke-width="2"/>
+  <text x="745" y="474" fill="#e3b341" font-size="11" text-anchor="middle">p99</text>
+  <text x="745" y="508" fill="#8b949e" font-size="11" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">47 ms</text>
+  <text x="40" y="450" fill="#8b949e" font-size="11" text-anchor="start" font-weight="700">LATENCY, measured on a capture paced in real time</text>
+  <text x="840" y="470" fill="#e6edf3" font-size="11" text-anchor="start">throughput ~12,500 packets/s, ~2,400 flows/s,</text>
+  <text x="840" y="486" fill="#e6edf3" font-size="11" text-anchor="start">on one CPU core</text>
+  <text x="840" y="510" fill="#8b949e" font-size="11" text-anchor="start">agreement with training:</text>
+  <text x="840" y="526" fill="#8b949e" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">tools/live/detect_check.py</text>
+</svg>
