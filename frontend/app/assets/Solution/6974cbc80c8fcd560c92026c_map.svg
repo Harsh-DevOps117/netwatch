@@ -1,0 +1,99 @@
+<svg width="600" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="nodeGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#666666;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#666666;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Circular flow with 8 interconnected points -->
+  <g transform="translate(300, 300)">
+    <!-- Connection circles (layers) -->
+    <circle r="220" fill="none" stroke="#333333" stroke-width="1.5" opacity="0.3"/>
+    <circle r="180" fill="none" stroke="#666666" stroke-width="1.5" opacity="0.4"/>
+    <circle r="140" fill="none" stroke="#333333" stroke-width="1.5" opacity="0.3"/>
+    
+    <!-- Interconnecting lines forming web structure -->
+    <!-- Outer ring connections -->
+    <line x1="155" y1="-155" x2="220" y2="0" stroke="#333333" stroke-width="2" opacity="0.5"/>
+    <line x1="220" y1="0" x2="155" y2="155" stroke="#333333" stroke-width="2" opacity="0.5"/>
+    <line x1="155" y1="155" x2="0" y2="220" stroke="#666666" stroke-width="2" opacity="0.5"/>
+    <line x1="0" y1="220" x2="-155" y2="155" stroke="#666666" stroke-width="2" opacity="0.5"/>
+    <line x1="-155" y1="155" x2="-220" y2="0" stroke="#333333" stroke-width="2" opacity="0.5"/>
+    <line x1="-220" y1="0" x2="-155" y2="-155" stroke="#333333" stroke-width="2" opacity="0.5"/>
+    <line x1="-155" y1="-155" x2="0" y2="-220" stroke="#666666" stroke-width="2" opacity="0.5"/>
+    <line x1="0" y1="-220" x2="155" y2="-155" stroke="#666666" stroke-width="2" opacity="0.5"/>
+    
+    <!-- Cross connections -->
+    <line x1="155" y1="-155" x2="-155" y2="155" stroke="#666666" stroke-width="1.5" opacity="0.3"/>
+    <line x1="220" y1="0" x2="-220" y2="0" stroke="#666666" stroke-width="1.5" opacity="0.3"/>
+    <line x1="155" y1="155" x2="-155" y2="-155" stroke="#666666" stroke-width="1.5" opacity="0.3"/>
+    <line x1="0" y1="220" x2="0" y2="-220" stroke="#666666" stroke-width="1.5" opacity="0.3"/>
+    
+    <!-- Inner web connections to center -->
+    <line x1="0" y1="0" x2="155" y2="-155" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="220" y2="0" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="155" y2="155" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="0" y2="220" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-155" y2="155" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-220" y2="0" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="-155" y2="-155" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    <line x1="0" y1="0" x2="0" y2="-220" stroke="#666666" stroke-width="2" opacity="0.4"/>
+    
+    <!-- Nodes (8 points in circular arrangement) -->
+    <!-- Top -->
+    <circle cx="0" cy="-220" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="0" cy="-220" r="7" fill="#333333"/>
+    <circle cx="0" cy="-220" r="3" fill="#000000"/>
+    
+    <!-- Top-right -->
+    <circle cx="155" cy="-155" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="155" cy="-155" r="7" fill="#333333"/>
+    <circle cx="155" cy="-155" r="3" fill="#000000"/>
+    
+    <!-- Right -->
+    <circle cx="220" cy="0" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="220" cy="0" r="7" fill="#333333"/>
+    <circle cx="220" cy="0" r="3" fill="#000000"/>
+    
+    <!-- Bottom-right -->
+    <circle cx="155" cy="155" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="155" cy="155" r="7" fill="#333333"/>
+    <circle cx="155" cy="155" r="3" fill="#000000"/>
+    
+    <!-- Bottom -->
+    <circle cx="0" cy="220" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="0" cy="220" r="7" fill="#333333"/>
+    <circle cx="0" cy="220" r="3" fill="#000000"/>
+    
+    <!-- Bottom-left -->
+    <circle cx="-155" cy="155" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="-155" cy="155" r="7" fill="#333333"/>
+    <circle cx="-155" cy="155" r="3" fill="#000000"/>
+    
+    <!-- Left -->
+    <circle cx="-220" cy="0" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="-220" cy="0" r="7" fill="#333333"/>
+    <circle cx="-220" cy="0" r="3" fill="#000000"/>
+    
+    <!-- Top-left -->
+    <circle cx="-155" cy="-155" r="10" fill="url(#nodeGlow)"/>
+    <circle cx="-155" cy="-155" r="7" fill="#333333"/>
+    <circle cx="-155" cy="-155" r="3" fill="#000000"/>
+    
+    <!-- Center node (larger) -->
+    <circle cx="0" cy="0" r="14" fill="url(#nodeGlow)"/>
+    <circle cx="0" cy="0" r="10" fill="#666666"/>
+    <circle cx="0" cy="0" r="5" fill="#000000"/>
+    
+    <!-- Flow indicators (small dots along connections showing direction) -->
+    <circle cx="77" cy="-77" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="110" cy="0" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="77" cy="77" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="0" cy="110" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="-77" cy="77" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="-110" cy="0" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="-77" cy="-77" r="3" fill="#666666" opacity="0.8"/>
+    <circle cx="0" cy="-110" r="3" fill="#666666" opacity="0.8"/>
+  </g>
+</svg>
