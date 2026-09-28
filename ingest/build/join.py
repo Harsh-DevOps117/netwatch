@@ -12,7 +12,7 @@ produced for one capture:
 
 Neither bins time. edges.parquet is an edge LIST ordered by event time, and the
 "windows" in build_flow_packet_map are per-flow [start, end] intervals, not
-fixed time bins -- see docs/design.md Blocks 4 and 5.
+fixed time bins -- see docs/data.md, "Joining".
 """
 
 from __future__ import annotations
