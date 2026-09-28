@@ -1,6 +1,12 @@
-"""Download the published model from Hugging Face into artifacts/huggingface/download/, ready to serve.
+"""Download the published model, and optionally the dataset, from Hugging Face into artifacts/huggingface/download/.
 
 Usage:  uv run --with huggingface_hub python tools/publish/download.py --repo <account>/netwatch-flow-cascade
+        uv run --with huggingface_hub python tools/publish/download.py --dataset <account>/netwatch-ids2018-events \
+            --sets processed model [--days Friday-02-03-2018 ...] [--revision v1.0.0]
+
+The dataset is fetched set by set (`processed`, `model`, as its card describes) and day by day, into
+artifacts/huggingface/download/<dataset name>/ in the repository's own layout: <set>/<portion>/<day>/*.parquet. It is
+gated: accept its terms on the Hugging Face page and log in (`hf auth login`) first.
 
 artifacts/huggingface/download/<repo name>/ after a download:
     *.safetensors, *.config.json, README.md, ...   the repository exactly as published
@@ -65,13 +71,47 @@ def download(repo: str, revision: "str | None" = None, root: Path = DOWNLOADS) -
     return folder
 
 
+SETS = ("processed", "model")
+
+
+def dataset_patterns(sets: "list[str]", days: "list[str] | None") -> list[str]:
+    """The files to fetch: the card, plus every portion of the chosen sets, for the chosen days or all of them."""
+    unknown = sorted(set(sets) - set(SETS))
+    if unknown or not sets:
+        raise ValueError(f"sets must be among {SETS}, got {sets}")
+    return ["README.md"] + [f"{s}/*/{day}/**" for s in sets for day in (days or ["*"])]
+
+
+def download_dataset(repo: str, sets: "list[str]", days: "list[str] | None" = None, revision: "str | None" = None,
+                     root: Path = DOWNLOADS) -> Path:
+    """Fetch the chosen sets (and days) of the dataset repository, in its own layout."""
+    from huggingface_hub import snapshot_download
+
+    folder = Path(snapshot_download(repo_id=repo, repo_type="dataset", revision=revision,
+                                    allow_patterns=dataset_patterns(sets, days), local_dir=root / repo.split("/")[-1]))
+    files = [p for p in folder.rglob("*.parquet")]
+    print(f"{repo} -> {folder}\n  {len(files)} parquet files, {sum(p.stat().st_size for p in files) / 1e9:.1f} GB "
+          f"({', '.join(sets)}; days: {', '.join(days) if days else 'all'})")
+    return folder
+
+
 def main(argv: "list[str] | None" = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--repo", required=True, help="<account>/<name> of the Hugging Face model repository")
+    parser.add_argument("--repo", default=None, help="<account>/<name> of the Hugging Face model repository")
+    parser.add_argument("--dataset", default=None, help="<account>/<name> of the Hugging Face dataset repository")
+    parser.add_argument("--sets", nargs="+", default=list(SETS), choices=SETS,
+                        help="dataset sets to fetch: processed (model-agnostic tables), model (flow embeddings and "
+                             "latents of the published model); default both")
+    parser.add_argument("--days", nargs="+", default=None, help="dataset days to fetch (default: all)")
     parser.add_argument("--revision", default=None, help="a branch, tag or commit (default: the latest)")
     parser.add_argument("--out", type=Path, default=DOWNLOADS, help="downloads root (default: artifacts/huggingface/download)")
     args = parser.parse_args(argv)
-    download(args.repo, args.revision, args.out)
+    if not args.repo and not args.dataset:
+        parser.error("give --repo, --dataset, or both")
+    if args.repo:
+        download(args.repo, args.revision, args.out)
+    if args.dataset:
+        download_dataset(args.dataset, args.sets, args.days, args.revision, args.out)
     return 0
 
 
