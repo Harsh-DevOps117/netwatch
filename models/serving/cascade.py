@@ -87,8 +87,15 @@ class Cascade:
         if path is None or not Path(path).is_file():
             return None
         state = torch.load(path, map_location="cpu", weights_only=False)
-        model = ENCODERS[state["encoder"]](state.get("width", 100), int(state["d_z"])) \
-            if state["encoder"] in ENCODERS else EventAutoencoder(state.get("width", 100), int(state["d_z"]))
+        if state["encoder"] not in ENCODERS:
+            raise ValueError(f"{path}: encoder {state['encoder']!r} is not one of {ENCODERS}")
+        # The context width comes from the checkpoint's own normalisation vector, not from a Block 8 beside it: a
+        # serving process may load the compressor alone, and guessing 100 here would build the wrong shape in silence.
+        width = int(state["model"]["s_mean"].numel())
+        if state.get("target", "s") != "s":
+            raise ValueError(f"{path}: only the variant-B compressor (target 's') reconstructs the context width; "
+                             f"this one targets {state['target']!r}")
+        model = EventAutoencoder(state["encoder"], d_s=width, d_z=int(state["d_z"]), target=width)
         model.load_state_dict(state["model"])
         model.to(self.device).eval().requires_grad_(False)
         return model
