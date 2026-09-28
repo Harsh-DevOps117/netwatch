@@ -68,7 +68,7 @@ terms on Hugging Face and log in first.
 
 ```bash
 git clone --recurse-submodules <repository url> && cd netwatch
-NETWATCH_HF_ACCOUNT=<account> tools/setup.sh
+tools/setup.sh
 
 # self-checks: no dataset and no GPU needed
 uv run python -m models.serving.graph
