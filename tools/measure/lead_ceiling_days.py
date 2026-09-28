@@ -7,7 +7,7 @@ came from the 3M-event slice, and `attack_slice` centres on the attack span: on 
 first Bot attack and contains none of the day's 1,239,249 pre-attack rows. Measured over whole days instead, Bot has
 19,983 benign events on attacking hosts more than 60 s before that host's next attack, up to 15,488 s; Infiltration has
 54,483, up to 23,064 s. The lead is real. What is NOT measurable is a model's use of it, because `segment_split`
-interleaves the splits in wall-clock time -- see docs/DEPLOYMENT_RUNBOOK.md section 8.
+interleaves the splits in wall-clock time -- see docs/data.md, "Splits".
 
 No model and no latents are needed — the ceiling depends only on labels, times and endpoints, so this reads the event
 stream directly and works for days that were never exported.
