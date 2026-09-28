@@ -50,7 +50,7 @@ def _embeddings(path: Path, event_id: np.ndarray) -> tuple[np.ndarray, np.ndarra
 
 def load_day(day: str, arm: str, events_root: Path = Path("data/events"),
              features_root: Path = Path("data/context_features"), embeddings_root: Path = Path("data/flow_embeddings"),
-             split: np.ndarray | None = None, records: bool = True) -> dict[str, np.ndarray]:
+             split: np.ndarray | None = None, records: bool = True, flows: bool = True) -> dict[str, np.ndarray]:
     """Everything Block 8 reads for one day, in availability order.
 
     Input:  day, arm ("split" or "sides"), roots of the event stream, side features and Block 7 exports, optional
@@ -91,30 +91,46 @@ def load_day(day: str, arm: str, events_root: Path = Path("data/events"),
     # checked against the per-packet times on 200,000 events, median difference 0.2 ns and at most 8.3 us, which is
     # float32 in the stored aggregates. Deriving it costs nothing; exporting it exactly would mean re-reading every
     # packet of every day.
-    data["flow_summary"] = events[AGG_COLUMNS].to_numpy(np.float32)
-    data["flow_time"] = data["t"] + (events["iat_mean"].to_numpy(np.float64)
-                                     * np.maximum(events["pkt_n"].to_numpy() - 1, 0))
-    # Only a summary that lands after the event was scored carries anything Block 7 did not already see. Measured:
-    # 98.6% of Bot events (median 2 ms later), 97.0% of DoS-Hulk (median 127 ms), 0.0% of DoS-SlowHTTPTest, whose
-    # packets are all inside the 10 ms budget.
-    data["flow_later"] = data["flow_time"] > t_obs + 1e-6
+    # `flows` / `records` False leave these out: a context encoder built without flow messages or flow records never
+    # reads them, and on a full day they are 2+ GB of RAM and a host-to-GPU copy per batch for nothing.
+    if flows:
+        data["flow_summary"] = events[AGG_COLUMNS].to_numpy(np.float32)
+        data["flow_time"] = data["t"] + (events["iat_mean"].to_numpy(np.float64)
+                                         * np.maximum(events["pkt_n"].to_numpy() - 1, 0))
+        # Only a summary that lands after the event was scored carries anything Block 7 did not already see. Measured:
+        # 98.6% of Bot events (median 2 ms later), 97.0% of DoS-Hulk (median 127 ms), 0.0% of DoS-SlowHTTPTest, whose
+        # packets are all inside the 10 ms budget.
+        data["flow_later"] = data["flow_time"] > t_obs + 1e-6
     # The flow's own CICFlowMeter record, and the earliest moment it can exist (models/context_encoder/records.py). Its 68
     # columns cover the whole flow, where the aggregates above stop at the first 20 packets, so they are new
     # information -- and they exist only once the flow has closed, which is why they reach the model as a message on
     # the link timeline and never as a feature of the 10 ms verdict. A day without the export has no record messages.
     record_file = Path(features_root) / day / "flow_records.parquet"
-    if record_file.exists():
+    if records and record_file.exists():
         from models.context_encoder.records import RECORD_COLUMNS
-        table = pq.read_table(record_file, columns=["event_id", "record_time", *RECORD_COLUMNS]).to_pandas()
-        if not np.array_equal(table["event_id"].to_numpy(), event_id):
+        # Batch by batch straight into the final array: 69 columns x 7.7M rows is 2.1 GB, and reading the whole table
+        # first (as Arrow, then pandas) held three copies at once -- 13.3 GB peak on Friday-16, on a 15 GB machine.
+        source = pq.ParquetFile(record_file)
+        n = source.metadata.num_rows
+        ids, record_time = np.empty(n, np.int64), np.empty(n, np.float64)
+        summary = np.empty((n, len(RECORD_COLUMNS)), np.float32)
+        at = 0
+        for batch in source.iter_batches(batch_size=1_000_000, columns=["event_id", "record_time", *RECORD_COLUMNS]):
+            end = at + batch.num_rows
+            ids[at:end], record_time[at:end] = batch.column("event_id").to_numpy(), batch.column("record_time").to_numpy()
+            for i, name in enumerate(RECORD_COLUMNS):
+                summary[at:end, i] = batch.column(name).to_numpy()
+            at = end
+        if not np.array_equal(ids, event_id):
             raise ValueError(f"{day}: the flow records do not line up with the event stream")
-        data["record_summary"] = table[RECORD_COLUMNS].to_numpy(np.float32)
-        data["record_time"] = table["record_time"].to_numpy(np.float64)
+        data["record_summary"], data["record_time"] = summary, record_time
         data["record_later"] = data["record_time"] > t_obs + 1e-6
     keep = events["has_packets"].to_numpy()
     order = availability_order(t_obs[keep], event_id[keep])
     rows = np.flatnonzero(keep)[order]
-    return {name: values[rows] for name, values in data.items()}
+    for name in list(data):                  # one array at a time, so the unordered copy of each is freed as we go
+        data[name] = data[name][rows]
+    return data
 
 
 def make_stream(day: dict, keep: np.ndarray) -> dict:
@@ -167,3 +183,35 @@ def attack_slice(day: dict, events: int, family: str | None = None) -> np.ndarra
     keep = np.zeros(n, bool)
     keep[start:start + events] = True
     return keep
+
+
+def day_cache(load, root: Path, what: str = ""):
+    """Wrap a day loader so each (day, arm) is parsed once and read back from plain .npy files afterwards.
+
+    Input:  a load_day-shaped callable, the cache folder, a tag for what the loader keeps (e.g. "f1r0": flow
+            summaries yes, records no)
+    Output: a callable with the same signature
+
+    Parsing a day from parquet takes 138-195 s and happens once per epoch per block; reading the saved arrays back
+    takes ~6 s (measured, Thursday-15, 3.9 GB). Arrays are stored without pickle -- object columns are saved as strings,
+    which is what every reader converts them to anyway. A folder is used only once its .complete marker exists, so an
+    interrupted write is redone rather than read.
+    """
+    root = Path(root)
+
+    def cached(day: str, arm: str, *args, **kwargs) -> dict:
+        # Keyed on what the loader keeps, not just the day: a Block 8 without flow records caches a day without them,
+        # and one with records reading that folder back would train with none -- silently, as absence is representable.
+        folder = root / f"{day}__{arm}{'__' + what if what else ''}"
+        if (folder / ".complete").exists():
+            # Copy-on-write maps: pages come from the file as they are read, so a day's base arrays are not all held in
+            # RAM beside the streams cut from them; a caller that writes in place gets a private copy of that page.
+            return {p.stem: np.load(p, allow_pickle=False, mmap_mode="c") for p in sorted(folder.glob("*.npy"))}
+        data = load(day, arm, *args, **kwargs)
+        folder.mkdir(parents=True, exist_ok=True)
+        for name, values in data.items():
+            np.save(folder / f"{name}.npy", values.astype(str) if values.dtype == object else values)
+        (folder / ".complete").touch()
+        return data
+
+    return cached
