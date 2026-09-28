@@ -50,6 +50,23 @@ def incidents(t, key, gap: float) -> int:
     return int(starts.sum())
 
 
+def test_hours(blob: dict) -> float:
+    """How long the test rows cover, in hours: what every per-hour rate is divided by.
+
+    Input:  a scores blob
+    Output: hours
+
+    The test split is a set of bands spread through the day (models.data.splits.band_hours), so the first-to-last span
+    of its rows is about three times too long. A blob written since 2026-09-27 carries the exact figure; for an older one
+    the bands are recovered from the rows themselves: consecutive test rows more than the 120 s embargo apart belong to
+    different bands. That reproduced the exact figure on all five days to the second.
+    """
+    if "test_hours" in blob:
+        return max(float(blob["test_hours"]), 1e-9)
+    gaps = np.diff(np.sort(np.asarray(blob["t_obs"], dtype=float)))
+    return max(float(gaps[gaps <= 120.0].sum()) / 3600.0, 1e-9)
+
+
 def sweep(blob: dict, budgets=BUDGETS, gap: float = 60.0, device: str | None = None) -> pd.DataFrame:
     """Every budget's threshold and what it costs, per family.
 
@@ -73,7 +90,7 @@ def sweep(blob: dict, budgets=BUDGETS, gap: float = 60.0, device: str | None = N
     attack = torch.as_tensor(blob["test_attack"], device=device)
     t_obs = torch.as_tensor(blob["t_obs"], device=device)
     sender = torch.as_tensor(blob["sender"], device=device)
-    hours = max(float(t_obs.max() - t_obs.min()) / 3600.0, 1e-9) if t_obs.numel() else 1e-9
+    hours = test_hours(blob)
     benign = ~attack
     qs = torch.tensor([1.0 - b for b in budgets], device=device, dtype=torch.float32)
     rows = []
