@@ -59,14 +59,16 @@ attacking host reaches its next new target a median of 32 s (Infiltration) to 80
 Requirements: Python 3.12 via [uv](https://docs.astral.sh/uv/); for ingest and live serving also `tshark`
 (`apt install tshark`) and a JDK 8 for CICFlowMeter. A CUDA GPU is optional.
 
-CICFlowMeter is a git submodule (`tools/CICFlowMeter`, the upstream repository pinned at the commit ingest used).
-`tools/setup_cicflowmeter.sh` fetches it if the clone did not, applies the one change ingest needs, and builds it; the
-first build downloads Gradle's dependencies.
+`tools/setup.sh` does the whole setup once after cloning: `uv sync`; CICFlowMeter, a git submodule pinned at the commit
+ingest used, fetched, patched and built by `tools/setup_cicflowmeter.sh`; the published model (release `v1.0.0`) from
+Hugging Face into `artifacts/huggingface/download/netwatch-flow-cascade/`, with `artifacts/current` pointed at it so
+every serving command serves it. It then asks whether to download the dataset, and which set (`processed`, `model` or
+both) and which days; `--dataset none|processed|model|both` answers without asking. The dataset is gated: accept its
+terms on Hugging Face and log in first.
 
 ```bash
 git clone --recurse-submodules <repository url> && cd netwatch
-tools/setup_cicflowmeter.sh
-uv sync
+NETWATCH_HF_ACCOUNT=<account> tools/setup.sh
 
 # self-checks: no dataset and no GPU needed
 uv run python -m models.serving.graph
