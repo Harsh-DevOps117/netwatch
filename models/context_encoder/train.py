@@ -71,7 +71,9 @@ def run_stream(model: ContextEncoder, head: LinkPredictor, stream: dict, *, batc
     model.begin_day(len(links))
     rng = np.random.default_rng(seed)
     n = len(stream["sender"])
-    total, seen, positives, negatives = 0.0, 0, [], []
+    # Loss and logits stay on the device until the stream ends: reading them back per batch forced a CPU<->GPU
+    # synchronisation every batch, and under WSL each one costs far more than the batch's own kernels.
+    total, seen, positives, negatives = torch.zeros((), device=device, dtype=torch.float64), 0, [], []
     for start in range(0, n, batch_size):
         rows = np.arange(start, min(start + batch_size, n))
         fake, usable = negative_receivers(stream["receiver"][rows], rng)
@@ -80,18 +82,21 @@ def run_stream(model: ContextEncoder, head: LinkPredictor, stream: dict, *, batc
         with torch.set_grad_enabled(train):
             s, s_negative = model(batch, negative)
             pos = head(s)
-            neg = head(s_negative)[torch.from_numpy(usable).to(device)]
+            neg = head(s_negative)[torch.from_numpy(usable).to(device, non_blocking=True)]
             loss = F.binary_cross_entropy_with_logits(torch.cat([pos, neg]), torch.cat(
                 [torch.ones_like(pos), torch.zeros_like(neg)]))
             if train:
                 optimiser.zero_grad()
                 loss.backward()
                 optimiser.step()
-        total += float(loss.detach()) * len(rows)
+        total += loss.detach().double() * len(rows)
         seen += len(rows)
-        positives.append(pos.detach().cpu().numpy())
-        negatives.append(neg.detach().cpu().numpy())
-    return total / max(seen, 1), np.concatenate(positives), np.concatenate(negatives)
+        positives.append(pos.detach())
+        negatives.append(neg.detach())
+    if not positives:
+        return 0.0, np.zeros(0, np.float32), np.zeros(0, np.float32)
+    return (float(total) / max(seen, 1), torch.cat(positives).float().cpu().numpy(),
+            torch.cat(negatives).float().cpu().numpy())
 
 
 def link_ap(positives: np.ndarray, negatives: np.ndarray) -> float:
