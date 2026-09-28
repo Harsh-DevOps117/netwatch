@@ -214,6 +214,23 @@ def _rank_split(t: np.ndarray, train: float, val: float, gap: float) -> np.ndarr
     return out
 
 
+def band_hours(t: np.ndarray, split: np.ndarray, code: int = 2) -> float:
+    """How long one split's bands last, in hours: the time a per-hour rate on that split's rows must be divided by.
+
+    Input:  event times and split codes, both in time order; the split code (2: test)
+    Output: the summed duration of every unbroken run of that code, in hours
+
+    A split is a set of bands, one per segment, so its rows are spread over the whole day while covering only part of
+    it (test: 2.8-3.7 of 10-13 hours on the five days). Dividing by the first-to-last span understates every rate about
+    three times.
+    """
+    t, split = np.asarray(t, dtype=float), np.asarray(split, dtype=np.int64)
+    if not len(t):
+        return 0.0
+    edges = np.flatnonzero(np.diff(np.r_[-99, split, -99]) != 0)
+    return float(sum(t[b - 1] - t[a] for a, b in zip(edges[:-1], edges[1:]) if split[a] == code)) / 3600.0
+
+
 def split_report(split: np.ndarray, label: np.ndarray, benign: str | None = None) -> pd.DataFrame:
     """Rows per split per family, and whether any split is empty.
 
