@@ -1,9 +1,7 @@
-<!-- BEGIN GENERATED: front matter and inventory, rewritten by tools/publish/huggingface.py -->
 ---
 license: other
 license_name: cse-cic-ids2018
 license_link: https://www.unb.ca/cic/datasets/ids-2018.html
-gated: true
 task_categories:
   - tabular-classification
 tags:
@@ -70,7 +68,7 @@ configs:
       - split: Thursday_15_02_2018
         path: "model/latents/Thursday-15-02-2018/**/*.parquet"
 ---
-
+<!-- BEGIN GENERATED: inventory, rewritten by tools/publish/huggingface.py -->
 | set | portion | config to load | days | size |
 |---|---|---|---|---|
 | `processed` | `events` | `processed_events` | 5 | 1.5 GB |
@@ -198,5 +196,5 @@ remapping through each day's `node_index`.
 ## Licence and attribution
 
 Derived from **CSE-CIC-IDS2018**, distributed by the Canadian Institute for Cybersecurity, whose terms govern
-redistribution and require attribution. This repository is gated for that reason. Cite the original dataset in any work
+redistribution and require attribution. Keep this repository private, or gated once public, for that reason. Cite the original dataset in any work
 that uses these files.
