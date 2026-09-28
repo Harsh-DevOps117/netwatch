@@ -26,7 +26,7 @@ import torch
 
 from models.runtime import configure, maybe_compile
 from models.serving.emitter import AlertEmitter
-from models.evaluation.thresholds import BUDGETS, incidents, sweep
+from models.evaluation.thresholds import BUDGETS, incidents, sweep, test_hours
 
 
 def average_precision(score: torch.Tensor, positive: torch.Tensor) -> float:
@@ -87,7 +87,7 @@ def emission_funnel(blob: dict, family: int, threshold: float, persist: int = 3,
     key = torch.as_tensor(blob["sender"])
     t = torch.as_tensor(blob["t_obs"])
     truth = torch.as_tensor(blob["test_code"]) == family
-    hours = max(float(t.max() - t.min()) / 3600.0, 1e-9)
+    hours = test_hours(blob)                                  # the test bands' own duration, not first-to-last
     order = torch.argsort(t)                                  # emission is order-dependent: availability order
     emitter = AlertEmitter(threshold, persist=persist, gap=gap)
     opened = emitter.push_batch(key[order], score[order], t[order])
