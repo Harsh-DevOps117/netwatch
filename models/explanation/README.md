@@ -1,54 +1,47 @@
 # `models/explanation` — why the system said what it said
 
-## Purpose
+Answers, for an alert or a forecast, the questions an analyst asks. Every explanation is read from the trained model's
+own activations or gradients, not from a separate model fitted afterwards.
 
-Answer, for any alert, the two questions an analyst actually asks. The problem statement requires explainability, and
-the context encoder was already computing one half of the answer and discarding it.
+| question | answer | source |
+|---|---|---|
+| which recent events made the context encoder see this event the way it did? | its attention over the event's neighbourhood | `attention.py` |
+| did the verdict come from the flow itself or from its context? | gradient × input over the detector's 132 inputs, summed over the flow span (32) and the context span (100), signed | `attention.py` |
+| why is the forecast starting from this host? | the world model's neighbourhood attention for each forecast seed, summed per peer host | `world_model.py` |
 
-## Function
-
-**1. "Why this host?" — attention activations.** The context encoder attends over up to 20 neighbouring events, being
-the latest event per distinct peer of each endpoint. Its attention distribution says how much of this event's context
-came from each of them. This is a real activation of the trained model, not a post-hoc surrogate fitted afterwards.
-
-The distribution was being thrown away (`need_weights=False`). It is now capturable with `encoder.explain = True`.
-
-**2. "Was it the flow itself, or its context?" — input attribution.** The detector reads a 132-wide vector: 32 columns
-from the flow embedding, 100 from the context encoder. Gradient × input over the standardised features, summed across
-each span, says which half carried the decision. Signed, because a span can argue *for* benign.
+The world model's explanation is served in `GET /forecast` as `explanation`
+([docs/serving.md](../../docs/serving.md#3-the-forecast-api)).
 
 ## Files
 
 | file | role |
 |---|---|
-| `__main__.py` | CLI shim |
+| `__main__.py` | command line |
 | `attention.py` | `attention_over_batch`, `top_neighbours`, `explain_events`, `input_attribution` |
+| `world_model.py` | `seed_explanations` |
 
 ## Running
 
 ```bash
-uv run python -m models.explanation \
-  --block8 data/model_cache/block8_10d/best.pt \
-  --day Friday-02-03-2018 --family Bot --events 3000000 \
-  --attacks-only --explain 25 --neighbours 3
+# the context encoder's attention, for attack events of one day
+uv run python -m models.explanation --context-encoder <run>/b8det/best.pt --head <run>/detector/head_<day>.pt \
+  --day <day> --attacks-only --explain 25 --neighbours 3 --out <folder>
+
+# the world model, on a recorded day
+uv run python -m models.explanation --world-model <run>/b10/best.pt --latents <run>/latents/<day> \
+  --node-index data/events/<day>/node_index.parquet --events 20000 --explain 5
 ```
 
-Output is one row per (event, reported neighbour), carrying the neighbour's attention share, its age in seconds, its
-role (whether it was reached as sender or receiver) and its label.
+The output has one row per (event, reported neighbour): the neighbour's share of the attention, its age in seconds,
+whether it was reached through the sender or the receiver, and its label.
 
 ## Notes
 
-**Enabling explainability cannot change a verdict.** Capture is opt-in and verified to leave the encoding
-bit-identical. The default keeps `need_weights=False`, which lets the fused attention kernel skip materialising the
-weights at all, so training pays nothing.
-
-**An empty neighbourhood produces meaningless weights.** An event with no neighbours is made to attend a dummy slot
-whose contribution is then zeroed. `valid` is returned alongside the weights and `top_neighbours` reports `-1` for those
-slots rather than presenting padding as evidence. Reporting them would be inventing an explanation.
-
-**Attribution is a local linearisation, not a causal claim.** It says what this particular row's score was most
-sensitive to, not what would happen under intervention.
-
-**Do not attach a seconds figure to anticipation in any interface.** Detection can be presented with its threshold and
-alarm rate. Anticipation should be presented as a ranked "what may be coming" list with no time claim, because the lead
-the data contains cannot currently be scored — see `models/data/README.md`.
+- **Explaining never changes a verdict.** Capturing the attention weights leaves the encoding bit-identical; it is off
+  by default so training does not pay for it.
+- **An event with no neighbours has no attention explanation.** Such rows are marked (`valid`, and `-1` in
+  `top_neighbours`) rather than presenting padding as evidence.
+- The world model's global readout describes the whole network, not one seed, so it is not reported per seed.
+- **Attribution is a local sensitivity, not a causal claim**: it says what this row's score responded to most, not what
+  would happen under an intervention.
+- Anticipation is presented as a ranked list of what may come next, with no time in seconds attached.
