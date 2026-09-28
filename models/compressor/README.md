@@ -1,75 +1,63 @@
-# `models/compressor` — the event compressor (Block 9)
+# `models/compressor` — compressor
 
-## Purpose
+Compresses each event's context `s` (100 numbers, from a frozen context encoder) into `z` (32 numbers) for the world
+model, and reports how unlike benign traffic that context is. Trained twice from the same code: on the forecasting
+encoder for the `lag` world model (`b9`), and on the detection encoder for the `live` one (`b9live`). Design and figure:
+[docs/architecture.md §7](../../docs/architecture.md#7-compressor).
 
-Compress the context encoder's 100-wide context vector into a 32-wide latent `z`, and keep the reconstruction error as
-a signal in its own right. `z` is what the world model reads.
+## How it works
 
-## Function
-
-An autoencoder over the frozen context vector, fitted on benign events only. Two outputs per event:
-
-- `z` — the compressed context, 32-wide.
-- `recon_error` — the squared reconstruction error on the benign scale the autoencoder was fitted with. Low means the
-  context looks like benign traffic.
-
-The context encoder is frozen throughout and never receives a gradient; that separation is the premise of the cascade.
+An autoencoder, 100 → 128 → 32 → 128 → 100, trained on benign events only to rebuild `s` (mean squared error). `s` is
+first put on a benign scale fitted once on 200,000 benign training events and stored in the checkpoint. Each event is
+encoded on its own; the context encoder receives no gradient.
 
 ## Files
 
 | file | role |
 |---|---|
-| `__main__.py` | CLI shim |
-| `train.py` | the objective: `run_block9` |
-| `latents.py` | `frozen_block8`, `context_vectors`, scoring, and the `event_latents.parquet` export |
-| `autoencoder.py` | the autoencoder modules and target construction |
+| `__main__.py` | command line |
+| `train.py` | the training loop |
+| `autoencoder.py` | the autoencoder and its benign scale |
+| `latents.py` | loading the frozen context encoder, scoring, and the `event_latents.parquet` export |
 
 ## Inputs and outputs
 
-**In:** a context encoder checkpoint, plus everything that stage read.
-**Out:**
-- `<out>/best.pt` — selected on mean validation loss
-- `data/latents/<run>/<day>/event_latents.parquet` — one row per event, in availability order
-- `data/latents/<run>/<day>/latents_manifest.json`
+| | path |
+|---|---|
+| in | `<run>/b8/best.pt` (`live`: `<run>/b8det/best.pt`) and everything it reads |
+| out: model | `<run>/b9/best.pt` (`live`: `b9live/`; best mean validation loss), `epoch_NN.pt`, `resume.pt`, `history.csv`, `best_metrics.csv` |
+| out: latents | `<run>/latents/<day>/` (`live`: `latents-live/<day>/`): `event_latents.parquet` + `latents_manifest.json` — one row per event with packets, in availability order |
 
-The export is the handoff to Block 10. It carries `event_id`, `t`, `t_obs`, endpoints, `z`, `recon_error`, `split`,
-`label`, `observation_population` and `attack`. **`label` and `attack` are evaluation only and must never be used as
-input.**
+`label`, `attack`, `role` and `split` in the export are for evaluation only and must never be a model input; neither is
+`recon_error`, which is a score. Columns: [docs/data.md](../../docs/data.md).
 
 ## Running
 
 ```bash
 # fit
-uv run python -m models.compressor --encoder mlp --target s \
-  --block8 data/model_cache/block8_10d/best.pt --days <days...> \
-  --out data/model_cache/block9_10d \
-  --epochs 6 --patience 2 --window 512 --d-z 32 --normalise-rows 200000
+uv run python -m models.compressor --encoder mlp --target s --context-encoder <run>/b8/best.pt \
+  --days <days...> --embeddings-root <run>/embeddings --out <run>/b9 \
+  --epochs 5 --window 512 --d-z 32 --lr 1e-3 --normalise-rows 200000 --lr-schedule cosine
 
-# export the latents Block 10 reads
-uv run python -m models.compressor --encoder mlp --target s \
-  --block8 data/model_cache/block8_10d/best.pt \
-  --load data/model_cache/block9_10d/best.pt \
-  --out data/model_cache/block9_10d \
-  --export data/latents/serve_10d --window 512 --days <days...>
+# export the latents the world model reads
+uv run python -m models.compressor --encoder mlp --target s --context-encoder <run>/b8/best.pt \
+  --load <run>/b9/best.pt --out <run>/b9 --export <run>/latents --window 512 \
+  --days <days...> --embeddings-root <run>/embeddings
 ```
 
-`--out` is required by argparse even when exporting, and doubles as the checkpoint location when `--load` is omitted.
-`--window` must match the value used to fit.
+For the `live` pair, the same two commands with `--context-encoder <run>/b8det/best.pt`, `--out <run>/b9live` and
+`--export <run>/latents-live`.
 
-## Settings that matter
+## Settings
 
-| setting | value | reason |
+| setting | value | why |
 |---|---|---|
-| `--d-z` | **32** | The shipped latent width. |
-| `--window` | **512** | Events per window, and also the batch. Matches the context encoder's live batch, so training and serving see the same staleness. |
-| `--target` | **s** | Rebuild the context vector. `x_e` rebuilds the fixed event features instead, which is the comparison arm. |
-| `--normalise-rows` | **200000** | Benign training rows used to fit the scale of `s`. |
+| `--d-z` | 32 | the latent width the world model reads |
+| `--window` | 512 | events per batch, matching the context encoder; must be the same when fitting and exporting |
+| `--target` | `s` | rebuild the context vector |
+| `--normalise-rows` | 200,000 | benign training events used to fit the scale of `s` |
 
 ## Notes
 
-**Do not use `recon_error` as a gate on the detector.** Adding it as a second condition on every alert was measured and
-rejected: it cost recall without buying false-positive rate. It remains useful as a reported signal.
-
-**Naming.** This package's output is `event_latents.parquet`; the flow encoder's is `flow_embeddings.parquet`. Both have
-one row per event and 32 numbers per row, so a loader expecting one would silently accept the other and train on
-representations that carry no network context. The names are kept distinct for that reason.
+- `event_latents.parquet` (the compressor's `z`) and `flow_embeddings.parquet` (the flow encoder's `h`) both hold 32
+  numbers per event; the names differ so one cannot be loaded in place of the other by mistake.
