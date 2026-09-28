@@ -57,7 +57,10 @@ class NeighbourIndex:
         for key, peer in ((sender, receiver), (receiver, sender)):
             order = np.lexsort((positions, key))                 # grouped by endpoint, stream order inside
             node, partner = key[order], peer[order]
-            starts = np.flatnonzero(np.r_[True, (node[1:] != node[:-1]) | (partner[1:] != partner[:-1])])
+            # An empty stream has no runs at all. Without this guard the leading True below makes starts [0], which
+            # then indexes an empty array -- and an empty stream is legitimate: a split can hold no events.
+            starts = (np.flatnonzero(np.r_[True, (node[1:] != node[:-1]) | (partner[1:] != partner[:-1])])
+                      if n else np.zeros(0, np.intp))
             ends = np.r_[starts[1:], n] - 1                      # a run ends where the next one starts
             scale = n + 1
             # Two search keys over the same endpoint-ordered entries: one per entry, to find where a query falls in
