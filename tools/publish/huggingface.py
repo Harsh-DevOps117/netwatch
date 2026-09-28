@@ -2,9 +2,10 @@
 
 Run: uv run python tools/publish/huggingface.py --what model --user <account>
      uv run python tools/publish/huggingface.py --what dataset --user <account> --days Friday-02-03-2018
-     uv run python tools/publish/huggingface.py --stage ~/hf-staging --user <account>
+     uv run python tools/publish/huggingface.py --bundle <run folder> --user <account>
 
-Builds two self-contained folders under `huggingface/`, each with the card Hugging Face renders as its front page, then
+Takes every model from artifacts/current (the latest promoted run, tools/promote.py) unless --bundle names another, and
+builds two self-contained folders under `artifacts/huggingface/`, each with the card Hugging Face renders as its front page, then
 prints the upload command. Nothing is uploaded from here: staging is separated from publishing so the contents can be
 inspected, and because pushing derived data has licensing consequences (see LICENSING below).
 
@@ -32,15 +33,39 @@ from pathlib import Path
 BEGIN = "<!-- BEGIN GENERATED: front matter and inventory, rewritten by tools/publish/huggingface.py -->"
 END = "<!-- END GENERATED -->"
 
-STAGE = Path("huggingface")          # release staging, not a pipeline output; override with --stage
+STAGE = Path("artifacts/huggingface")   # release staging, beside every other model artefact; override with --stage
+SOURCES = Path("huggingface")           # the tracked cards, handler and config each staged folder starts from
+CURRENT = Path("artifacts/current")     # the latest promoted run, the default bundle
+
+
+def seed(kind: str, stage: Path) -> None:
+    """Copy the tracked card, handler and config for `kind` (model / dataset) into its staging folder.
+
+    Input:  "model" or "dataset", the staging root
+    Output: none; <stage>/<kind>/ holds the tracked files, refreshed on every staging run
+    """
+    source, target = SOURCES / kind, stage / kind
+    if source.resolve() == target.resolve():
+        return
+    target.mkdir(parents=True, exist_ok=True)
+    for path in source.iterdir():
+        if path.is_file():
+            shutil.copy2(path, target / path.name)
 
 # Files a consumer needs to load a model, in the order a reader meets them. Each is (source, purpose).
 MODEL_PARTS = {
     "detector": ("the family classifier: weights, feature scaler, families, budget thresholds, serve_threshold"),
-    "context_encoder": ("Block 8, frozen: link memory and neighbourhood attention"),
-    "compressor": ("Block 9, frozen: the 32-wide latent and the reconstruction error"),
-    "flow_encoder": ("Block 7, frozen: one embedding per flow, with its input scaler"),
+    "context_encoder": ("the detection encoder, frozen: link memory over packets and the 20-packet summary"),
+    "world_model_context_encoder": ("the forecasting encoder, frozen: packets, summary and flow records"),
+    "record_encoder": ("the record encoder the forecasting encoder reads flow records through, frozen"),
+    "compressor": ("the compressor, frozen: the 32-wide latent and the reconstruction error"),
+    "flow_encoder": ("the flow encoder, frozen: one embedding per flow, with its input scaler"),
+    "world_model": ("the world model: node memory, neighbourhood attention, ranking and next-event heads, calibrated threshold"),
+    "live_compressor": ("the live tag's compressor: the same design, trained on the detection encoder's context"),
+    "live_world_model": ("the live tag's world model, trained on live_compressor's latents; served seconds behind the wire"),
 }
+# The live tag's pair exists only in runs trained with it; a run without it still publishes a complete lag cascade.
+OPTIONAL = ("live_compressor", "live_world_model")
 
 
 def human(size: int) -> str:
@@ -80,7 +105,7 @@ def model_card(user: str, repo: str, parts: dict[str, Path], stage: Path) -> str
     operating point and the fact that thresholds do not survive retraining belong on the front page, not three clicks
     away.
     """
-    listed = "\n".join(f"| `{name}.safetensors` | {MODEL_PARTS.get(name, 'part of the cascade')} |"
+    listed = "\n".join(f"| `{name}.safetensors` | {MODEL_PARTS.get(name, 'the detector head trained on ' + name.removeprefix('detector_') if name.startswith('detector_') else 'part of the cascade')} |"
                        for name in parts)
     return f"""---
 license: mit
@@ -154,18 +179,22 @@ huggingface-cli upload {user}/{repo} {stage} . --repo-type model
 #   model/      produced BY this cascade: Block 7 embeddings and Block 9 latents. Only meaningful with it.
 DATASET_SETS = {
     "processed": {
-        "events": (Path("data/events"), "*.parquet",
+        # Separate portions: one config must hold one schema, or load_dataset fails on the second file.
+        "events": (Path("data/events"), "events.parquet",
                    "the labelled event stream, one row per flow, in availability order"),
+        "node_index": (Path("data/events"), "node_index.parquet",
+                       "per day, node id -> IP; names the hosts in events, latents and world-model output"),
         "flow_records": (Path("data/context_features"), "flow_records.parquet",
                          "CICFlowMeter's own columns per event, at the time the record can exist"),
         "side_features": (Path("data/context_features"), "side_features.parquet",
                           "per-event request/response features at the observation time, and who sent which side"),
     },
     "model": {
-        "flow_embeddings": (Path("data/flow_embeddings"), "flow_embeddings.parquet",
-                            "Block 7's 32-wide per-flow embedding; no network context"),
+        # The split side only: the embedding the published models read (request/response exports are experiments).
+        "flow_embeddings": (Path("data/flow_embeddings/split"), "flow_embeddings.parquet",
+                            "the flow encoder's 32-wide per-flow embedding; no network context"),
         "latents": (Path("data/latents"), "event_latents.parquet",
-                    "Block 9's 32-wide latent z and its reconstruction error; what the world model reads"),
+                    "the compressor's 32-wide latent z and its reconstruction error; what the world model reads"),
     },
 }
 
@@ -231,38 +260,69 @@ def dataset_inventory(staged: dict, sizes: dict) -> str:
     return "\n".join(rows)
 
 
-def stage_model(user: str, repo: str, serve: Path, dry_run: bool, stage: Path = STAGE) -> None:
+def stage_model(user: str, repo: str, serve: Path, dry_run: bool, stage: Path = STAGE,
+                bundle: "Path | None" = None, detector_day: "str | None" = None) -> None:
     """Copy the servable checkpoints into the staging folder and write the model card.
 
     Input:  account, repository name, the directory holding serving checkpoints, whether to only report, the
-            staging root
+            staging root, and optionally one run directory to take every stage from
     Output: none; writes <stage>/model/
+
+    Prefer `bundle`. Blocks 8-10 are each trained on the frozen output of the stage before, so a world model is only
+    valid with the exact Blocks 7-9 it was trained behind; picking the newest checkpoint per stage across data/model_cache
+    can pair it with encoders from another experiment, and its scores and threshold then mean nothing.
     """
     out = stage / "model"
     # Each role is looked for first in the serving directory, then in the layouts the training runs actually write.
-    # The newest match wins, so a fresh run is picked up without arguments.
-    cache = Path("data/model_cache")
+    # The newest match wins, so a fresh run is picked up without arguments. With a bundle, only the bundle is searched.
+    roots = [bundle] if bundle else [serve, Path("data/model_cache")]
     patterns = {
-        "detector": ["head*.pt", "serve/head*.pt"],
+        # b<N>/ is tools/train_all.sh's run layout; encoders/ and train/ are ~/netwatch-data/worldmodel's.
+        "detector": ["head*.pt", "serve/head*.pt", "serve/detector*.pt", "encoders/serve/detector*.pt",
+                     "detector/head*.pt"],
+        # Two Block 8s in a train_all run: b8det (no records) is the detector's, b8 (with records) the world model's.
         # Both spellings: the directories written before the stages were renamed still hold real checkpoints.
-        "context_encoder": ["context_encoder*/best.pt", "context/*/best.pt", "block8*/best.pt"],
-        "compressor": ["compressor*/best.pt", "compressor/*/best.pt", "block9*/best.pt", "block9/*/best.pt"],
-        "flow_encoder": ["flow_encoder*/*.pt", "scores/*/*.pt", "block7*/*.pt"],
+        "context_encoder": ["detection_encoder.pt", "context_encoder*/best.pt", "context/*/best.pt", "block8*/best.pt", "b8det/best.pt",
+                            "encoders/b8/best.pt"],
+        "world_model_context_encoder": ["forecasting_encoder.pt", "b8/best.pt", "encoders/b8/best.pt"],
+        "record_encoder": ["record_encoder.pt"],
+        "compressor": ["compressor.pt", "compressor*/best.pt", "compressor/*/best.pt", "block9*/best.pt", "block9/*/best.pt",
+                       "b9/best.pt", "encoders/b9/best.pt"],
+        "flow_encoder": ["flow_encoder.pt", "flow_encoder*/*.pt", "scores/*/*.pt", "block7*/*.pt", "b7/*.pt", "encoders/b7/*.pt"],
+        "world_model": ["world_model.pt", "world_model*/best.pt", "world_model/*/best.pt", "b10/best.pt", "train/best.pt"],
+        "live_compressor": ["live_compressor.pt", "b9live/best.pt"],
+        "live_world_model": ["live_world_model.pt", "b10live/best.pt"],
     }
     found: dict[str, Path] = {}
     for role, globs in patterns.items():
         hits: list[Path] = []
         for pattern in globs:
-            hits += sorted(serve.glob(pattern)) + sorted(cache.glob(pattern))
+            for root in roots:
+                # Per-epoch and resume files sit beside the kept model; they are never what gets published.
+                hits += sorted(p for p in root.glob(pattern) if "_epoch" not in p.name
+                               and not p.name.startswith(("epoch_", "resume")))
         if hits:
             found[role] = max(hits, key=lambda p: p.stat().st_mtime)
-    missing = [role for role in patterns if role not in found]
+    # Every detector head, one per training day, is published as detector_<day>; `detector` -- the one the inference
+    # endpoint loads -- is the head of the day named by --detector-day. Picking "the newest head" instead chose a day
+    # by file time.
+    heads = {p.stem.removeprefix("head_"): p for root in roots for p in sorted(root.glob("detector/head_*.pt"))}
+    if heads:
+        if detector_day is None and len(heads) > 1:
+            raise SystemExit(f"{len(heads)} detector heads found ({', '.join(sorted(heads))}); name the one the "
+                             f"inference endpoint serves with --detector-day. Every head is published as detector_<day>")
+        chosen = detector_day or next(iter(heads))
+        if chosen not in heads:
+            raise SystemExit(f"--detector-day {chosen}: no head for that day; found {', '.join(sorted(heads))}")
+        found["detector"] = heads[chosen]
+        found.update({f"detector_{day}": path for day, path in heads.items()})
+    missing = [role for role in patterns if role not in found and role not in OPTIONAL]
     if not found:
-        raise SystemExit(f"no checkpoints found under {serve} or {cache} -- run the training first "
-                         f"(docs/DEPLOYMENT_RUNBOOK.md)")
+        raise SystemExit(f"no checkpoints found under {', '.join(map(str, roots))} -- train and promote a run first "
+                         f"(docs/training.md)")
     if missing:
         print("\nincomplete cascade, these roles have no checkpoint yet:", ", ".join(missing))
-        print("a consumer cannot run the cascade without all four; stage anyway only to share a partial result")
+        print("a consumer cannot run the cascade without every stage; stage anyway only to share a partial result")
     total = sum(tree_size(p) for p in found.values())
     print(f"\nmodel staging -> {out}  ({human(total)})")
     for role, path in found.items():
@@ -271,7 +331,11 @@ def stage_model(user: str, repo: str, serve: Path, dry_run: bool, stage: Path = 
         print("\ndry run: nothing copied")
         return
     out.mkdir(parents=True, exist_ok=True)
-    from tools.publish.to_safetensors import convert, verify
+    seed("model", stage)
+    try:
+        from tools.publish.to_safetensors import convert, verify
+    except ModuleNotFoundError:                                  # run as a script, as the docstring says
+        from to_safetensors import convert, verify
     for role, path in found.items():
         staged_pt = out / f"{role}.pt"
         shutil.copy2(path, staged_pt)
@@ -290,7 +354,7 @@ def stage_model(user: str, repo: str, serve: Path, dry_run: bool, stage: Path = 
 
 
 def stage_dataset(user: str, repo: str, days: list[str], include: list[str], dry_run: bool,
-                  stage: Path = STAGE) -> None:
+                  stage: Path = STAGE, bundle: "Path | None" = None) -> None:
     """Lay the derived tables out as two selectable sets and refresh the card's generated block.
 
     Input:  account, repository name, days to stage (empty means every day found), which sets or portions to include,
@@ -298,13 +362,21 @@ def stage_dataset(user: str, repo: str, days: list[str], include: list[str], dry
     Output: none; writes <stage>/dataset/{processed,model}/<portion>/<day>/
 
     Copied into a per-day directory rather than flat, because Hugging Face exposes each day as a split and a consumer
-    almost always wants one day rather than all of them.
+    almost always wants one day rather than all of them. With a bundle, the latents are the bundle's: the ones its
+    world model was trained and calibrated on.
     """
     out = stage / "dataset"
     wanted = set(include) if include else set(DATASET_SETS)
+    sets = {name: dict(portions) for name, portions in DATASET_SETS.items()}
+    # From a bundle, the per-event outputs come from the same run as the published models; tables from another run are
+    # on another scale.
+    for portion, folder in (("latents", "latents"), ("flow_embeddings", "embeddings/split")):
+        if bundle and (bundle / folder).is_dir():
+            _, pattern, purpose = sets["model"][portion]
+            sets["model"][portion] = (bundle / folder, pattern, purpose)
     staged: dict[str, dict[str, dict[str, list[Path]]]] = {}
     sizes: dict[tuple, int] = {}
-    for set_name, portions in DATASET_SETS.items():
+    for set_name, portions in sets.items():
         for portion, (root, pattern, _) in portions.items():
             if wanted and set_name not in wanted and portion not in wanted and f"{set_name}/{portion}" not in wanted:
                 continue
@@ -344,7 +416,12 @@ def stage_dataset(user: str, repo: str, days: list[str], include: list[str], dry
                     target.parent.mkdir(parents=True, exist_ok=True)
                     if src.suffix == ".json" and target.exists():
                         continue
+                    # copy2 keeps mtime, so an unchanged file is recognised and a re-stage does not recopy gigabytes
+                    if target.exists() and (target.stat().st_size, target.stat().st_mtime) == \
+                            (src.stat().st_size, src.stat().st_mtime):
+                        continue
                     shutil.copy2(src, target)
+    seed("dataset", stage)
     refresh_dataset_card(out, {s: {p: list(d) for p, d in ps.items()} for s, ps in staged.items()}, sizes)
     print(f"upload with:\n  huggingface-cli upload {user}/{repo} {out} . --repo-type dataset --private")
 
@@ -384,20 +461,28 @@ def main(argv: list[str] | None = None) -> int:
                         help="directory holding the checkpoints written by the --save flags")
     parser.add_argument("--days", nargs="*", default=[], help="limit the dataset to these days (default: all found)")
     parser.add_argument("--include", nargs="+", default=[],
-                        choices=["processed", "model", "events", "flow_records", "side_features",
+                        choices=["processed", "model", "events", "node_index", "flow_records", "side_features",
                                  "flow_embeddings", "latents"],
                         help="a whole set (processed, model) or single portions. Default: everything found. "
                              "flow_embeddings is the largest portion by far")
     parser.add_argument("--stage", type=Path, default=STAGE,
-                        help="where to build the upload folders. Defaults to huggingface/ beside the source; it may "
-                             "point outside the repository")
+                        help="where to build the upload folders (default: artifacts/huggingface); it may point "
+                             "outside the repository")
+    parser.add_argument("--bundle", type=Path, default=None,
+                        help="take every model stage (and the latents) from this one folder: artifacts/current "
+                             "(default, when it exists) or a tools/train_all.sh run directory")
+    parser.add_argument("--detector-day", default=None,
+                        help="the day whose detector head the inference endpoint serves as `detector` (required when "
+                             "there are several); every head is also published as detector_<day>")
     parser.add_argument("--dry-run", action="store_true", help="report what would be staged, copy nothing")
     args = parser.parse_args(argv)
+    if args.bundle is None and CURRENT.is_dir():
+        args.bundle = CURRENT
     args.stage.mkdir(parents=True, exist_ok=True)
     if args.what in ("model", "both"):
-        stage_model(args.user, args.model_repo, args.serve, args.dry_run, args.stage)
+        stage_model(args.user, args.model_repo, args.serve, args.dry_run, args.stage, args.bundle, args.detector_day)
     if args.what in ("dataset", "both"):
-        stage_dataset(args.user, args.dataset_repo, args.days, args.include, args.dry_run, args.stage)
+        stage_dataset(args.user, args.dataset_repo, args.days, args.include, args.dry_run, args.stage, args.bundle)
     print("\nReminder: the dataset is a derived work of CSE-CIC-IDS2018 and carries its terms, not this repo's MIT "
           "licence. The dataset card is gated by default.")
     return 0
