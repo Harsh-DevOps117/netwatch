@@ -1,78 +1,61 @@
-# `models/detector` — the detection head
+# `models/detector` — detector
 
-## Purpose
+Names the attack family behind an event, with a probability, at a false-alarm budget the operator chooses. Design and
+figure: [docs/architecture.md §6](../../docs/architecture.md#6-detector).
 
-Name the attack family behind an event, at a chosen false-positive budget. This is the **main line**: it is the arm
-whose numbers are deployable, and the one the system leads with.
+## How it works
 
-## Function
+A small classifier over frozen inputs: `[h, s]` = 32 numbers from the flow encoder and 100 from the detection encoder,
+one hidden layer of 64, one output per class (benign first). Classes are weighted by the square root of their inverse
+frequency, because each attack family is a small fraction of the rows. One head is trained per day, on that day's
+families only, so a head does not know — and should not be served on — another day's attacks.
 
-A small classifier over a frozen representation: one hidden layer, one logit per class with benign first. Classes are
-weighted by inverse frequency, because an attack family is a fraction of a percent of the rows and the objective is
-recall — an unweighted fit learns to answer benign.
-
-The representation is the flow embedding (32-wide), and with `--context-encoder` the context vector beside it (132-wide total).
-**Passing a context encoder is not optional for the real system:** it is the only path by which link memory, the
-neighbourhood and the flow messages reach this arm.
-
-Thresholds are read from a **calibration** set — the validation split plus a held-back random slice of train — and never
-from the rows being reported.
+Thresholds come from **benign scores on calibration rows** (the validation split plus 20% of training kept back) at
+each false-alarm budget — 0.01%, 0.1%, 1% and 5% — one per family; test labels are never used to set them.
 
 ## Files
 
 | file | role |
 |---|---|
-| `__main__.py` | CLI shim |
-| `train.py` | `run_day`: fit, calibrate, report at each budget |
-| `model.py` | `Head`, `train_head`, `class_scores`, `family_codes`, `budget_threshold`, and `BENIGN` — the class order every stage numbers against |
-| `features.py` | `load_features`, plus the reconstruction-error gate measured against it |
-| `checkpoint.py` | `save_head` / `load_head` / `save_calibration` — everything a serving process reads |
-| `report.py` | `cost_of_recall`, `confusion`, `report`, `multiclass_matrix` |
-
-Split by concern in 2026-09-21; it was one 510-line `head.py`.
+| `__main__.py` | command line |
+| `train.py` | fit, calibrate and report one day |
+| `model.py` | the head, training, class scores, budget thresholds, the class order |
+| `features.py` | loads `[h, s]` for a day |
+| `checkpoint.py` | saving and loading everything a serving process needs |
+| `report.py` | results per family, population and budget; confusion matrices |
 
 ## Inputs and outputs
 
-**In:** `data/flow_embeddings/split/<day>/`, optionally a context encoder checkpoint.
-**Out:**
-- a report CSV, per family and per observation population, at each budget
-- `--save` → a servable checkpoint: head weights, **the feature scaler**, family names, the budget thresholds, and an
-  empty `serve_threshold`
-- `--save-scores` → the calibration-benign and test score distributions, for threshold sweeps without refitting
-
-Both are suffixed per day, so a multi-day run leaves one checkpoint per day rather than overwriting one.
+| | path |
+|---|---|
+| in | `<run>/embeddings/split/<day>/`, `<run>/b8det/best.pt` |
+| out | `<run>/detector/head_<day>.pt` — weights, **the feature scaler**, family names, thresholds per budget and the committed operating point `serve_threshold`; `scores_<day>.pt` — calibration and test score distributions; `results.csv` |
 
 ## Running
 
 ```bash
-uv run python -m models.detector --days <days...> \
-  --context-encoder data/model_cache/block8_10d/best.pt \
-  --save data/model_cache/serve/head.pt \
-  --save-scores data/model_cache/serve/scores.pt \
-  --seed 0
+uv run python -m models.detector --days <days...> --context-encoder <run>/b8det/best.pt \
+  --embeddings-root <run>/embeddings --save <run>/detector/head.pt \
+  --save-scores <run>/detector/scores.pt --out <run>/detector/results.csv --seed 0
 ```
 
-Then choose an operating point separately, with `tools/find_threshold.py`, which writes the chosen value into the
-checkpoint's `serve_threshold`. Nothing else writes that field.
+Then commit an operating point, the only step that writes `serve_threshold`:
+`python -m models.evaluation.thresholds --scores <run>/detector/scores_<day>.pt --recall-floor 0.995 --write <run>/detector/head_<day>.pt`
+([docs/training.md §6](../../docs/training.md#6-the-detectors-operating-point)). The training script commits each
+family's threshold at the 0.01% budget this way (`SERVE_BUDGET`).
 
-## Settings that matter
+## Settings
 
-| setting | value | reason |
+| setting | value | why |
 |---|---|---|
-| `--context-encoder` | **required in practice** | Without it the classifier sees flow embeddings alone and no context. |
-| `--tensorboard` / `--resume` / `--lr-schedule` | see `models/training.py` | shared by every trainer; `--lr-schedule none` is the default and what every measured result used |
-| `--seed` | **0, 1, 2** | Three seeds, always: a nondeterminism bug once masqueraded as roughly 5 points of seed variance. |
-| `--compressor` | **leave off** | Adding reconstruction error as a second condition on every alert was measured and rejected — it cost recall without buying false-positive rate. |
-| `--events` | omit for a real run | The slice proxy; on the Bot day fewer than ~3M events contain no test rows at all, and the run now says so rather than failing obscurely. |
+| `--context-encoder` | the detection encoder | without it the head sees the flow alone, with no context |
+| `--seed` | 0 | the training script trains one seed; run 1 and 2 as well before quoting a result's spread |
+| `--events`, `--family` | omit | train on a slice of a day, for quick checks only |
 
 ## Notes
 
-**The feature scaler is part of the model.** `class_scores` standardises with the training mean and standard deviation,
-so a process that reloads the weights without them produces scores on a different scale and every threshold becomes
-meaningless. `save_head` stores them; `load_head` restores them.
-
-**`fp_at_target` in the report is an oracle.** It selects its threshold using test attack scores, so it cannot be
-reproduced by a live system, which has no test labels. Quote only the budget → quantile → realised-FPR path.
-
-**Populations are reported separately.** `early_observation` and `completed_before_budget` are never pooled; only the
-first carries a lead-time claim.
+- **The feature scaler is part of the model**: scores computed without it land on another scale and every threshold
+  loses its meaning. `save_head` stores it and `load_head` restores it.
+- **Report only budget → threshold → realised false-alarm rate.** The report's `fp_at_target_oracle` column picks its threshold
+  with test labels, which no live system has; it is for analysis, not a result.
+- The two observation populations (`early_observation`, `completed_before_budget`) are always reported separately.
