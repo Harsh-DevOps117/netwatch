@@ -67,7 +67,7 @@ both) and which days; `--dataset none|processed|model|both` answers without aski
 terms on Hugging Face and log in first.
 
 ```bash
-git clone --recurse-submodules <repository url> && cd netwatch
+git clone --recurse-submodules https://github.com/Harsh-DevOps117/netwatch && cd netwatch
 tools/setup.sh
 
 # self-checks: no dataset and no GPU needed
