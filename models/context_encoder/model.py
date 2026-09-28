@@ -202,6 +202,17 @@ class LinkMemory(nn.Module):
         self.slot_of = (torch.arange(max(n_links, 1), device=device) if capacity is None
                         else torch.full((max(n_links, 1),), -1, dtype=torch.long, device=device))
 
+    def grow(self, n_links: int) -> None:
+        """Extend the link -> slot map to ids below `n_links`, for a live stream whose links keep appearing.
+
+        Only a capped table can grow: its slots are fixed and a new link simply has none yet. Doubling keeps the copies
+        rare.
+        """
+        if self.capacity is None or n_links <= len(self.slot_of):
+            return
+        extra = max(n_links, 2 * len(self.slot_of)) - len(self.slot_of)
+        self.slot_of = torch.cat([self.slot_of, torch.full((extra,), -1, dtype=torch.long, device=self.slot_of.device)])
+
     def _slots(self, links: torch.Tensor, allocate: bool) -> torch.Tensor:
         """Which row of the table each link occupies; -1 when it is not resident and none is free.
 
