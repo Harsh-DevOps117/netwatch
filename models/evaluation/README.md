@@ -1,71 +1,53 @@
-# `models/evaluation` — every reported metric, in one place
+# `models/evaluation` — every reported metric
 
-## Purpose
+Produces the full set of detector metrics with one command, so the same picture can be reported after every training
+run, and evaluates each stage against its own training objective.
 
-Produce the complete metric set for a trained model with one command. Previously each number lived in a different
-experiment script, and `tools/collect_final.py` could only gather the seven final experiments by index — nothing
-produced the whole picture for a given model, which is what has to be presented and re-presented after each full run.
+## What it reports
 
-## Function
+From the score file the detector writes (`--save-scores`):
 
-Reads a score blob written by `models.detector --save-scores` and reports four tables.
-
-1. **Ranking and calibration**, threshold-free — tied-rank PR-AUC, Brier score, expected calibration error.
-2. **Operating points** — budget → threshold → realised FPR, recall, precision, alarms/hour, incidents/hour.
-3. **The emission funnel** — events → above threshold → after persist-3 → incidents, run through the real
-   `AlertEmitter` rather than a reimplementation.
-4. **By observation population** — `early_observation` against `completed_before_budget`.
+1. **Ranking and calibration** (no threshold): tie-aware PR-AUC, Brier score, expected calibration error.
+2. **Operating points**: budget → threshold → realised false-alarm rate, recall, precision, alarms per hour, incidents
+   per hour.
+3. **From events to incidents**: events above threshold → after persistence (3 in a row) → incidents, using the same
+   `AlertEmitter` as serving.
+4. **By observation population**, never pooled — when the score file carries each row's population (detector score
+   files written from 2026-09-27 on); older files have none, and tables 1–3 then pool the two.
 
 ## Files
 
 | file | role |
 |---|---|
-| `__main__.py` | CLI shim |
-| `report.py` | `average_precision`, `calibration`, `emission_funnel`, `report` |
-| `thresholds.py` | budget → threshold sweep, and committing a chosen point into a checkpoint |
-| `blocks.py` | per-stage evaluation: each block against its own objective |
-
-## Per stage, not only end to end
-
-`python -m models.evaluation.blocks` scores each block on what it was trained against, because an end-to-end number
-cannot say which stage moved — and in a frozen cascade every later stage inherits whatever the earlier one produced.
-
-`effective_rank` is the column to watch: a stage can hold a healthy loss while collapsing its output into a few
-directions, starving the next stage however good the loss looks. `ratio` is attack error over benign error; at or below
-1 the reconstruction carries no signal. Errors are reported **per target**, because the flow encoder's own manifest
-warns against combining them unstandardised.
+| `__main__.py` | command line |
+| `report.py` | the four tables |
+| `thresholds.py` | the budget → threshold sweep, and committing a chosen operating point into a head checkpoint |
+| `blocks.py` | per-stage evaluation: each stage against its own objective |
 
 ## Running
 
 ```bash
-uv run python -m models.evaluation --scores data/model_cache/serve/scores_<day>.pt \
-  --out data/model_cache/results/evaluation_<day>
+# detector metrics for one day
+uv run python -m models.evaluation --scores <run>/detector/scores_<day>.pt --out <report folder>
+
+# commit an operating point into the detector head: the cheapest budget that keeps recall at the floor
+uv run python -m models.evaluation.thresholds --scores <run>/detector/scores_<day>.pt --recall-floor 0.995 \
+  --write <run>/detector/head_<day>.pt
+
+# each stage against its own objective
+uv run python -m models.evaluation.blocks --days <days...> --embeddings-root <run>/embeddings --latents <run>/latents/<day>
 ```
 
-`--fast` opts into cuDNN autotuning and TF32; off by default, because both change results in the last bits and this is
-the code that measures thresholds to six significant figures. `--compile` is accepted and falls back to eager when no C
-compiler is present.
-
-## Reference result
-
-Bot day, 3M slice, seed 0 — 574,893 test rows over 0.72 h, **63.7 ms** on the GPU:
-
-| metric | value |
-|---|---|
-| PR-AUC (tied) | 0.999973 |
-| Brier / ECE | 0.000157 / 0.000525 |
-| threshold 0.9793 | recall 0.9906, 6 false alarms, 8.4 false alarms/hour |
-| emission funnel | 16,241 above threshold → 15,409 after persist-3 → **21 incidents** (29.4/hour) |
-| coverage | all 10 attacking hosts alerted; all 16,389 attack events on an alerting host |
-
-The funnel line is the one to show an operator. Raw alerting is 22,708/hour; what a human sees is 29.4 incidents/hour.
+`--budgets`, `--persist` (default 3) and `--gap` (default 60 s) change the operating points and the incident rules.
+Rates per hour are over the test split's own duration — its bands, 2.8–3.7 h per day — not the first-to-last span of its
+rows, which covers the whole day and would understate every rate about three times.
+`--fast` enables faster GPU arithmetic that changes results in the last digits; it is off by default because this code
+measures thresholds precisely.
 
 ## Notes
 
-**Ties are collapsed in PR-AUC.** At a 10 ms budget most of a flood's rows share an identical input vector and therefore
-an identical score with some benign row. Ranking those by array position would invent a separation the model never
-produced, so precision and recall are taken once per distinct score.
-
-**Populations are never pooled**, for the reason given in `models/data/README.md`.
-
-**Calibration is reported even though nothing optimises it.** A probability shown to an analyst has to mean what it says.
+- **Ties are collapsed in PR-AUC.** Within 10 ms many flood events share an identical input, and so an identical score;
+  precision and recall are therefore taken once per distinct score rather than by row position.
+- **Per-stage evaluation** reports each stage's effective rank alongside its loss: a stage can keep a good loss while
+  collapsing its output into a few directions, which starves the next stage.
+- Calibration is reported because a probability shown to an analyst has to mean what it says.
