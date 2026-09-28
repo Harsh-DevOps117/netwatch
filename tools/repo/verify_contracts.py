@@ -1,10 +1,13 @@
-"""Check every claim in docs/*.json against the code and data that implement it.
+"""Check every claim in the team's JSON contracts against the code and data that implement it.
 
 The contracts are what teammates build against, so a stale field name there costs someone a day. This traces the
 checkable claims -- referenced modules and callables, declared column lists, declared file paths -- and fails loudly on
 any that no longer match. Run it after changing a schema, a CLI or a checkpoint format.
 
-Not checkable here, and deliberately skipped: dev.json's HTTP endpoints, because the backend is not in this repository.
+Not checkable here, and deliberately skipped: api-schema.json's HTTP endpoints, because the backend is not in this repository.
+
+The contracts live in docs/dev/contracts/, which is kept out of the published repository (it is the development team's
+working record). In a clone without it, the contract checks are reported as skipped and only the code checks run.
 """
 from __future__ import annotations
 
@@ -12,7 +15,7 @@ import importlib
 import json
 from pathlib import Path
 
-DOCS = Path("docs")
+DOCS = Path("docs/dev/contracts")
 
 # Kept out of the published repository on purpose: the Block 10 proxy is measured on slices and is not the deliverable,
 # and the four tools that import it travel with it. Declared here rather than read from .gitignore, because a check
@@ -24,7 +27,7 @@ LOCAL_ONLY_PATHS = ("models/world_model_proxy/", "tools/world_model/")
 def checks() -> list[tuple[str, bool, str]]:
     """Every contract claim, as (what was checked, whether it holds, what was found).
 
-    Input:  none; reads docs/*.json and imports the pipeline
+    Input:  none; reads docs/dev/contracts/*.json when present, and imports the pipeline
     Output: list of (label, ok, detail)
     """
     out: list[tuple[str, bool, str]] = []
@@ -43,8 +46,12 @@ def checks() -> list[tuple[str, bool, str]]:
 
     # ---- the JSONs parse at all
     docs = {}
-    for name in ("yug", "vedant", "dev", "kaustuk"):
-        path = DOCS / f"{name}.json"
+    # Keyed by subject, matching the file names rather than by whose desk they came from.
+    for name in ("live-sensor", "latents", "api", "modelling-notes"):
+        path = DOCS / (f"{name}.json" if name.endswith("notes") else f"{name}-schema.json")
+        if not path.exists():
+            skip(f"{name}.json parses", f"{DOCS} is local-only (not in the published repository)")
+            continue
         try:
             docs[name] = json.loads(path.read_text())
             check(f"{name}.json parses", True, f"version {docs[name].get('version')}")
@@ -67,6 +74,7 @@ def checks() -> list[tuple[str, bool, str]]:
         ("models.evaluation.report", "report"), ("models.evaluation.report", "average_precision"),
         ("models.explanation.attention", "attention_over_batch"),
         ("models.explanation.attention", "input_attribution"),
+        ("models.explanation.world_model", "seed_explanations"),
     ]
     for module, attr in promised:
         try:
@@ -98,51 +106,46 @@ def checks() -> list[tuple[str, bool, str]]:
     check("attention capture is off by default", enc.explain is False)
     check("encoder exposes last_attention", hasattr(enc, "last_attention"))
 
-    # ---- yug.json: the 20-packet summary width, which a live buffer is sized from
-    from ingest.build.events import AGG_COLUMNS
-    y = docs.get("yug", {})
-    summary = next((m for m in y.get("messages", []) if "summary" in str(m.get("name", "")).lower()
-                    or m.get("kind") == 2), None)
-    check("yug.json has a 20-packet summary message", summary is not None)
-    if summary is not None:
-        declared = json.dumps(summary)
-        check(f"yug.json states the real AGG width ({len(AGG_COLUMNS)})",
-              str(len(AGG_COLUMNS)) in declared, f"AGG_COLUMNS = {len(AGG_COLUMNS)}")
+    # ---- live-sensor-schema.json: what the capture side provides must be what models.serving.live reads
+    y = docs.get("live-sensor", {})
+    if not y:
+        return out + _code_only_note()
+    from models.serving import live
+    provide, reads = y.get("provide", {}), y.get("how_the_model_reads_it", {})
+    check("live-sensor-schema.json names the file patterns the live service accepts",
+          all(pattern in provide.get("file_names", "") for pattern in live.CAPTURES), f"live.CAPTURES = {live.CAPTURES}")
+    window = live.main.__code__.co_consts                                   # the --window default lives in main()
+    check("live-sensor-schema.json keeps as many files as one window needs (16)",
+          "16" in provide.get("retention", "") and 16 in window, "live.py --window default")
+    check(f"live-sensor-schema.json states the {int(live.HOLD_S)} s hold", f"{int(live.HOLD_S)} s" in json.dumps(reads))
+    check("live-sensor-schema.json names the registry the live service reads by default",
+          "artifacts/current/serving.json" in reads.get("models", "")
+          and live.CURRENT.as_posix().endswith("artifacts/current/serving.json"))
+    check("live-sensor-schema.json gives a capture folder", bool(y.get("save_to", {}).get("folder")))
+    from ingest.sources.packets import PACKET_FIELDS
+    listed = [f.get("column") for f in y.get("columns_the_model_side_extracts", {}).get("packet_fields", {}).get("fields", [])]
+    check("live-sensor-schema.json lists the packet fields ingest extracts, in order",
+          listed == [f.name for f in PACKET_FIELDS], f"contract {len(listed)}, PACKET_FIELDS {len(PACKET_FIELDS)}")
 
-    # ---- yug.json: side features must match SIDE_COLUMNS
-    from models.context_encoder.data import SIDE_COLUMNS
-    side_fields = set()
-    for message in y.get("messages", []):
-        side_fields |= set((message.get("fields", {}) or {}).get("side", {}) or {})
-    if side_fields:
-        real = set(SIDE_COLUMNS) - {"event_id", "sender_node_id", "receiver_node_id"}
-        check("yug.json side fields are all real SIDE_COLUMNS", side_fields <= set(SIDE_COLUMNS),
-              f"unknown: {sorted(side_fields - set(SIDE_COLUMNS))}")
-        check("yug.json covers every side feature", real <= side_fields, f"missing: {sorted(real - side_fields)}")
-
-    # ---- yug.json: the record message width
-    from models.context_encoder.records import RECORD_COLUMNS
-    record = next((m for m in y.get("messages", []) if "record" in str(m.get("name", "")).lower()), None)
-    check("yug.json has a flow record message", record is not None)
-    if record is not None:
-        check(f"yug.json states the real record width ({len(RECORD_COLUMNS)})",
-              str(len(RECORD_COLUMNS)) in json.dumps(record), f"RECORD_COLUMNS = {len(RECORD_COLUMNS)}")
-
-    # ---- vedant.json: latent columns must match what the exporter actually writes
-    declared = list((docs.get("vedant", {}).get("input", {}).get("columns", {}) or {}))
+    # ---- latents-schema.json: latent columns must match what the exporter actually writes
+    declared = list((docs.get("latents", {}).get("input", {}).get("columns", {}) or {}))
     exported = None
-    for manifest in sorted(Path("data/latents").glob("*/*/latents_manifest.json")):
-        exported = json.loads(manifest.read_text()).get("columns")
-        if exported:
-            break
-    if declared and exported:
-        check("vedant.json latent columns match a real export", set(declared) == set(exported),
+    manifests = sorted([*Path("artifacts/current/latents").glob("*/latents_manifest.json"),
+                        *Path("data/latents").glob("*/*/latents_manifest.json")], key=lambda m: m.stat().st_mtime)
+    exporter = Path("models/compressor/latents.py").stat().st_mtime
+    if manifests and manifests[-1].stat().st_mtime >= exporter:          # an export older than the exporter proves nothing
+        exported = json.loads(manifests[-1].read_text()).get("columns")
+    if declared and not exported and manifests:
+        skip("latents-schema.json latent columns match a real export",
+             "every export on disk predates the current exporter (models/compressor/latents.py)")
+    elif declared and exported:
+        check("latents-schema.json latent columns match a real export", set(declared) == set(exported),
               f"only in doc: {sorted(set(declared) - set(exported))}; "
               f"only in export: {sorted(set(exported) - set(declared))}")
     elif declared:
-        skip("vedant.json latent columns match a real export", "no latents export on disk (data/ is not committed)")
+        skip("latents-schema.json latent columns match a real export", "no latents export on disk (data/ and artifacts/ are not committed)")
     else:
-        check("vedant.json latent columns match a real export", False, "no columns declared in the contract")
+        check("latents-schema.json latent columns match a real export", False, "no columns declared in the contract")
 
     # ---- files documented as removed must actually be absent
     for name, doc in docs.items():
@@ -170,6 +173,11 @@ def checks() -> list[tuple[str, bool, str]]:
 
 
 
+
+
+def _code_only_note() -> list[tuple[str, bool, str]]:
+    """The contract checks that could not run, as one skip line."""
+    return [("contract content checks", None, "the JSON contracts are not in this checkout")]
 
 
 def _paths(node, found=None) -> set[str]:
@@ -202,7 +210,7 @@ def _is_path(text: str) -> bool:
     text = text.strip()
     if " " in text or not text or text.startswith(("http", "-")):
         return False
-    return text.startswith(("data/", "models/", "tools/", "ingest/", "docs/")) and "." in text.rsplit("/", 1)[-1]
+    return text.startswith(("data/", "models/", "tools/", "ingest/", "docs/", "huggingface/")) and "." in text.rsplit("/", 1)[-1]
 
 
 def main() -> int:
