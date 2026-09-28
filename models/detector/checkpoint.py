@@ -55,11 +55,14 @@ def load_head(path: Path, device: str = "cpu") -> tuple[Head, np.ndarray, np.nda
 
 
 def save_calibration(path: Path, *, families: list[str], day: str, calib_benign: np.ndarray, test: np.ndarray,
-                     test_code: np.ndarray, test_attack: np.ndarray, t_obs: np.ndarray, sender: np.ndarray) -> None:
+                     test_code: np.ndarray, test_attack: np.ndarray, t_obs: np.ndarray, sender: np.ndarray,
+                     population: "np.ndarray | None" = None, test_hours: "float | None" = None) -> None:
     """Persist the score distributions a threshold sweep needs, so the sweep never refits the head.
 
     Input:  destination, family names, day, per-class scores on the calibration benign rows and on the test rows,
-            test class codes, test attack flag, test observation times, test sender ids
+            test class codes, test attack flag, test observation times, test sender ids, and optionally each test row's
+            observation population, so models.evaluation can report the two populations apart, and the test bands'
+            duration in hours (models.data.splits.band_hours), which every per-hour rate is divided by
     Output: none; writes a torch checkpoint
 
     Calibration benign scores set the threshold; the test arrays turn a threshold into recall, realised FPR, alarms
@@ -72,5 +75,7 @@ def save_calibration(path: Path, *, families: list[str], day: str, calib_benign:
         "calib_benign": np.asarray(calib_benign, np.float32), "test": np.asarray(test, np.float32),
         "test_code": np.asarray(test_code, np.int64), "test_attack": np.asarray(test_attack, bool),
         "t_obs": np.asarray(t_obs, np.float64), "sender": np.asarray(sender, np.int64),
+        **({"population": np.asarray(population).astype(str)} if population is not None else {}),
+        **({"test_hours": float(test_hours)} if test_hours is not None else {}),
     }, path)
     print(f"scores -> {path}", flush=True)
