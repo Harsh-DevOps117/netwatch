@@ -1,65 +1,59 @@
-# `models/flow_encoder` — the per-flow encoder (Block 7)
+# `models/flow_encoder` — flow encoder
 
-## Purpose
+Turns one network flow, as seen in its first 10 ms, into `h`: 32 numbers. It reads no other traffic. Every later stage
+starts from `h`. Design and figure: [docs/architecture.md §4](../../docs/architecture.md#4-flow-encoder).
 
-Produce one fixed-width embedding per network flow from the first packets visible inside a 10 ms observation budget,
-without any network context. It is the first learned stage and the input to everything after it.
+## How it works
 
-## Function
+Each flow becomes a small graph: one node per packet seen (up to 20) and one flow node holding the flow's 40-number
+summary. Two graph layers (GINEConv over packet-to-packet edges, SAGEConv from the flow node) update the packets; mean
+and max pooling plus the summary give `h`. It is trained as an **autoencoder on benign flows**: small decoders must
+rebuild the summary, the packets and the flow's full 20-packet summary from `h`. After training it is frozen.
 
-An autoencoder over a flow's early packet sequence and its aggregate features. Trained on benign flows only, so its
-reconstruction error is meaningful on its own, and frozen afterwards: no gradient from any later stage reaches it.
-
-~65,000 parameters, 32-wide output embedding (`h_split`).
+About 65,000 parameters in the encoder, 124,000 with the decoders.
 
 ## Files
 
 | file | role |
 |---|---|
-| `__main__.py` | CLI: fit, score a held-out day, export embeddings |
-| `train.py` | the fitting loop, early stopping, `embed()` |
-| `encoder.py` | the packet reader and the autoencoder |
+| `__main__.py` | command line: fit, evaluate, export |
+| `train.py` | training loop and `embed()` |
+| `encoder.py` | the packet graph, the graph layers and the autoencoder |
 | `export.py` | writes `flow_embeddings.parquet` and its manifest |
-| `metrics.py` | tied-rank average precision, anomaly score |
+| `metrics.py` | tie-aware average precision, anomaly score |
 
 ## Inputs and outputs
 
-**In:** `data/events/<day>/`, `data/processed/<day>/`
-**Out:**
-- `data/flow_embeddings/<side>/<day>/flow_embeddings.parquet` — one row per event, `event_id ↔ h` a bijection
-- `<save-scores>/<stem>.pt` — weights **and the input scaler**
+| | path |
+|---|---|
+| in | `data/events/<day>/`, `data/processed/<day>/` |
+| out: model | `<run>/b7/<stem>.pt` (weights **and** the input scaler), `<stem>_epochNN.pt`, `<stem>_history.csv` |
+| out: embeddings | `<run>/embeddings/split/<day>/flow_embeddings.parquet` + `flow_embeddings_manifest.json`, one row per event |
+
+`<run>` is a training run folder, `~/netwatch-data/runs/<stamp>/`. Columns: [docs/data.md](../../docs/data.md).
 
 ## Running
 
+The training script runs this stage ([docs/training.md](../../docs/training.md)). To run it alone:
+
 ```bash
-# leave-one-day-out, which is how every reported Block 7 number was produced
-uv run python -m models.flow_encoder \
-  --fit-day <days...> --cross-day <held-out day> \
-  --side split --budget-ms 10 --epochs 30 --patience 5 \
-  --save-scores data/model_cache/block7_serve \
-  --export data/flow_embeddings/split_serve
+uv run python -m models.flow_encoder --side split --packet-encoder gnn --budget-ms 10 \
+  --fit-day <every day> --cross-day <any one day> --sample 320000 --epochs 10 \
+  --save-scores <run>/b7 --export <run>/embeddings/split --export-days <every day>
 ```
 
-`--side split` keeps a flow's two directions apart and is what the context encoder and the detector read. `responder`
-and `initiator` exist for other arms.
+## Settings
 
-## Settings that matter
-
-| setting | value | reason |
+| setting | value | why |
 |---|---|---|
-| `--budget-ms` | **10** | The design's observation budget. Changing it invalidates every downstream artefact, because `t_obs` and the observation population both move. |
-| `--side` | **split** | What the context encoder and detector consume. |
-| `--fit-day` | all days, **for serving** | See below. |
+| `--budget-ms` | 10 | the observation budget; changing it changes every event's `t_obs` and every later stage |
+| `--side` | `split` | keeps a flow's two directions apart; what the context encoders and the detector read |
+| `--fit-day` | every day | a model fitted on some days only is an evaluation run, not one to serve |
+| `--sample` | 320,000 | events per day used for fitting; the export still embeds every event |
 
 ## Notes
 
-**A leave-one-day-out checkpoint is not servable.** `--fit-day A B --cross-day C` produces an evaluation artefact: it
-has never seen day C. Every checkpoint currently on disk is of that kind. A servable encoder must be fit with every day
-in `--fit-day`; the scores from such a run are contaminated, because each day is also a fit day, and must not be quoted.
-The checkpoint and the export are the deliverable there.
-
-**The input scaler travels with the weights** (see the IMPORTANT section of `docs/DEPLOYMENT_RUNBOOK.md`). `normalise()` fits its statistics on this run's sampled training rows,
-which depend on `--fit-day`, `--sample` and `--seed`. The checkpoint stores them (`format: block7-encoder-v1`) and
-`--load-from` restores them; checkpoints written before that change carry none, so loading one recomputes the statistics
-from the current invocation's sample and warns. The export manifest records a `normalisation_sha256` so a mismatch is
-detectable rather than silent.
+- **The input scaler is part of the model.** It is fitted on the sampled benign training rows and stored in the checkpoint;
+  the export manifest records its hash, so a mismatch is detected rather than silent.
+- When every day is a fit day, the run's own evaluation scores are not held out and should not be quoted; the
+  checkpoint and the export are what such a run is for.
