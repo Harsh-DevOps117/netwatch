@@ -11,7 +11,9 @@ tools/
   publish/       staging models and data for Hugging Face
   live/          StreamMeter.java (the lag service's flow meter) and stream_check.py (its equivalence check),
                  detect_check.py (the live detector against training), pcap_from_packets.py (captures rebuilt from a day)
-  setup_cicflowmeter.sh   fetches (git submodule, pinned), patches and builds tools/CICFlowMeter; run once after cloning
+  setup.sh                once after cloning: uv sync, CICFlowMeter, the published model (artifacts/current points at it),
+                          and the dataset if wanted (asks which set and days, or --dataset none|processed|model|both)
+  setup_cicflowmeter.sh   fetches (git submodule, pinned), patches and builds tools/CICFlowMeter; setup.sh runs it
   repo/          repository checks
 ```
 
@@ -48,7 +50,7 @@ differs and not even PR-AUC is comparable. To choose the detector's operating po
 |---|---|
 | `huggingface.py` | stages `artifacts/huggingface/model/` and `artifacts/huggingface/dataset/` from `artifacts/current` (or `--bundle <run>`), with the cards Hugging Face shows, and prints the upload command; staging is separate from uploading so the contents can be checked first |
 | `to_safetensors.py` | converts a checkpoint to safetensors plus a JSON config after checking every tensor is bit-identical; `--to-pt` converts back. Called by `huggingface.py --what model` |
-| `download.py` | downloads a published model into `artifacts/huggingface/download/<repo>/` and rebuilds it as servable `.pt` files with a `serving.json` |
+| `download.py` | downloads a published model into `artifacts/huggingface/download/<repo>/` and rebuilds it as servable `.pt` files with a `serving.json`; with `--dataset`, the chosen sets (`--sets processed model`) and days (`--days`) of the dataset |
 
 ```bash
 uv run python tools/publish/huggingface.py --what model   --user <account> --detector-day <day> --dry-run
