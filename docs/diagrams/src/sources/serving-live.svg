@@ -1,0 +1,90 @@
+<svg viewBox="0 0 1200 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">Lag forecast service (tag lag)</title>
+  <desc id="d">A capture writes a file every 30 seconds. Each cycle merges the latest 16 files, eight minutes, into one capture and ingests it with the training code. Flows that start in the first or last 120 seconds are dropped, because they may have begun before the window or may still be open; the rest are final, the same flows a whole-day ingest produces. The encoders, compressor and world model then run and answer GET /forecast. The state describes the network as of the newest packet minus 120 seconds, about 121 to 152 seconds ago, refreshed every 30 seconds.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="480" fill="#0b0e14"/>
+  <rect width="1200" height="480" fill="url(#grid)"/>
+  <rect width="1200" height="480" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">Lag forecast service (tag lag)</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">each finished capture file starts one cycle over the latest 16 files; only flows that are certainly complete are used</text>
+  <rect x="82" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="112.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="146" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="176.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="210" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="240.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="274" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="304.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="338" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="368.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="402" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="432.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="466" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="496.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="530" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="560.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="594" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="624.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="658" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="688.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="722" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="752.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="786" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="816.0" y="172" fill="#3fb950" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="850" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="880.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="914" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="944.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="978" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="1008.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="1042" y="150" width="60" height="34" rx="5" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="1072.0" y="172" fill="#8b949e" font-size="10.5" text-anchor="middle">30 s</text>
+  <rect x="1042" y="150" width="60" height="34" rx="5" fill="none" stroke="#e6edf3" stroke-width="2"><animate attributeName="stroke-opacity" values="0.2;1;0.2" dur="2s" repeatCount="indefinite"/></rect>
+  <text x="1072.0" y="140" fill="#e6edf3" font-size="10.5" text-anchor="middle">newest file</text>
+  <path d="M80,122 L80,116 L1104,116 L1104,122" fill="none" stroke="#8b949e"/>
+  <text x="592" y="108" fill="#e6edf3" font-size="11.5" text-anchor="middle">window: the latest 16 files (8 min); every packet is parsed once, and one CICFlowMeter reads all files as one stream</text>
+  <path d="M80,196 L80,202 L336,202 L336,196" fill="none" stroke="#8b949e"/>
+  <text x="208.0" y="218" fill="#8b949e" font-size="10.5" text-anchor="middle">first 120 s: a flow may have begun before the window</text>
+  <path d="M848,196 L848,202 L1104,202 L1104,196" fill="none" stroke="#8b949e"/>
+  <text x="976.0" y="218" fill="#8b949e" font-size="10.5" text-anchor="middle">last 120 s: a flow may still be open</text>
+  <path d="M336,196 L336,202 L848,202 L848,196" fill="none" stroke="#3fb950"/>
+  <text x="592" y="218" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">complete flows: final, identical to a whole-day ingest</text>
+  <line x1="1104" y1="240" x2="1104" y2="268" stroke="#e6edf3"/>
+  <text x="1104" y="284" fill="#e6edf3" font-size="10.5" text-anchor="middle">newest packet</text>
+  <line x1="848" y1="240" x2="848" y2="268" stroke="#7ee787" stroke-width="2"/>
+  <text x="848" y="284" fill="#7ee787" font-size="11" text-anchor="middle" font-weight="700">state_as_of = newest − 120 s</text>
+  <path d="M1100,254 L854,254" fill="none" stroke="#7ee787" stroke-width="1.5" marker-end="url(#ah_7ee787)"/>
+  <text x="1126.0" y="256" fill="#e6edf3" font-size="1" text-anchor="start"></text>
+  <text x="28" y="316" fill="#e6edf3" font-size="11.5" text-anchor="start">How old the answer is: the newest packet is up to one file (30 s) old when that file closes, the hold is 120 s, and a cycle takes some seconds,</text>
+  <text x="28" y="333" fill="#e6edf3" font-size="11.5" text-anchor="start">so the forecast shows the network about 121–152 s ago, refreshed every 30 s. The payload says so: source.state_as_of, source.lag_seconds.</text>
+  <rect x="28" y="372" width="170" height="52" rx="8" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4"/>
+  <text x="113" y="394" fill="#8b949e" font-size="12.5" text-anchor="middle" font-weight="700">parse the new file</text>
+  <text x="113" y="411" fill="#8b949e" font-size="10.5" text-anchor="middle">tshark, once per file</text>
+  <rect x="220" y="372" width="170" height="52" rx="8" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4"/>
+  <text x="305" y="394" fill="#8b949e" font-size="12.5" text-anchor="middle" font-weight="700">flow stream</text>
+  <text x="305" y="411" fill="#8b949e" font-size="10.5" text-anchor="middle">one CICFlowMeter, continuous</text>
+  <path d="M200,398 L218,398" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <rect x="412" y="372" width="170" height="52" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="497" y="394" fill="#3fb950" font-size="12.5" text-anchor="middle" font-weight="700">complete flows</text>
+  <text x="497" y="411" fill="#8b949e" font-size="10.5" text-anchor="middle">started ≥ 120 s ago</text>
+  <path d="M392,398 L410,398" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <rect x="604" y="372" width="170" height="52" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="689" y="394" fill="#bc8cff" font-size="12.5" text-anchor="middle" font-weight="700">encoders</text>
+  <text x="689" y="411" fill="#8b949e" font-size="10.5" text-anchor="middle">flow · context · compressor</text>
+  <path d="M584,398 L602,398" fill="none" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#ah_bc8cff)"/>
+  <rect x="796" y="372" width="170" height="52" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="881" y="394" fill="#3fb950" font-size="12.5" text-anchor="middle" font-weight="700">world model</text>
+  <text x="881" y="411" fill="#8b949e" font-size="10.5" text-anchor="middle">state + rollout</text>
+  <path d="M776,398 L794,398" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <rect x="988" y="372" width="170" height="52" rx="8" fill="#0b0e14" stroke="#7ee787" stroke-width="1.4"/>
+  <text x="1073" y="394" fill="#7ee787" font-size="12.5" text-anchor="middle" font-weight="700">GET /forecast</text>
+  <text x="1073" y="411" fill="#8b949e" font-size="10.5" text-anchor="middle">port 8901</text>
+  <path d="M968,398 L986,398" fill="none" stroke="#7ee787" stroke-width="1.5" marker-end="url(#ah_7ee787)"/>
+  <text x="28" y="452" fill="#8b949e" font-size="11" text-anchor="start">one cycle per finished capture file · capture with dumpcap -b duration:30 · the service itself needs no root</text>
+  <circle r="3.5" fill="#7ee787"><animateMotion dur="5s" repeatCount="indefinite" path="M200,398 L218,398 M392,398 L410,398 M584,398 L602,398 M776,398 L794,398 M968,398 L986,398"/></circle>
+</svg>
