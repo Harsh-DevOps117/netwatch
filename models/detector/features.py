@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
+from torch import nn
 
 from models.compressor.autoencoder import ENCODERS, EventAutoencoder
 from models.compressor.latents import context_vectors, frozen_context_encoder
@@ -12,7 +14,8 @@ from models.context_encoder.data import attack_slice, load_day, make_stream
 
 
 def load_features(day: str, context: Path | None = None, device: str = "cpu",
-                  events: int | None = None, family: str | None = None) -> tuple[dict, str]:
+                  events: int | None = None, family: str | None = None,
+                  embeddings_root: Path = Path("data/flow_embeddings")) -> tuple[dict, str]:
     """What the classifier reads: Block 7's split embedding, optionally with Block 8's context beside it.
 
     Input:  day, a Block 8 checkpoint to take context from (None for the embedding alone), device
@@ -22,23 +25,31 @@ def load_features(day: str, context: Path | None = None, device: str = "cpu",
     the neighbourhood and the flow messages all live in `s`. Passing a checkpoint here is what puts them in front of
     it, and the name in the report says which was measured.
     """
-    data = load_day(day, "split")
+    model8 = arm = None
+    if context is not None:
+        model8, arm = frozen_context_encoder(context, device)
+    # Only the late messages this Block 8 reads: the detection path's Block 8 is trained without flow records, and
+    # loading a day's records it never uses costs ~1.6 GB of RAM.
+    reads = set(model8.late) if model8 is not None else set()
+    data = load_day(day, "split", embeddings_root=embeddings_root, flows="flow" in reads, records="record" in reads)
     if events:
         keep = attack_slice(data, events, family)
         data = {k: v[keep] for k, v in data.items() if isinstance(v, np.ndarray)}
     x, name = data["h_split"], "h_split"
-    context = None
-    if context is not None:
-        model8, arm = frozen_context_encoder(context, device)
+    # `context` is the checkpoint path; `vectors` is what it produces. They were once the same name, which meant the
+    # path was overwritten with None before it could be tested -- so every run silently trained on h_split alone and
+    # reported that it had, while the gate below failed asking for a flag that had in fact been passed.
+    vectors = None
+    if model8 is not None:
         stream = make_stream(data, np.ones(len(data["sender"]), bool))
-        context = context_vectors(model8, stream, arm, device=device)
-        x = np.concatenate([x, context], 1)
+        vectors = context_vectors(model8, stream, arm, device=device)
+        x = np.concatenate([x, vectors], 1)
         name = "h_split+s"
     # sender / t_obs ride along so a consumer can group alerts by host and convert counts into a rate: the score
     # alone cannot say whether 6,000 false alarms are 6,000 incidents or six noisy hosts.
     return {"h": x, "sender": data["sender"], "receiver": data["receiver"], "t_obs": data["t_obs"],
             "label": data["label"], "population": data["population"], "split": data["split"],
-            "attack": data["attack"], "context": context}, name
+            "attack": data["attack"], "context": vectors}, name
 
 
 def benign_gate(compressor: Path, context: np.ndarray, device: str = "cpu", chunk: int = 4096) -> np.ndarray:
