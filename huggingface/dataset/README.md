@@ -128,8 +128,8 @@ Each day is a split, so one day can be loaded without fetching the rest.
 ```python
 from datasets import load_dataset
 
-events  = load_dataset("<account>/<repo>", "processed_events",  split="Friday_02_03_2018")
-latents = load_dataset("<account>/<repo>", "model_latents",     split="Friday_02_03_2018")
+events  = load_dataset("kaustuk000/netwatch-ids2018-events", "processed_events",  split="Friday_02_03_2018")
+latents = load_dataset("kaustuk000/netwatch-ids2018-events", "model_latents",     split="Friday_02_03_2018")
 ```
 
 Or read the parquet directly, which suits a table this wide:
@@ -138,7 +138,7 @@ Or read the parquet directly, which suits a table this wide:
 import pyarrow.parquet as pq
 from huggingface_hub import hf_hub_download
 
-path = hf_hub_download("<account>/<repo>", "model/latents/Friday-02-03-2018/event_latents.parquet",
+path = hf_hub_download("kaustuk000/netwatch-ids2018-events", "model/latents/Friday-02-03-2018/event_latents.parquet",
                        repo_type="dataset")
 table = pq.read_table(path)
 ```
