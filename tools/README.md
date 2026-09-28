@@ -55,7 +55,7 @@ differs and not even PR-AUC is comparable. To choose the detector's operating po
 ```bash
 uv run python tools/publish/huggingface.py --what model   --user <account> --detector-day <day> --dry-run
 uv run python tools/publish/huggingface.py --what dataset --user <account>
-uv run --with huggingface_hub python tools/publish/download.py --repo <account>/netwatch-flow-cascade
+uv run --with huggingface_hub python tools/publish/download.py --repo kaustuk000/netwatch-flow-cascade
 ```
 
 Full instructions: [docs/publishing.md](../docs/publishing.md). **The dataset is not MIT**: CSE-CIC-IDS2018 has its own
