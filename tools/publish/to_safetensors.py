@@ -21,7 +21,9 @@ from pathlib import Path
 import torch
 from safetensors.torch import load_file, save_file
 
-# Checkpoint keys whose value is a state_dict rather than a single tensor. Flattened as "<key>.<param>".
+# Checkpoint keys whose value is a state_dict rather than a single tensor. Flattened as "<key>.<param>". Any other dict
+# made only of tensors (the record encoder's `decoder`) is flattened the same way, and the config lists them all in
+# `nested_keys`; files written before that list existed are read with this fixed set.
 NESTED = ("model", "head", "encoder", "ae")
 
 
@@ -37,8 +39,11 @@ def flatten(checkpoint: dict) -> tuple[dict[str, torch.Tensor], dict]:
     """
     tensors: dict[str, torch.Tensor] = {}
     config: dict = {}
+    nested, numpy_keys = [], []
     for key, value in checkpoint.items():
-        if key in NESTED and isinstance(value, dict):
+        all_tensors = isinstance(value, dict) and bool(value) and all(isinstance(p, torch.Tensor) for p in value.values())
+        if (key in NESTED and isinstance(value, dict)) or all_tensors:
+            nested.append(key)
             for name, param in value.items():
                 if isinstance(param, torch.Tensor):
                     tensors[f"{key}.{name}"] = param.detach().cpu().contiguous()
@@ -51,12 +56,14 @@ def flatten(checkpoint: dict) -> tuple[dict[str, torch.Tensor], dict]:
         as_tensor = _maybe_tensor(value)
         if as_tensor is not None:
             tensors[key] = as_tensor
+            numpy_keys.append(key)                   # restored as numpy, so the file comes back as it went in
             continue
         try:
             json.dumps(value)
             config[key] = value
         except (TypeError, ValueError):
             config[key] = repr(value)
+    config["nested_keys"], config["numpy_keys"] = nested, numpy_keys
     return tensors, config
 
 
@@ -104,18 +111,20 @@ def unflatten(stem: Path) -> dict:
     Output: a dict the training and serving code can torch.save and load, as they load their own checkpoints
 
     For a consumer who downloaded the safetensors: the pickle is written locally from tensors they already trust.
-    Numpy scalers come back as tensors; values `flatten` had to repr stay strings.
+    Numpy arrays come back as numpy (files from before `numpy_keys` existed return them as tensors); values `flatten`
+    had to repr stay strings.
     """
     tensors = load_file(f"{stem}.safetensors")
     config = json.loads(Path(f"{stem}.config.json").read_text())
-    checkpoint = {k: v for k, v in config.items() if k not in ("source_checkpoint", "tensor_names")
-                  and not k.endswith("_non_tensor")}
+    nested, numpy_keys = set(config.get("nested_keys", NESTED)), set(config.get("numpy_keys", ()))
+    checkpoint = {k: v for k, v in config.items() if k not in ("source_checkpoint", "tensor_names", "nested_keys",
+                                                               "numpy_keys") and not k.endswith("_non_tensor")}
     for name, tensor in tensors.items():
         key, _, param = name.partition(".")
-        if key in NESTED and param:
+        if key in nested and param:
             checkpoint.setdefault(key, {})[param] = tensor
         else:
-            checkpoint[name] = tensor
+            checkpoint[name] = tensor.numpy() if name in numpy_keys else tensor
     return checkpoint
 
 
@@ -140,7 +149,21 @@ def verify(destination: Path, source: Path) -> None:
             if tensor.is_floating_point() else torch.equal(tensor, other)
         if not same:
             raise SystemExit(f"{name}: values changed during conversion")
-    print(f"  verified: {len(original)} tensors identical to {source.name}")
+    # The round trip a consumer makes: every tensor and array of the original must come back, of the same kind. The
+    # tensor check above cannot see a field `flatten` turned into text -- how the record decoder was once lost.
+    lost = _arrays(torch.load(source, map_location="cpu", weights_only=False)).keys() - _arrays(unflatten(destination)).keys()
+    if lost:
+        raise SystemExit(f"lost in the round trip: {sorted(lost)}")
+    print(f"  verified: {len(original)} tensors identical to {source.name}, round trip complete")
+
+
+def _arrays(value, prefix: str = "") -> dict:
+    """Every tensor and numpy array in a checkpoint, by path and kind."""
+    if isinstance(value, dict):
+        return {k: v for key, item in value.items() for k, v in _arrays(item, f"{prefix}/{key}").items()}
+    if isinstance(value, torch.Tensor) or _maybe_tensor(value) is not None:
+        return {(prefix, type(value).__name__): value}
+    return {}
 
 
 def main(argv: list[str] | None = None) -> int:
