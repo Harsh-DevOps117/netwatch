@@ -79,24 +79,24 @@ what was actually staged; the text below its `END GENERATED` marker is never tou
 
 ---
 
-## 3. Upload
+## 3. Download
+
+Each release is tagged (`v1.0.0`, then `v1.1.0` with the revised world model), and the cards carry the same version, so a
+consumer can pin one with `revision="v1.0.0"`.
+
+`tools/setup.sh` does this after a clone (and points `artifacts/current` at the download). By hand:
 
 ```bash
-huggingface-cli login
-huggingface-cli upload <account>/netwatch-flow-cascade   artifacts/huggingface/model   . --repo-type model
-huggingface-cli upload <account>/netwatch-ids2018-events artifacts/huggingface/dataset . --repo-type dataset --private
-```
-
-## Download
-
-```bash
-uv run --with huggingface_hub python tools/publish/download.py --repo <account>/netwatch-flow-cascade
+uv run --with huggingface_hub python tools/publish/download.py --repo <account>/netwatch-flow-cascade --revision v1.0.0
+uv run --with huggingface_hub python tools/publish/download.py --dataset <account>/netwatch-ids2018-events \
+    --revision v1.0.0 --sets processed model --days Friday-02-03-2018
 ```
 
 Writes the repository to `artifacts/huggingface/download/netwatch-flow-cascade/`, rebuilds every stage as `.pt` beside
 it (bit-exact, under the same names as `artifacts/current/`, every head as `detector/head_<day>.pt`) and writes a
 `serving.json` (the `lag` tag, and `live` when its pair was published), so the download can be served directly:
-`python -m models.serving.live --registry artifacts/huggingface/download/netwatch-flow-cascade/serving.json …`
+`python -m models.serving.live --registry artifacts/huggingface/download/netwatch-flow-cascade/serving.json …`. The
+dataset keeps the repository's layout, `artifacts/huggingface/download/netwatch-ids2018-events/<set>/<portion>/<day>/`.
 
 ---
 
