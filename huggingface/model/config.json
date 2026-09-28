@@ -3,10 +3,35 @@
   "task": "network-intrusion-detection",
   "observation_budget_ms": 10.0,
   "stages": {
-    "flow_encoder": {"file": "flow_encoder.safetensors", "output_width": 32, "frozen": true},
-    "context_encoder": {"file": "context_encoder.safetensors", "output_width": 100, "frozen": true},
-    "compressor": {"file": "compressor.safetensors", "latent_width": 32, "frozen": true},
-    "detector": {"file": "detector.safetensors", "input_width": 132, "hidden": 64}
+    "flow_encoder": {
+      "file": "flow_encoder.safetensors",
+      "output_width": 32,
+      "frozen": true
+    },
+    "context_encoder": {
+      "file": "context_encoder.safetensors",
+      "output_width": 100,
+      "frozen": true
+    },
+    "compressor": {
+      "file": "compressor.safetensors",
+      "latent_width": 32,
+      "frozen": true
+    },
+    "detector": {
+      "file": "detector.safetensors",
+      "input_width": 132,
+      "hidden": 64
+    },
+    "world_model": {
+      "file": "world_model.safetensors",
+      "reads": "compressor latent z (32) per event, in stream order",
+      "memory_width": 100,
+      "stateful": true,
+      "served_by_handler": false,
+      "serve": "python -m models.world_model.service (replay) or models.serving.live (live capture), from the source repository",
+      "threshold": "world_model.config.json: score, direction, serve_threshold (test recall 0.0 - not a working detector)"
+    }
   },
   "input": {
     "name": "features",
