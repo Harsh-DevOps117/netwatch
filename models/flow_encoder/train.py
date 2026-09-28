@@ -37,7 +37,7 @@ def train_autoencoder(
     model: FlowAutoencoder, data: dict, rows: np.ndarray, val_rows: np.ndarray,
     *, epochs: int = 5, batch_size: int = 1024, lr: float = 1e-3, device: str = "cpu",
     seed: int = 0, workers: int = 0, patience: int = 0,
-    schedule: str = "none", board=None, resume: "Path | None" = None,
+    schedule: str = "none", board=None, resume: "Path | None" = None, on_epoch=None,
 ) -> list[tuple[float, float]]:
     """Fit the autoencoder on benign rows only.
 
@@ -82,6 +82,8 @@ def train_autoencoder(
                       lr=optimiser.param_groups[0]["lr"])
         step_schedule(scheduler, metric=val if val == val else None)
         state.epoch, state.history = epoch + 1, [list(h) for h in history]
+        if on_epoch is not None:
+            on_epoch(epoch + 1, model)                   # e.g. keep this epoch's weights on disk
         if resume is not None:
             state.improved(val if val == val else float("inf"))
             state.save(resume, model, optimiser, scheduler)
