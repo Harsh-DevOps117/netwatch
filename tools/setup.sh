@@ -3,7 +3,7 @@
 #
 # Run:  tools/setup.sh                                   asks whether to download the dataset, and which part
 #       tools/setup.sh --dataset none|processed|model|both [--days <day> ...]    no questions
-# Env:  NETWATCH_HF_ACCOUNT   the Hugging Face account that hosts the two repositories (asked for when unset)
+# Env:  NETWATCH_HF_ACCOUNT   the Hugging Face account that hosts the two repositories (default kaustuk000)
 #       NETWATCH_REVISION     the release to fetch (default v1.0.0)
 #
 # The model lands in artifacts/huggingface/download/netwatch-flow-cascade/ and artifacts/current is pointed at it, so
@@ -14,7 +14,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
-ACCOUNT="${NETWATCH_HF_ACCOUNT:-}"
+ACCOUNT="${NETWATCH_HF_ACCOUNT:-kaustuk000}"
 REVISION="${NETWATCH_REVISION:-v1.0.0}"
 MODEL_REPO=netwatch-flow-cascade
 DATASET_REPO=netwatch-ids2018-events
@@ -48,7 +48,6 @@ echo "== 2/4 CICFlowMeter"
 tools/setup_cicflowmeter.sh
 
 echo "== 3/4 model ($REVISION)"
-[ -n "$ACCOUNT" ] || read -rp "Hugging Face account that hosts NetWatch: " ACCOUNT
 if ! hf_py tools/publish/download.py --repo "$ACCOUNT/$MODEL_REPO" --revision "$REVISION"; then
 	echo "model download failed. If the repository is private, log in and re-run:  uvx --from huggingface_hub hf auth login"
 	exit 1
