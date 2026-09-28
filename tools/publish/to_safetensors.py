@@ -97,6 +97,28 @@ def convert(source: Path, destination: Path) -> dict:
     return config
 
 
+def unflatten(stem: Path) -> dict:
+    """Rebuild a checkpoint dict from `<stem>.safetensors` and `<stem>.config.json`: the inverse of `flatten`.
+
+    Input:  the stem, without extension
+    Output: a dict the training and serving code can torch.save and load, as they load their own checkpoints
+
+    For a consumer who downloaded the safetensors: the pickle is written locally from tensors they already trust.
+    Numpy scalers come back as tensors; values `flatten` had to repr stay strings.
+    """
+    tensors = load_file(f"{stem}.safetensors")
+    config = json.loads(Path(f"{stem}.config.json").read_text())
+    checkpoint = {k: v for k, v in config.items() if k not in ("source_checkpoint", "tensor_names")
+                  and not k.endswith("_non_tensor")}
+    for name, tensor in tensors.items():
+        key, _, param = name.partition(".")
+        if key in NESTED and param:
+            checkpoint.setdefault(key, {})[param] = tensor
+        else:
+            checkpoint[name] = tensor
+    return checkpoint
+
+
 def verify(destination: Path, source: Path) -> None:
     """Check the safetensors file reproduces the original tensors exactly.
 
@@ -112,7 +134,11 @@ def verify(destination: Path, source: Path) -> None:
         raise SystemExit(f"tensor names differ: only in source {sorted(set(original) - set(restored))}, "
                          f"only in output {sorted(set(restored) - set(original))}")
     for name, tensor in original.items():
-        if not torch.equal(tensor, restored[name]):
+        # NaN never equals itself, and Block 10's last_seen buffer is NaN for every node not yet seen.
+        other = restored[name]
+        same = tensor.shape == other.shape and bool(((tensor == other) | (tensor.isnan() & other.isnan())).all()) \
+            if tensor.is_floating_point() else torch.equal(tensor, other)
+        if not same:
             raise SystemExit(f"{name}: values changed during conversion")
     print(f"  verified: {len(original)} tensors identical to {source.name}")
 
@@ -126,7 +152,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep-pt", action="store_true",
                         help="leave the .pt files in the staging directory. Off by default: publishing both invites "
                              "a consumer to load the pickle")
+    parser.add_argument("--to-pt", type=Path, default=None, metavar="STEM",
+                        help="the reverse: rebuild <source>.pt from STEM.safetensors + STEM.config.json, for the "
+                             "repository's own loaders (e.g. --to-pt world_model world_model.pt)")
     args = parser.parse_args(argv)
+
+    if args.to_pt:
+        if not args.source:
+            parser.error("--to-pt STEM needs the .pt path to write as the first argument")
+        torch.save(unflatten(args.to_pt), args.source)
+        print(f"  {args.to_pt.name}.safetensors -> {args.source}")
+        return 0
 
     if args.stage:
         found = sorted(args.stage.glob("*.pt"))
