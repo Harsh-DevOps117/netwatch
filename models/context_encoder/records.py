@@ -221,9 +221,12 @@ def main(argv: list[str] | None = None) -> int:
                              "mirror of Block 7: frozen before Block 8 ever sees it")
     parser.add_argument("--events", type=int, default=None, help="train on a slice of this many events")
     parser.add_argument("--family", default=None, help="the family the slice centres on")
+    parser.add_argument("--steps", type=int, default=200,
+                        help="optimisation steps for --train-encoder, each on 65,536 benign records drawn at random. "
+                             "200 left the loss still halving every 50 steps on a full day; watch it level off")
     args = parser.parse_args(argv)
     if args.train_encoder:
-        state = train_encoder(args.days[0], args.events, args.family)
+        state = train_encoder(args.days[0], args.events, args.family, epochs=args.steps)
         args.train_encoder.parent.mkdir(parents=True, exist_ok=True)
         torch.save(state, args.train_encoder)
         print(f"record encoder trained on {state['benign_rows']:,} benign flows -> {args.train_encoder}")
