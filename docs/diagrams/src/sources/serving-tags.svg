@@ -1,0 +1,72 @@
+<svg viewBox="0 0 1200 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">Serving tags</title>
+  <desc id="d">The lag tag reads capture files and uses only complete flows, so its state is about 150 s behind the wire. The live tag reads the detection stream, every flow 10 ms after its first packet, with a compressor and world model trained on the detection encoder&#x27;s output, and is a few seconds behind. serving.json names each tag&#x27;s models; resolve refuses a tag whose models are not trained. The table gives, for each attack, how often its next new target is still ahead when each tag serves.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="460" fill="#0b0e14"/>
+  <rect width="1200" height="460" fill="url(#grid)"/>
+  <rect width="1200" height="460" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">Serving tags</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">two inputs for the world model, served side by side; a forecast is useful only while its predictions are still ahead</text>
+  <rect x="28" y="110" width="220" height="70" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="138.0" y="141.5" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">capture files</text>
+  <text x="138.0" y="156.5" fill="#e6edf3" font-size="11" text-anchor="middle">complete flows (120 s timeout)</text>
+  <rect x="28" y="250" width="220" height="70" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="138.0" y="281.5" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700">packet stream</text>
+  <text x="138.0" y="296.5" fill="#e6edf3" font-size="11" text-anchor="middle">every flow at first packet + 10 ms</text>
+  <rect x="300" y="110" width="170" height="70" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="385.0" y="134.0" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700">tag: lag</text>
+  <text x="385.0" y="149.0" fill="#e6edf3" font-size="11" text-anchor="middle">forecasting encoder</text>
+  <text x="385.0" y="164.0" fill="#8b949e" font-size="11" text-anchor="middle">state ≈ 150 s behind</text>
+  <rect x="300" y="250" width="170" height="70" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="385.0" y="274.0" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700">tag: live</text>
+  <text x="385.0" y="289.0" fill="#e6edf3" font-size="11" text-anchor="middle">detection encoder</text>
+  <text x="385.0" y="304.0" fill="#8b949e" font-size="11" text-anchor="middle">state ≈ 1–4 s behind</text>
+  <path d="M248,145 L298,145" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <path d="M248,285 L298,285" fill="none" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ah_58a6ff)"/>
+  <rect x="520" y="84" width="250" height="270" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="534" y="106" fill="#e6edf3" font-size="13" text-anchor="start" font-weight="700">serving.json</text>
+  <text x="536" y="124" fill="#8b949e" font-size="11" text-anchor="start">written by every training run</text>
+  <text x="536" y="154" fill="#3fb950" font-size="12" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">lag  → its 4 models</text>
+  <text x="536" y="176" fill="#58a6ff" font-size="12" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">live → its 4 models</text>
+  <text x="536" y="214" fill="#e6edf3" font-size="12" text-anchor="start" font-weight="700">resolve(tag):</text>
+  <text x="536" y="234" fill="#e6edf3" font-size="11.5" text-anchor="start">models not trained</text>
+  <text x="536" y="250" fill="#ff7b72" font-size="11.5" text-anchor="start" font-weight="700">→ refused</text>
+  <text x="536" y="272" fill="#3fb950" font-size="11.5" text-anchor="start" font-weight="700">otherwise → the tag&#x27;s models</text>
+  <text x="536" y="312" fill="#8b949e" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">lag: GET :8901/forecast</text>
+  <text x="536" y="328" fill="#8b949e" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">live: GET :8902/forecast</text>
+  <path d="M470,145 L518,170" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <path d="M470,285 L518,250" fill="none" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ah_58a6ff)"/>
+  <rect x="790" y="84" width="390" height="350" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="804" y="106" fill="#bc8cff" font-size="13" text-anchor="start" font-weight="700">IS THE NEXT TARGET STILL AHEAD?</text>
+  <text x="806" y="126" fill="#8b949e" font-size="11" text-anchor="start">per attack event: wait until its host first reaches</text>
+  <text x="806" y="141" fill="#8b949e" font-size="11" text-anchor="start">a new target, against each tag&#x27;s lag (event stream only)</text>
+  <text x="1030" y="170" fill="#58a6ff" font-size="11" text-anchor="end" font-weight="700">live</text>
+  <text x="1152" y="170" fill="#3fb950" font-size="11" text-anchor="end" font-weight="700">lag</text>
+  <rect x="806" y="180" width="358" height="24" rx="5" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.1"/>
+  <text x="818" y="196" fill="#e6edf3" font-size="11.5" text-anchor="start">Infiltration</text>
+  <text x="1030" y="196" fill="#58a6ff" font-size="11.5" text-anchor="end" font-weight="700">98.5%</text>
+  <text x="1152" y="196" fill="#3fb950" font-size="11.5" text-anchor="end" font-weight="700">33.5%</text>
+  <rect x="806" y="210" width="358" height="24" rx="5" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.1"/>
+  <text x="818" y="226" fill="#e6edf3" font-size="11.5" text-anchor="start">Bot</text>
+  <text x="1030" y="226" fill="#58a6ff" font-size="11.5" text-anchor="end" font-weight="700">100%</text>
+  <text x="1152" y="226" fill="#3fb950" font-size="11.5" text-anchor="end" font-weight="700">98.3%</text>
+  <rect x="806" y="240" width="358" height="24" rx="5" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.1"/>
+  <text x="818" y="256" fill="#e6edf3" font-size="11.5" text-anchor="start">DoS-GoldenEye</text>
+  <text x="1030" y="256" fill="#58a6ff" font-size="11.5" text-anchor="end" font-weight="700">100%</text>
+  <text x="1152" y="256" fill="#3fb950" font-size="11.5" text-anchor="end" font-weight="700">96.6%</text>
+  <rect x="806" y="270" width="358" height="24" rx="5" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.1"/>
+  <text x="818" y="286" fill="#e6edf3" font-size="11.5" text-anchor="start">DoS floods, web attacks</text>
+  <text x="1152" y="286" fill="#8b949e" font-size="11" text-anchor="end">stay on one target</text>
+  <text x="806" y="322" fill="#e6edf3" font-size="11" text-anchor="start">floods need no forecast: the detector flags them</text>
+  <text x="806" y="338" fill="#e6edf3" font-size="11" text-anchor="start">within ~31 ms of each flow&#x27;s first packet</text>
+  <text x="806" y="378" fill="#8b949e" font-size="11" text-anchor="start">inputs checked against training:</text>
+  <text x="806" y="396" fill="#8b949e" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">lag  models.serving.parity</text>
+  <text x="806" y="412" fill="#8b949e" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">live tools/live/detect_check.py</text>
+  <text x="28" y="400" fill="#e6edf3" font-size="11" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">measured for a trained world model: python -m tools.measure.forecast_lead --latents &lt;day&gt; --checkpoint &lt;pt&gt;</text>
+  <text x="28" y="420" fill="#8b949e" font-size="11" text-anchor="start">the lag tag was called delay; that name still resolves</text>
+</svg>
