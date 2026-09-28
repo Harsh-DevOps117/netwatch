@@ -22,6 +22,7 @@ dependencies = [
     "safetensors>=0.4",
     # Training telemetry. torch.utils.tensorboard is a thin wrapper and needs the writer itself.
     "tensorboard>=2.21.0",
+    "scikit-learn>=1.9.1",
 ]
 
 [tool.uv]
