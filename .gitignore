@@ -76,8 +76,6 @@ credentials.json
 /huggingface/dataset/processed/
 /huggingface/dataset/model/
 
-# Third-party CICFlowMeter clone: its own repository, plus build output (~18 GB)
-/tools/CICFlowMeter/
 
 # ---------------------------------------------------------------------------
 # Model artefacts and large binaries, wherever they appear.
@@ -164,3 +162,13 @@ docs/STATUS_*.md
 # ---------------------------------------------------------------------------
 models/world_model_proxy/
 tools/world_model/
+
+# ---------------------------------------------------------------------------
+# Development-only documentation: current status, the team's JSON contracts,
+# experiment records and per-person guides. Kept locally, never published.
+# ---------------------------------------------------------------------------
+/docs/dev/
+/docs/diagrams/src/node_modules/
+
+# every model the project serves or publishes: promoted runs, Hugging Face staging and downloads
+/artifacts/
