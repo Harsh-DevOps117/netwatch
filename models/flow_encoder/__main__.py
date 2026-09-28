@@ -201,12 +201,33 @@ def main(argv: list[str] | None = None) -> int:
         history = []
     else:
         board = Telemetry(args.tensorboard, args.run_name)
+        checkpoint = lambda: {"format": "flow-encoder-v1", "model": model.state_dict(), "stats": stats,
+                              "side": args.side, "packet_encoder": args.packet_encoder, "budget_ms": args.budget_ms,
+                              "fit_days": list(args.fit_day), "sample": args.sample, "model_seed": model_seed}
+        epoch_file = lambda n: args.save_scores / f"{stem}_epoch{n:02d}.pt"
+        if args.save_scores:
+            args.save_scores.mkdir(parents=True, exist_ok=True)
         history = train_autoencoder(
             model, fit, train_rows, val_rows, epochs=args.epochs, batch_size=args.batch_size,
             device=device, seed=model_seed, workers=args.workers, patience=args.patience,
             schedule=args.lr_schedule, board=board, resume=args.resume,
+            on_epoch=(lambda n, _: torch.save({**checkpoint(), "epoch": n}, epoch_file(n))) if args.save_scores else None,
         )
         board.close()
+        # The best epoch by validation, from its file: after a resume the in-memory best only covers this session's
+        # epochs, and every epoch's weights are on disk anyway.
+        losses = [h[1] for h in history]
+        if args.save_scores and losses and np.isfinite(losses).any():
+            best = int(np.nanargmin(losses)) + 1
+            if epoch_file(best).exists():
+                model.load_state_dict(torch.load(epoch_file(best), map_location=device, weights_only=False)["model"])
+                print(f"  kept epoch {best} of {len(losses)} (validation {losses[best - 1]:.4f})", flush=True)
+        if args.save_scores:
+            # Per epoch: training loss and validation benign reconstruction. Held-out and cross-day scores (the test
+            # side) are in --results-csv.
+            args.save_scores.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(history, columns=["train_loss", "val_benign_loss"]).rename_axis("epoch").rename(
+                index=lambda i: i + 1).to_csv(args.save_scores / f"{stem}_history.csv")
     h_fit, err_fit = embed(model, fit, np.arange(len(fit_split)), device=device, workers=args.workers)
     h_cross, err_cross = embed(model, cross, cross_rows, device=device, workers=args.workers)
 
