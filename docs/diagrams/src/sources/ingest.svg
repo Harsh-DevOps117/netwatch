@@ -1,0 +1,99 @@
+<svg viewBox="0 0 1200 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <title id="t">Ingest: from packet captures to an event stream</title>
+  <desc id="d">A day&#x27;s captures are selected by their pcap header and first packet. tshark writes packets, CICFlowMeter writes two-way flows, and the published attack schedule labels both. An interval join maps each packet to its flow, and each flow is also written as an edge. The event stream builder turns a day&#x27;s flows, packets and map into one event per flow in six steps. Two more per-event tables, side features and flow records, are built for the context encoder.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="glow" cx="24%" cy="10%" r="55%"><stop offset="0%" stop-color="#e54d5e" stop-opacity="0.10"/><stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.05"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8b949e" stroke-opacity="0.6" stroke-width="2"/></pattern>
+    <marker id="ah_bc8cff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bc8cff"/></marker><marker id="ah_58a6ff" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/></marker><marker id="ah_8b949e" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker><marker id="ah_3fb950" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="ah_e6edf3" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="ah_39c5bb" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#39c5bb"/></marker><marker id="ah_f778ba" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f778ba"/></marker><marker id="ah_e3b341" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3b341"/></marker><marker id="ah_ff7b72" viewBox="0 0 10 10" refX="7.2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b72"/></marker>
+  </defs>
+  <rect width="1200" height="540" fill="#0b0e14"/>
+  <rect width="1200" height="540" fill="url(#grid)"/>
+  <rect width="1200" height="540" fill="url(#glow)"/>
+  <text x="28" y="40" fill="#e6edf3" font-size="20" text-anchor="start" font-weight="700">Ingest: from packet captures to an event stream</text>
+  <text x="28" y="62" fill="#8b949e" font-size="13" text-anchor="start">plain data processing, no learning · each capture becomes tables, then each day becomes one event stream</text>
+  <rect x="28" y="196" width="170" height="110" rx="8" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4"/>
+  <text x="113.0" y="232.5" fill="#8b949e" font-size="12" text-anchor="middle" font-weight="700">Captures</text>
+  <text x="113.0" y="247.5" fill="#e6edf3" font-size="11" text-anchor="middle">a day&#x27;s folder of files</text>
+  <text x="113.0" y="262.5" fill="#8b949e" font-size="11" text-anchor="middle">kept: pcap/pcapng header,</text>
+  <text x="113.0" y="277.5" fill="#8b949e" font-size="11" text-anchor="middle">first packet on that day</text>
+  <rect x="248" y="96" width="230" height="64" rx="8" fill="#0b0e14" stroke="#58a6ff" stroke-width="1.4"/>
+  <text x="363.0" y="117.0" fill="#58a6ff" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">packets.parquet</text>
+  <text x="363.0" y="132.0" fill="#e6edf3" font-size="11" text-anchor="middle">tshark · one row per packet</text>
+  <text x="363.0" y="147.0" fill="#8b949e" font-size="11" text-anchor="middle">29 columns incl. first 128 payload bytes</text>
+  <rect x="248" y="196" width="230" height="64" rx="8" fill="#0b0e14" stroke="#e3b341" stroke-width="1.4"/>
+  <text x="363.0" y="217.0" fill="#e3b341" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flows.parquet</text>
+  <text x="363.0" y="232.0" fill="#e6edf3" font-size="11" text-anchor="middle">CICFlowMeter · two-way flows, 76 statistics</text>
+  <text x="363.0" y="247.0" fill="#8b949e" font-size="11" text-anchor="middle">a flow ends at a FIN or 120 s after its start</text>
+  <rect x="248" y="296" width="230" height="64" rx="8" fill="#0b0e14" stroke="#ff7b72" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="363.0" y="317.0" fill="#ff7b72" font-size="12" text-anchor="middle" font-weight="700">5 label columns</text>
+  <text x="363.0" y="332.0" fill="#e6edf3" font-size="11" text-anchor="middle">the published attack schedule:</text>
+  <text x="363.0" y="347.0" fill="#8b949e" font-size="11" text-anchor="middle">attacker / victim IPs, windows, ports</text>
+  <text x="363" y="378" fill="#8b949e" font-size="10.5" text-anchor="middle">labels are for evaluation only</text>
+  <path d="M198,236 C216,236 218,128 232,128 L246,128" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M198,251 L246,228" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M363,296 L363,262" fill="none" stroke="#ff7b72" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_ff7b72)"/>
+  <rect x="528" y="96" width="240" height="64" rx="8" fill="#0b0e14" stroke="#bc8cff" stroke-width="1.4"/>
+  <text x="648.0" y="117.0" fill="#bc8cff" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_packet_map.parquet</text>
+  <text x="648.0" y="132.0" fill="#e6edf3" font-size="11" text-anchor="middle">interval join: same 5-tuple AND</text>
+  <text x="648.0" y="147.0" fill="#8b949e" font-size="11" text-anchor="middle">inside the flow&#x27;s time span</text>
+  <rect x="528" y="296" width="240" height="64" rx="8" fill="#0b0e14" stroke="#8b949e" stroke-width="1.4"/>
+  <text x="648.0" y="317.0" fill="#8b949e" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">edges.parquet</text>
+  <text x="648.0" y="332.0" fill="#e6edf3" font-size="11" text-anchor="middle">each flow as a timestamped edge</text>
+  <text x="648.0" y="347.0" fill="#8b949e" font-size="11" text-anchor="middle">between two hosts</text>
+  <path d="M478,128 L526,128" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M478,216 C496,216 496,146 512,146 L526,146" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M478,248 C498,252 498,328 512,328 L526,328" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <rect x="818" y="84" width="354" height="318" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="832" y="106" fill="#3fb950" font-size="13" text-anchor="start" font-weight="700">EVENT STREAM · one event per flow</text>
+  <circle cx="848" cy="124" r="11" fill="none" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="848" y="128" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">1</text>
+  <text x="870" y="122" fill="#e6edf3" font-size="12" text-anchor="start">start time from the first packet</text>
+  <text x="870" y="137" fill="#8b949e" font-size="11" text-anchor="start">microseconds, not CICFlowMeter&#x27;s 1 s</text>
+  <circle cx="848" cy="170" r="11" fill="none" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="848" y="174" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">2</text>
+  <text x="870" y="168" fill="#e6edf3" font-size="12" text-anchor="start">20 aggregates over the first 20 packets</text>
+  <text x="870" y="183" fill="#8b949e" font-size="11" text-anchor="start">size, TTL, window, gaps, flags, payload</text>
+  <circle cx="848" cy="216" r="11" fill="none" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="848" y="220" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">3</text>
+  <text x="870" y="214" fill="#e6edf3" font-size="12" text-anchor="start">drop the empty twin</text>
+  <text x="870" y="229" fill="#8b949e" font-size="11" text-anchor="start">of a forward / reverse duplicate</text>
+  <circle cx="848" cy="262" r="11" fill="none" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="848" y="266" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">4</text>
+  <text x="870" y="260" fill="#e6edf3" font-size="12" text-anchor="start">node ids per day</text>
+  <text x="870" y="275" fill="#8b949e" font-size="11" text-anchor="start">by first appearance; never across days</text>
+  <circle cx="848" cy="308" r="11" fill="none" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="848" y="312" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">5</text>
+  <text x="870" y="306" fill="#e6edf3" font-size="12" text-anchor="start">per-host history, earlier events only</text>
+  <text x="870" y="321" fill="#8b949e" font-size="11" text-anchor="start">dt_src, dt_dst, port_delta, dst_port_new</text>
+  <circle cx="848" cy="354" r="11" fill="none" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="848" y="358" fill="#3fb950" font-size="11" text-anchor="middle" font-weight="700">6</text>
+  <text x="870" y="352" fill="#e6edf3" font-size="12" text-anchor="start">orientation: reversed</text>
+  <text x="870" y="367" fill="#8b949e" font-size="11" text-anchor="start">a bare SYN, else the higher port; no label</text>
+  <path d="M768,128 C786,128 786,200 802,200 L816,200" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ah_8b949e)"/>
+  <path d="M478,228 L816,228" fill="none" stroke="#e3b341" stroke-width="1.5" marker-end="url(#ah_e3b341)"/>
+  <text x="648" y="220" fill="#e3b341" font-size="10.5" text-anchor="middle">flows</text>
+  <path d="M478,106 C620,62 790,62 806,118 L814,134" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah_58a6ff)"/>
+  <text x="648" y="90" fill="#58a6ff" font-size="10.5" text-anchor="middle">packets for the aggregates</text>
+  <rect x="818" y="424" width="170" height="58" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="903.0" y="449.5" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">events.parquet</text>
+  <text x="903.0" y="464.5" fill="#e6edf3" font-size="11" text-anchor="middle">one row per event, by t</text>
+  <rect x="1002" y="424" width="170" height="58" rx="8" fill="#0b0e14" stroke="#3fb950" stroke-width="1.4"/>
+  <text x="1087.0" y="449.5" fill="#3fb950" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">node_index.parquet</text>
+  <text x="1087.0" y="464.5" fill="#e6edf3" font-size="11" text-anchor="middle">node id ↔ IP, per day</text>
+  <path d="M903,402 L903,422" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <path d="M1087,402 L1087,422" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ah_3fb950)"/>
+  <rect x="248" y="424" width="250" height="58" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4"/>
+  <text x="373.0" y="442.0" fill="#39c5bb" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">side_features.parquet</text>
+  <text x="373.0" y="457.0" fill="#e6edf3" font-size="11" text-anchor="middle">sender, receiver, request / response</text>
+  <text x="373.0" y="472.0" fill="#8b949e" font-size="11" text-anchor="middle">counts, reply latency, as of t_obs</text>
+  <rect x="528" y="424" width="240" height="58" rx="8" fill="#0b0e14" stroke="#39c5bb" stroke-width="1.4"/>
+  <text x="648.0" y="442.0" fill="#39c5bb" font-size="12" text-anchor="middle" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">flow_records.parquet</text>
+  <text x="648.0" y="457.0" fill="#e6edf3" font-size="11" text-anchor="middle">69 record columns + record_time</text>
+  <text x="648.0" y="472.0" fill="#8b949e" font-size="11" text-anchor="middle">(the flow&#x27;s last packet)</text>
+  <path d="M816,453 L770,453" fill="none" stroke="#39c5bb" stroke-width="1.5" marker-end="url(#ah_39c5bb)"/>
+  <path d="M794,453 L794,504 L373,504 L373,484" fill="none" stroke="#39c5bb" stroke-width="1.5" marker-end="url(#ah_39c5bb)"/>
+  <text x="560" y="526" fill="#39c5bb" font-size="11" text-anchor="middle">built for the context encoder from the same day&#x27;s packets and flows, one row per event</text>
+  <circle r="3.5" fill="#58a6ff"><animateMotion dur="3.5s" repeatCount="indefinite" path="M198,236 C216,236 218,128 232,128 L246,128 M478,128 L526,128 M768,128 C786,128 786,200 802,200 L816,200"/></circle>
+  <circle r="3.5" fill="#e3b341"><animateMotion dur="2.5s" repeatCount="indefinite" path="M478,228 L816,228"/></circle>
+</svg>
