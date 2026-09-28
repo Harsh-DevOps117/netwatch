@@ -87,8 +87,8 @@ consumer can pin one with `revision="v1.0.0"`.
 `tools/setup.sh` does this after a clone (and points `artifacts/current` at the download). By hand:
 
 ```bash
-uv run --with huggingface_hub python tools/publish/download.py --repo <account>/netwatch-flow-cascade --revision v1.0.0
-uv run --with huggingface_hub python tools/publish/download.py --dataset <account>/netwatch-ids2018-events \
+uv run --with huggingface_hub python tools/publish/download.py --repo kaustuk000/netwatch-flow-cascade --revision v1.0.0
+uv run --with huggingface_hub python tools/publish/download.py --dataset kaustuk000/netwatch-ids2018-events \
     --revision v1.0.0 --sets processed model --days Friday-02-03-2018
 ```
 
