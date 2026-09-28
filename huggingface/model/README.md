@@ -64,8 +64,8 @@ Request shape for the endpoint:
 ```
 
 Feature extraction is **not** in the endpoint: it needs packet capture and a stream of every flow's history. The
-repository runs the whole chain on live traffic, from packets to verdict about 31 ms after a flow's first packet:
-`python -m models.serving.detect_live --interface <iface>`.
+repository ([github.com/Harsh-DevOps117/netwatch](https://github.com/Harsh-DevOps117/netwatch)) runs the whole chain,
+from packets to a verdict about 31 ms after a flow's first packet.
 
 ## The world model
 
@@ -76,13 +76,8 @@ forward without observations, it produces the forecast graph `S[t] → S[t+k]`.
 
 **It is not served by `handler.py`.** It is stateful: memory advances with every event in stream order and resets per
 day, so it cannot score an event on its own. Run it with the repository's code, which reads the same weights:
-
-```bash
-# the repository's loaders read .pt; rebuild it locally from the downloaded safetensors (bit-exact)
-uv run python tools/publish/to_safetensors.py world_model.pt --to-pt world_model
-uv run python -m models.world_model.service --load world_model.pt --latents <day latents> --node-index <node_index.parquet>
-# GET http://localhost:8900/forecast   -- observed links, predicted links with alternatives, threshold, explanation
-```
+`tools/setup.sh` fetches this model (rebuilt as `.pt`, bit-exact) and, if asked, the dataset
+([kaustuk000/netwatch-ids2018-events](https://huggingface.co/datasets/kaustuk000/netwatch-ids2018-events)).
 `model.memory` and `model.last_seen` in the file are per-day runtime state, not weights; they are reset before scoring.
 
 **Calibration, honestly.** `world_model.config.json` carries `score`, `direction`, `budget`, `thresholds` and
