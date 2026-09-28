@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+
+from models.data.splits import band_hours
 import pandas as pd
 import torch
 
@@ -57,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     head, mean, std = train_head(x[fit_rows], code[fit_rows], len(families) + 1, device=device, seed=args.seed)
     score = class_scores(head, mean, std, x, device=device)[:, target]
     attack = data["label"] == args.family
-    hours = float(data["t_obs"][test_rows].max() - data["t_obs"][test_rows].min()) / 3600.0
+    hours = band_hours(data["t_obs"], split)                  # the test bands' own duration, not first-to-last
     sender = torch.as_tensor(data["sender"].astype(np.int64))
     t_obs = torch.as_tensor(data["t_obs"])
     calib_benign = score[calib_rows][~attack[calib_rows]]
