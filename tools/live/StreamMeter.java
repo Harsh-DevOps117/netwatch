@@ -3,7 +3,13 @@ import cic.cs.unb.ca.jnetpcap.BasicPacketInfo;
 import cic.cs.unb.ca.jnetpcap.FlowFeature;
 import cic.cs.unb.ca.jnetpcap.PacketReader;
 import org.jnetpcap.PcapClosedException;
+import org.jnetpcap.PcapHeader;
+import org.jnetpcap.nio.JBuffer;
+import org.jnetpcap.packet.PcapPacket;
+import org.jnetpcap.protocol.lan.Ethernet;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -11,6 +17,8 @@ import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 /**
  * CICFlowMeter over one endless capture: every flow is written the moment it is final.
@@ -122,6 +130,41 @@ public class StreamMeter {
         markers.flush();
     }
 
+    // Windows has no POSIX FIFO. Read the same normalised PCAP bytes from stdin,
+    // then use CICFlowMeter's own jnetpcap decoder and flow rules unchanged.
+    void readStdin() throws IOException {
+        DataInputStream input = new DataInputStream(new BufferedInputStream(System.in));
+        byte[] global = new byte[24];
+        input.readFully(global);
+        ByteBuffer header = ByteBuffer.wrap(global).order(ByteOrder.LITTLE_ENDIAN);
+        if (header.getInt(0) != 0xa1b2c3d4 || header.getInt(20) != 1) {
+            throw new IOException("stdin must be a little-endian microsecond Ethernet PCAP");
+        }
+        byte[] record = new byte[16];
+        int first;
+        while ((first = input.read()) != -1) {
+            record[0] = (byte) first;
+            input.readFully(record, 1, 15);
+            ByteBuffer fields = ByteBuffer.wrap(record).order(ByteOrder.LITTLE_ENDIAN);
+            long seconds = Integer.toUnsignedLong(fields.getInt());
+            int micros = fields.getInt(), caplen = fields.getInt(), wirelen = fields.getInt();
+            if (caplen < 0 || caplen > 16 * 1024 * 1024) {
+                throw new IOException("invalid PCAP packet length: " + caplen);
+            }
+            byte[] bytes = new byte[caplen];
+            input.readFully(bytes);
+            PcapHeader captureHeader = new PcapHeader(caplen, wirelen);
+            captureHeader.hdr_sec(seconds);
+            captureHeader.hdr_usec(micros);
+            PcapPacket packet = new PcapPacket(captureHeader, new JBuffer(bytes));
+            packet.scan(Ethernet.ID);
+            BasicPacketInfo info = PacketReader.getBasicPacketInfo(packet, true, false);
+            if (info != null) {
+                add(info);
+            }
+        }
+    }
+
     public static void main(String[] args) throws IOException {
         if (args.length != 2) {
             System.err.println("usage: StreamMeter <capture or FIFO> <output CSV>");
@@ -134,16 +177,20 @@ public class StreamMeter {
             csv.println(FlowFeature.getHeader());
         }
         StreamMeter meter = new StreamMeter(csv, toStdout ? csv : new PrintWriter(System.out));
-        PacketReader reader = new PacketReader(args[0], true, false);                  // IPv4 only, as ifm.Cmd
-        while (true) {
-            BasicPacketInfo packet;
-            try {
-                packet = reader.nextPacket();
-            } catch (PcapClosedException end) {
-                break;
-            }
-            if (packet != null) {
-                meter.add(packet);
+        if (args[0].equals("-")) {
+            meter.readStdin();
+        } else {
+            PacketReader reader = new PacketReader(args[0], true, false);              // IPv4 only, as ifm.Cmd
+            while (true) {
+                BasicPacketInfo packet;
+                try {
+                    packet = reader.nextPacket();
+                } catch (PcapClosedException end) {
+                    break;
+                }
+                if (packet != null) {
+                    meter.add(packet);
+                }
             }
         }
         meter.finish();
