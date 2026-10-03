@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -55,61 +54,14 @@ func registerProtectionRoutes(mux *http.ServeMux, models *modelapi.Client) {
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(value)
 	}
-	mux.HandleFunc("/api/protection/key", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "GET required", http.StatusMethodNotAllowed)
-			return
-		}
-		_, err := protection.LoadAPIKey()
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			http.Error(w, "saved Groq API key is unavailable", http.StatusInternalServerError)
-			return
-		}
-		write(w, map[string]bool{"saved": err == nil})
-	})
-	mux.HandleFunc("/api/protection/key/save", func(w http.ResponseWriter, r *http.Request) {
-		var request struct {
-			APIKey string `json:"api_key"`
-		}
-		if !post(w, r, &request) {
-			return
-		}
-		if err := protection.SaveAPIKey(request.APIKey); err != nil {
-			http.Error(w, "could not save Groq API key: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		write(w, map[string]bool{"saved": true})
-	})
-	mux.HandleFunc("/api/protection/key/clear", func(w http.ResponseWriter, r *http.Request) {
-		var request struct{}
-		if !post(w, r, &request) {
-			return
-		}
-		if err := protection.ClearAPIKey(); err != nil {
-			http.Error(w, "could not clear Groq API key", http.StatusInternalServerError)
-			return
-		}
-		write(w, map[string]bool{"saved": false})
-	})
 	mux.HandleFunc("/api/protection/advice", func(w http.ResponseWriter, r *http.Request) {
-		var request struct {
-			protection.Identity
-			APIKey string `json:"api_key"`
-		}
+		var request protection.Identity
 		if !post(w, r, &request) {
 			return
 		}
-		if request.APIKey == "" {
-			var err error
-			request.APIKey, err = protection.LoadAPIKey()
-			if err != nil {
-				http.Error(w, "save a Groq API key before requesting guidance", http.StatusBadRequest)
-				return
-			}
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
-		plan, err := service.Advise(ctx, request.Identity, request.APIKey)
+		plan, err := service.Advise(ctx, request)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
