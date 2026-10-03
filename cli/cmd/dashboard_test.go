@@ -6,7 +6,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -131,34 +130,17 @@ func TestProtectionRouteRejectsCrossOriginAndMissingActionHeader(t *testing.T) {
 	}
 }
 
-func TestDashboardProtectionKeySaveAndClear(t *testing.T) {
-	config := t.TempDir()
-	if runtime.GOOS == "windows" {
-		t.Setenv("APPDATA", config)
-	} else {
-		t.Setenv("XDG_CONFIG_HOME", config)
-	}
+func TestDashboardProtectionGuideNeedsNoKey(t *testing.T) {
 	handler := dashboardHandler(newDashboardStore("test0"), modelapi.NewClient("", "http://127.0.0.1:8902/detections"))
-	request := httptest.NewRequest(http.MethodPost, "/api/protection/key/save", strings.NewReader(`{"api_key":"test-dashboard-secret"}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Netwatch-Action", "protection")
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "test-dashboard-secret") {
-		t.Fatalf("save response = %d %s", response.Code, response.Body.String())
+	for _, path := range []string{"/api/protection/key", "/api/protection/key/save", "/api/protection/key/clear"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("%s = %d, want no such route", path, response.Code)
+		}
 	}
-	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/protection/key", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"saved":true`) {
-		t.Fatalf("status response = %d %s", response.Code, response.Body.String())
-	}
-	request = httptest.NewRequest(http.MethodPost, "/api/protection/key/clear", strings.NewReader(`{}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Netwatch-Action", "protection")
-	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"saved":false`) {
-		t.Fatalf("clear response = %d %s", response.Code, response.Body.String())
+	if strings.Contains(dashboardHTML, "Groq") || strings.Contains(strings.ToLower(dashboardHTML), "api key") {
+		t.Fatal("the response guide is built on this machine; the dashboard must not ask for a key")
 	}
 }
 
@@ -244,7 +226,7 @@ func TestDashboardHTMLIsNotCached(t *testing.T) {
 		t.Fatalf("dashboard Cache-Control = %q, want no-store", got)
 	}
 	if !strings.Contains(response.Body.String(), `id="protectionFacts"`) {
-		t.Fatal("dashboard must show verified incident facts separately from Groq guidance")
+		t.Fatal("dashboard must show verified incident facts separately from the response guide")
 	}
 }
 
