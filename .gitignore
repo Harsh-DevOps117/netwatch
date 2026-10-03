@@ -29,6 +29,17 @@ htmlcov/
 coverage.xml
 
 # ---------------------------------------------------------------------------
+# Go
+#
+# The launch scripts keep Go's build and module caches inside the checkout
+# (GOCACHE and GOPATH), at the root or under cli/. Binaries are built, never tracked.
+# ---------------------------------------------------------------------------
+.gocache/
+.gopath/
+/cli/bin/
+*.exe
+
+# ---------------------------------------------------------------------------
 # Editors and operating systems
 # ---------------------------------------------------------------------------
 .vscode/
@@ -98,6 +109,9 @@ credentials.json
 *.db
 *.sqlite
 *.sqlite3
+# SQLite's write-ahead log and its index, beside a live database
+*.sqlite-wal
+*.sqlite-shm
 
 # Captures and archives
 *.pcap
