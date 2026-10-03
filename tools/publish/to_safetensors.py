@@ -15,9 +15,11 @@ the class order. Both are written together and both must be uploaded.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 from pathlib import Path
 
+import numpy as np
 import torch
 from safetensors.torch import load_file, save_file
 
@@ -125,7 +127,43 @@ def unflatten(stem: Path) -> dict:
             checkpoint.setdefault(key, {})[param] = tensor
         else:
             checkpoint[name] = tensor.numpy() if name in numpy_keys else tensor
+    # v1.0.0 published the flow encoder's nested numpy scalers as their repr.
+    # Recover the numbers using a strict data parser, never eval downloaded text.
+    if checkpoint.get("format") in ("flow-encoder-v1", "block7-encoder-v1") and isinstance(checkpoint.get("stats"), str):
+        checkpoint["stats"] = _legacy_stats(checkpoint["stats"])
     return checkpoint
+
+
+def _legacy_stats(value: str) -> dict:
+    """Read legacy numpy-array scaler metadata without executing Python code."""
+    def read(node):
+        if isinstance(node, ast.Constant) and type(node.value) in (str, int, float):
+            return node.value
+        if isinstance(node, (ast.List, ast.Tuple)):
+            values = [read(item) for item in node.elts]
+            return tuple(values) if isinstance(node, ast.Tuple) else values
+        if isinstance(node, ast.Dict):
+            return {read(key): read(item) for key, item in zip(node.keys, node.values)}
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            number = read(node.operand)
+            if type(number) in (int, float):
+                return -number if isinstance(node.op, ast.USub) else number
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "array"
+                and len(node.args) == 1 and len(node.keywords) == 1):
+            dtype = node.keywords[0]
+            if dtype.arg == "dtype" and isinstance(dtype.value, ast.Name) and dtype.value.id in ("float32", "float64"):
+                return np.asarray(read(node.args[0]), dtype=np.dtype(dtype.value.id))
+        raise ValueError("Unsupported expression in legacy flow-encoder scaler metadata")
+
+    stats = read(ast.parse(value, mode="eval").body)
+    if not isinstance(stats, dict) or not {"a", "pkt"}.issubset(stats):
+        raise ValueError("The published flow encoder is missing its normalisation statistics")
+    for pair in stats.values():
+        if (not isinstance(pair, (list, tuple)) or len(pair) != 2
+                or any(not isinstance(array, np.ndarray) or array.ndim != 1 or not np.isfinite(array).all()
+                       for array in pair) or pair[0].shape != pair[1].shape or np.any(pair[1] <= 0)):
+            raise ValueError("Invalid normalisation statistics in the published flow encoder")
+    return stats
 
 
 def verify(destination: Path, source: Path) -> None:
