@@ -13,7 +13,6 @@ import (
 	"detector/modelapi"
 	"detector/protection"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var protectService string
@@ -21,7 +20,7 @@ var protectDetectionsURL string
 
 var protectCmd = &cobra.Command{
 	Use:   "protect",
-	Short: "Get Groq guidance for a detector incident and optionally block one source IP",
+	Short: "Show the response guide for a detector incident and optionally block one source IP",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runProtection(cmd.Context(), protectService, protectDetectionsURL)
 	},
@@ -82,42 +81,13 @@ func runProtection(ctx context.Context, serviceName, override string) error {
 		return errors.New("invalid incident selection")
 	}
 	item := incidents[len(incidents)-index]
-	key := strings.TrimSpace(os.Getenv("GROQ_API_KEY"))
-	enteredKey := false
-	if key == "" {
-		key, err = protection.LoadAPIKey()
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-	}
-	if key == "" {
-		if !term.IsTerminal(int(os.Stdin.Fd())) {
-			return errors.New("save a Groq API key in the dashboard, set GROQ_API_KEY, or run protect in a terminal to enter it securely")
-		}
-		fmt.Print("Groq API key (hidden, saved after successful guidance): ")
-		secret, readErr := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if readErr != nil {
-			return readErr
-		}
-		key = strings.TrimSpace(string(secret))
-		enteredKey = true
-	}
-	adviceCtx, stopAdvice := context.WithTimeout(ctx, 25*time.Second)
-	plan, err := protectionService.Advise(adviceCtx, protection.Identity{Family: item.Family, Incident: item.Incident, OpenedAt: item.T}, key)
+	adviceCtx, stopAdvice := context.WithTimeout(ctx, 10*time.Second)
+	plan, err := protectionService.Advise(adviceCtx, protection.Identity{Family: item.Family, Incident: item.Incident, OpenedAt: item.T})
 	stopAdvice()
 	if err != nil {
 		return err
 	}
-	if enteredKey {
-		if err := protection.SaveAPIKey(key); err != nil {
-			fmt.Printf("Warning: guidance worked, but the key could not be saved: %v\n", err)
-		} else {
-			fmt.Println("Groq API key saved for this user. Clear it from the dashboard Protection page when no longer needed.")
-		}
-	}
-	key = ""
-	fmt.Printf("\nGroq guidance for incident #%d (%s):\n%s\n\n", plan.Incident, plan.Family, plan.Advice)
+	fmt.Printf("\nResponse guide for incident #%d (%s):\n%s\n\n", plan.Incident, plan.Family, plan.Advice)
 	if !plan.CanExecute {
 		fmt.Printf("Automatic host block unavailable: %s\n", plan.Reason)
 		return nil
