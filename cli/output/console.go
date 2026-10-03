@@ -187,6 +187,14 @@ func PrintWindowReport(index int, feat *features.WindowFeatures, alerts []alert.
 				fmt.Printf("%s│%s        %sTarget / Dest IP    :%s %s%s%s\n",
 					cardColor, colorReset, colorDim, colorReset, colorBold, a.DestinationIP, colorReset)
 			}
+			if a.SourceIP == "" && a.DestinationIP == "" {
+				scope := "Network-wide traffic"
+				if a.Protocol != "" {
+					scope = "Network-wide " + a.Protocol
+				}
+				fmt.Printf("%s│%s        %sScope               :%s %s%s%s (no individual source or target)\n",
+					cardColor, colorReset, colorDim, colorReset, colorBold, scope, colorReset)
+			}
 			fmt.Printf("%s│%s        %sDiagnostic Evidence :%s %s\n",
 				cardColor, colorReset, colorDim, colorReset, a.Reason)
 		}

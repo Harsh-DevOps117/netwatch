@@ -28,6 +28,14 @@ dependencies = [
 [tool.uv]
 package = false
 
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.pytest.ini_options]
 # A single test root mirroring the source layout: tests/models/ and tests/ingest/.
 testpaths = ["tests"]

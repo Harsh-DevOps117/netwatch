@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import errno
 import time
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
@@ -17,7 +18,17 @@ import pyarrow.parquet as pq
 FLOW_SUFFIX = "_Flow.csv"
 
 
-import fcntl
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
+
+def cicflowmeter_command(cic_dir: Path) -> list[str]:
+    """The platform's Gradle launcher with Netwatch's pinned-library overrides."""
+    launcher = (["cmd.exe", "/d", "/c", str(Path(cic_dir) / "gradlew.bat")]
+                if os.name == "nt" else ["./gradlew"])
+    return [*launcher, "-I", str(Path(__file__).resolve().parents[2] / "tools" / "repo" / "cicflowmeter.gradle")]
 
 class _CFMFileLock:
     """Serialise CICFlowMeter/Gradle invocations across processes.
@@ -35,14 +46,32 @@ class _CFMFileLock:
 
     def acquire(self, poll_interval: float = 0.5) -> None:
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self.fd = os.open(self.lock_path, os.O_CREAT | os.O_WRONLY)
-        # Blocks; the kernel manages the waiting queue.
-        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        self.fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR)
+        if os.name == "nt":
+            if os.fstat(self.fd).st_size == 0:
+                os.write(self.fd, b"\0")
+            while True:
+                os.lseek(self.fd, 0, os.SEEK_SET)
+                try:
+                    msvcrt.locking(self.fd, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as error:
+                    if error.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                        os.close(self.fd)
+                        self.fd = None
+                        raise
+                    time.sleep(poll_interval)
+        else:
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
 
     def release(self) -> None:
         if self.fd is not None:
             try:
-                fcntl.flock(self.fd, fcntl.LOCK_UN)
+                if os.name == "nt":
+                    os.lseek(self.fd, 0, os.SEEK_SET)
+                    msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(self.fd, fcntl.LOCK_UN)
                 os.close(self.fd)
             except OSError:
                 pass
@@ -114,7 +143,7 @@ def _run_cicflowmeter_once(
     with lock:
         process = subprocess.Popen(
             [
-                "./gradlew",
+                *cicflowmeter_command(cic_dir),
                 "--no-daemon",
                 # 512 MB is ample for one PCAP and caps swap pressure.
                 "-Dorg.gradle.jvmargs=-Xms64m -Xmx512m -Duser.timezone=UTC",

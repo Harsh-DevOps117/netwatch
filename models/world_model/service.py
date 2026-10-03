@@ -37,6 +37,7 @@ STAGE_UNAVAILABLE = ""
 
 # The ranking head's score, as `models.world_model.calibration` names it when that is the one it serves.
 TARGET = "target_probability"
+INCIDENT_GAP_S = 120.0
 
 
 def node_names(index: "Path | None") -> dict:
@@ -83,10 +84,66 @@ def severity(value: float, threshold: dict) -> str:
     Compared on the signed scale `direction * value` that calibration stored the thresholds on.
     """
     signed = threshold.get("direction", 1) * value
-    tightest = max(threshold["thresholds"].values(), default=threshold["threshold"])
+    tightest = max([threshold["threshold"], *threshold["thresholds"].values()])
     if signed >= tightest:
         return "HIGH"
     return "MEDIUM" if signed >= threshold["threshold"] else ""
+
+
+def observed_incidents(rows: dict, threshold: "dict | None", names: dict, *, gap: float = INCIDENT_GAP_S) -> list[dict]:
+    """Group observed world-model flags by link, without treating a forecast as an observation.
+
+    Three consecutive scored events on the same link must cross the served threshold.
+    A further crossing within ``gap`` seconds extends the same incident. These are
+    operational groupings over the current scored window, not validated incident FPR.
+    """
+    if threshold is None:
+        return []
+    score_name = threshold["score"]
+    direction = int(threshold["direction"])
+    cutoff = float(threshold["threshold"])
+    runs: dict[tuple[int, int], int] = {}
+    pending: dict[tuple[int, int], list[dict]] = {}
+    last_flag: dict[tuple[int, int], float] = {}
+    active: dict[tuple[int, int], dict] = {}
+    incidents: list[dict] = []
+    columns = ("event_id", "t", "surprise", "ranking", "sender", "receiver")
+    newest = float(rows["t"][-1]) if len(rows["t"]) else 0.0
+    for event_id, t, surprise, ranking, sender, receiver in zip(*(rows[c] for c in columns)):
+        key = (int(sender), int(receiver))
+        value = (max(dict(ranking).get(sender, 0.0), dict(ranking).get(receiver, 0.0))
+                 if score_name == TARGET else float(surprise))
+        if direction * value < cutoff:
+            runs.pop(key, None)
+            pending.pop(key, None)
+            continue
+        event_time = float(t)
+        if event_time > last_flag.get(key, float("-inf")) + gap:
+            runs.pop(key, None)
+            pending.pop(key, None)
+        runs[key] = runs.get(key, 0) + 1
+        last_flag[key] = event_time
+        event = {"event_id": int(event_id), "t": event_time,
+                 "sender_ip": names.get(key[0], str(key[0])),
+                 "receiver_ip": names.get(key[1], str(key[1])),
+                 "value": round(float(value), 6), "severity": severity(float(value), threshold)}
+        if runs[key] < 3:
+            pending.setdefault(key, []).append(event)
+            continue
+        incident = active.get(key)
+        if incident is None or event_time > incident["last_seen"] + gap:
+            incident = {"id": f"{event_time:.6f}:{key[0]}:{key[1]}", "opened": event_time,
+                        "last_seen": event_time, "sender_ip": names.get(key[0], str(key[0])),
+                        "receiver_ip": names.get(key[1], str(key[1])), "opening_score": round(float(value), 6),
+                        "events": 0, "related_events": [], "severity": severity(float(value), threshold)}
+            active[key] = incident
+            incidents.append(incident)
+        incident["last_seen"] = event_time
+        incident["related_events"].extend([*pending.pop(key, ()), event])
+        incident["events"] = len(incident["related_events"])
+        if severity(float(value), threshold) == "HIGH":
+            incident["severity"] = "HIGH"
+    return [incident for incident in incidents if incident["last_seen"] + gap >= newest][-30:]
 
 
 def forecast_payload(rollouts: list[dict], rows: dict, *, caveats: list[str], names: "dict | None" = None,
@@ -115,6 +172,7 @@ def forecast_payload(rollouts: list[dict], rows: dict, *, caveats: list[str], na
     latest = list(zip(*(list(rows[c])[-recent:] for c in columns)))
     links: dict = {}
     input_alerts = []
+    recent_events = []
     for event_id, t, surprise, ranking, sender, receiver in latest:
         if score == TARGET:
             ranked = dict(ranking)
@@ -126,6 +184,8 @@ def forecast_payload(rollouts: list[dict], rows: dict, *, caveats: list[str], na
         link["events"] += 1
         link["values"].append(value)
         level = judge(value)
+        recent_events.append({"event_id": int(event_id), "t": float(t), "sender_ip": ip(sender),
+                              "receiver_ip": ip(receiver), "value": round(value, 6), "severity": level})
         if level:
             if level == "HIGH" or not link["severity"]:
                 link["severity"] = level
@@ -175,7 +235,9 @@ def forecast_payload(rollouts: list[dict], rows: dict, *, caveats: list[str], na
         "score": score,
         "threshold": threshold,
         "source": source or {},
-        "observed": {"edges": list(links.values()), "alerts": input_alerts[-50:], "events": len(latest)},
+        "observed": {"edges": list(links.values()), "alerts": input_alerts[-50:],
+                     "recent_events": recent_events[-12:],
+                     "incidents": observed_incidents(rows, threshold, names), "events": len(latest)},
         "alerts": alerts,
         "current_state": "S[t]",
         "future_states": [f"S[t+{k}]" for k in steps],
@@ -188,7 +250,9 @@ def forecast_payload(rollouts: list[dict], rows: dict, *, caveats: list[str], na
         "predicted_stage": STAGE_UNAVAILABLE,
         "predicted_edges": predicted_edges,
         "rollout_steps": len(steps),
-        "caveats": caveats,
+        "caveats": caveats + (["observed incidents group three consecutive threshold crossings on a link with a "
+                               f"{INCIDENT_GAP_S:g}-second quiet gap; this grouping has no measured incident false-positive rate"]
+                              if threshold else []),
         "events_scored": int((source or {}).get("position", len(latest))),
         # Why each seed: the neighbours its initiator attended to. Layer 1 only; the global readout is network-wide.
         "explanation": explanation or [],
@@ -199,7 +263,8 @@ def caveats_for(threshold: "dict | None") -> list[str]:
     """What the panel must not let a reader assume."""
     out = [
         "this is a replay of a recorded day, not this machine's traffic: no live runner feeds Block 10 yet",
-        "each step's target is the ranking head's choice; a predicted link has not happened",
+        "S[t+k] means k imagined event steps on each seeded rollout, not k seconds or the next k actual network events: the rollout assumes a one-second internal gap "
+        "but does not predict an arrival time; a predicted link has not been observed or confirmed as an incident",
     ]
     if threshold is None:
         out.append("this checkpoint is uncalibrated, so nothing is alerted: run models.world_model.calibration")
@@ -264,9 +329,14 @@ class Handler(BaseHTTPRequestHandler):
     """Answers GET with the latest payload."""
 
     payload: dict = {}
+    mode_controller = None
 
     def do_GET(self) -> None:
-        body = json.dumps(self.payload).encode()
+        if self.path.rstrip("/") == "/threshold-mode" and self.mode_controller is not None:
+            ready = self.mode_controller.live_calibration is not None and self.mode_controller.live_calibration.status("world")["ready"]
+            body = json.dumps(self.mode_controller.threshold_mode.status(ready)).encode()
+        else:
+            body = json.dumps(with_live_age(self.payload)).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -274,8 +344,38 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self) -> None:
+        if self.path.rstrip("/") != "/threshold-mode" or self.mode_controller is None:
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 128:
+                raise ValueError("invalid request size")
+            mode = json.loads(self.rfile.read(length))["mode"]
+            ready = self.mode_controller.live_calibration is not None and self.mode_controller.live_calibration.status("world")["ready"]
+            result = self.mode_controller.threshold_mode.set(mode, ready)
+            status = 200
+        except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
+            result, status = {"error": str(error)}, 409
+        body = json.dumps(result).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, *args) -> None:
         """Silent: the dashboard polls this, and one access line per poll buries the startup output."""
+
+
+def with_live_age(payload: dict, now: float | None = None) -> dict:
+    """Keep the live state age truthful between expensive forecast cycles."""
+    source = payload.get("source") or {}
+    if source.get("mode") != "live" or source.get("state_as_of") is None:
+        return payload
+    age = max(0.0, (time.time() if now is None else now) - float(source["state_as_of"]))
+    return {**payload, "source": {**source, "lag_seconds": round(age, 1)}}
 
 
 def main(argv: "list[str] | None" = None) -> int:

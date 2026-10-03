@@ -12,8 +12,8 @@
 
 This project provides a standalone, high-performance, deterministic network threat detection and telemetry extraction engine written in idiomatic Go. It is designed to parse raw PCAP files, segment packets into time-bounded windows, extract deep statistical, packet-level, and relationship graph features, track bidirectional network flows, and apply deterministic rules to identify attack indicators in real-time or offline forensic mode.
 
-### The NTRO Context & Future World Model
-The ultimate goal of the NTRO problem statement is to build an **Attack Forecasting System** using a **World Model** that predicts how cyberattacks evolve over time.
+### The NTRO Context & World Model
+The CLI now consumes the local forecast and early-detection services while keeping deterministic packet telemetry as a separate evidence source.
 
 ```
 +-------------------------------------------------------------+
@@ -292,14 +292,73 @@ tshark -i eth0 -F pcap -w - | ./run.sh stdin
 # 5. Local dashboard: captures live traffic and opens the browser at 127.0.0.1 only
 ./run.sh dashboard --port 8787
 
-# 6. Build or Clean
+# 6. Read the lag forecast once (or add --watch 5s)
+./run.sh model --service lag
+
+# 7. Read forecasts with live early detections
+./run.sh model --service lag --detections --watch 5s
+
+# Alarm only on newly arriving observed incidents, or include raw event flags
+./run.sh model --service lag --watch 5s --world-alarm incident --detection-alarm both
+
+# 8. Start only the model dashboard when packet capture is unavailable
+./run.sh dashboard --capture=false --model-service lag
+
+# 9. Build or Clean
 ./run.sh build
 ./run.sh clean
+
+# 10. Response guide for a detector incident, with an optional confirmed host block
+./run.sh protect
 ```
 
-The dashboard uses Server-Sent Events to deliver completed real Netwatch windows,
-active flows, graph topology, and deterministic rule alerts. It does not send
-telemetry to a cloud service or generate placeholder packet data.
+The dashboard uses Server-Sent Events for completed capture windows and polls the
+local Go proxy for `GET /forecast` and `GET /detections`. The default forecast is
+the lag service at `127.0.0.1:8901`; choose `--model-service live` or `replay`, or
+override URLs explicitly. The page is self-contained and has no CDN dependency.
+It labels replay as recorded data, shows live state age, calibration, measured
+recall and every service caveat, and never presents forecast scores as calibrated
+probabilities. If tshark/tcpdump or capture permission is missing, the dashboard
+continues in model-only mode.
+
+Open **PCAP analysis** in the dashboard sidebar (or `/offline`) and use the
+upload form at the top of the page to ingest a `.pcap` or `.pcapng` file (up to
+128 MiB). The floating **Upload another PCAP** button returns to that form when
+results are scrolled down. Offline results split the last observed scored
+events from up to three imagined world-model event steps per seed path; the
+rollout has no wall-clock ETA. Jobs created before the observed-event timeline
+was added show aggregated observed links until the PCAP is analyzed again.
+
+The Protection page in the dashboard shows a response guide for a selected detector
+incident, and `protect` prints the same guide in the terminal. The guide is built
+on this machine from the incident's verified facts: family, opening score, active
+state, linked-event count and private/public source scope. One incident always
+reads the same, no key is needed and nothing is sent to an outside service. It
+says what the flag does and does not establish, what to check first for that
+family, what containment this host offers, and how to recover. Forecast links
+and raw event flags cannot activate protection. The guide is text only; the one
+action Netwatch can take is the block below. For an active incident with a single
+validated public source IPv4, an explicit `BLOCK <IP>` confirmation may add a
+host-firewall inbound block (`netsh` on Windows, `iptables` on Linux). The rule
+also supports a consistent private LAN source targeting this host when at least
+three linked events exist, but requires the stronger `BLOCK LAN <IP>` confirmation;
+blocking a LAN service or device can disrupt legitimate work. Local-host, reserved,
+and inconsistent sources remain ineligible. The red button becomes available only
+after the guide returns an eligible active-incident plan. A block rule
+remains after Netwatch exits (reboot persistence depends on the OS/firewall);
+the dashboard offers Undo while its process is running,
+and both UI and CLI print the manual removal command. Elevated firewall rights
+are needed; Windows requests UAC approval when the dashboard is not elevated.
+A single host block cannot stop a distributed flood; use upstream
+ISP/CDN controls for DDoS.
+
+The dashboard presents incidents as the operator-facing alerts and exposes
+their contributing event flags in each incident's drill-down; it never alarms
+on hypothetical forecast links. The CLI watch flags `--world-alarm` and
+`--detection-alarm` can include diagnostic event flags when explicitly chosen and ring
+the terminal bell for newly arriving matches. The first snapshot only primes the
+deduplicator, so old rows do not re-alarm when a watch starts. World incidents
+are operational 3-event/120-second groupings with no measured incident FPR.
 
 ---
 

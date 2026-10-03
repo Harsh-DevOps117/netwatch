@@ -8,47 +8,49 @@ import (
 	"time"
 
 	"detector/parser"
+	"detector/semantics"
 )
 
 type FlowRecord struct {
-	FlowID                  string    `json:"flow_id"`
-	Protocol                string    `json:"protocol"`
-	InitiatorIP             string    `json:"initiator_ip"`
-	InitiatorPort           uint16    `json:"initiator_port"`
-	ResponderIP             string    `json:"responder_ip"`
-	ResponderPort           uint16    `json:"responder_port"`
-	StartTime               time.Time `json:"start_time"`
-	LastSeen                time.Time `json:"last_seen"`
-	DurationSeconds         float64   `json:"duration_seconds"`
-	State                   string    `json:"state"`
-	ForwardPackets          int       `json:"fwd_packets"`
-	BackwardPackets         int       `json:"bwd_packets"`
-	TotalPackets            int       `json:"total_packets"`
-	ForwardBytes            int64     `json:"fwd_bytes"`
-	BackwardBytes           int64     `json:"bwd_bytes"`
-	TotalBytes              int64     `json:"total_bytes"`
-	ForwardPayloadBytes     int64     `json:"fwd_payload_bytes"`
-	BackwardPayloadBytes    int64     `json:"bwd_payload_bytes"`
-	FwdIATMeanMicroseconds  float64   `json:"fwd_iat_mean_us"`
-	BwdIATMeanMicroseconds  float64   `json:"bwd_iat_mean_us"`
-	FwdIATMaxMicroseconds   float64   `json:"fwd_iat_max_us"`
-	BwdIATMaxMicroseconds   float64   `json:"bwd_iat_max_us"`
-	FwdPacketLenMean        float64   `json:"fwd_pkt_len_mean"`
-	BwdPacketLenMean        float64   `json:"bwd_pkt_len_mean"`
-	SYNCount                int       `json:"syn_count"`
-	SYNACKCount             int       `json:"syn_ack_count"`
-	RSTCount                int       `json:"rst_count"`
-	FINCount                int       `json:"fin_count"`
+	semantics.Tags
+	FlowID                 string    `json:"flow_id"`
+	Protocol               string    `json:"protocol"`
+	InitiatorIP            string    `json:"initiator_ip"`
+	InitiatorPort          uint16    `json:"initiator_port"`
+	ResponderIP            string    `json:"responder_ip"`
+	ResponderPort          uint16    `json:"responder_port"`
+	StartTime              time.Time `json:"start_time"`
+	LastSeen               time.Time `json:"last_seen"`
+	DurationSeconds        float64   `json:"duration_seconds"`
+	State                  string    `json:"state"`
+	ForwardPackets         int       `json:"fwd_packets"`
+	BackwardPackets        int       `json:"bwd_packets"`
+	TotalPackets           int       `json:"total_packets"`
+	ForwardBytes           int64     `json:"fwd_bytes"`
+	BackwardBytes          int64     `json:"bwd_bytes"`
+	TotalBytes             int64     `json:"total_bytes"`
+	ForwardPayloadBytes    int64     `json:"fwd_payload_bytes"`
+	BackwardPayloadBytes   int64     `json:"bwd_payload_bytes"`
+	FwdIATMeanMicroseconds float64   `json:"fwd_iat_mean_us"`
+	BwdIATMeanMicroseconds float64   `json:"bwd_iat_mean_us"`
+	FwdIATMaxMicroseconds  float64   `json:"fwd_iat_max_us"`
+	BwdIATMaxMicroseconds  float64   `json:"bwd_iat_max_us"`
+	FwdPacketLenMean       float64   `json:"fwd_pkt_len_mean"`
+	BwdPacketLenMean       float64   `json:"bwd_pkt_len_mean"`
+	SYNCount               int       `json:"syn_count"`
+	SYNACKCount            int       `json:"syn_ack_count"`
+	RSTCount               int       `json:"rst_count"`
+	FINCount               int       `json:"fin_count"`
 
 	// Internal state tracking
-	lastFwdTime   time.Time
-	lastBwdTime   time.Time
-	fwdIATSumUs   float64
-	bwdIATSumUs   float64
-	fwdIATCount   int
-	bwdIATCount   int
-	fwdPktLenSum  int64
-	bwdPktLenSum  int64
+	lastFwdTime  time.Time
+	lastBwdTime  time.Time
+	fwdIATSumUs  float64
+	bwdIATSumUs  float64
+	fwdIATCount  int
+	bwdIATCount  int
+	fwdPktLenSum int64
+	bwdPktLenSum int64
 }
 
 type FlowTracker struct {
@@ -110,6 +112,7 @@ func (ft *FlowTracker) ProcessPacket(p *parser.ParsedPacket) {
 		}
 
 		flow = &FlowRecord{
+			Tags:          p.Tags,
 			FlowID:        key,
 			Protocol:      p.Protocol,
 			InitiatorIP:   srcIPStr,
@@ -129,6 +132,12 @@ func (ft *FlowTracker) ProcessPacket(p *parser.ParsedPacket) {
 	flow.DurationSeconds = math.Round(flow.LastSeen.Sub(flow.StartTime).Seconds()*1000) / 1000
 
 	isFwd := (srcIPStr == flow.InitiatorIP && p.SrcPort == flow.InitiatorPort)
+	if !isFwd {
+		// Only label a reverse packet as a response when this flow has a
+		// preceding request. TCP additionally needs established state.
+		corroborated := flow.ForwardPackets > 0 && (p.Protocol == "UDP" || (flow.SYNACKCount > 0 && (flow.State == "ESTABLISHED" || flow.State == "FIN_WAIT")))
+		p.Tags = semantics.Classify(semantics.Observation{Transport: p.Protocol, SrcIP: srcIPStr, DstIP: dstIPStr, SrcPort: p.SrcPort, DstPort: p.DstPort, Established: corroborated})
+	}
 
 	if isFwd {
 		flow.ForwardPackets++

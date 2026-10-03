@@ -201,6 +201,10 @@ class LinkMemory(nn.Module):
         # link -> slot. Unbounded: the link id *is* the slot, so every existing code path is unchanged.
         self.slot_of = (torch.arange(max(n_links, 1), device=device) if capacity is None
                         else torch.full((max(n_links, 1),), -1, dtype=torch.long, device=device))
+        # Inverse residency map: eviction must touch only the slots being
+        # recycled, not build a (all links x incoming links) comparison matrix.
+        self.link_at = (None if capacity is None else
+                        torch.full((slots,), -1, dtype=torch.long, device=device))
 
     def grow(self, n_links: int) -> None:
         """Extend the link -> slot map to ids below `n_links`, for a live stream whose links keep appearing.
@@ -235,11 +239,13 @@ class LinkMemory(nn.Module):
             missing = missing[:max(room, 0)]
             if len(missing):
                 free = torch.topk(self.used_at, len(missing), largest=False).indices
-                stale = torch.nonzero(self.slot_of[:, None] == free[None, :])
+                stale = self.link_at[free]
+                stale = stale[stale >= 0]
                 if len(stale):
-                    self.slot_of[stale[:, 0]] = -1
+                    self.slot_of[stale] = -1
                     self.evictions += len(stale)
                 self.slot_of[missing] = free
+                self.link_at[free] = missing
                 self.state[free], self.used[free], self.last[free] = 0.0, False, 0.0
             at = torch.where(links >= 0, self.slot_of[links.clamp(min=0)], torch.full_like(links, -1))
         self.used_at[at.clamp(min=0)] = self.clock

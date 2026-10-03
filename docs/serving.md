@@ -65,7 +65,7 @@ first capture file is still being written (`lag`), or before the first forecast 
 | `score` | the score alerts are judged on: `next_event_pred_error` (surprise) or `target_probability` (ranking head) |
 | `threshold` | `null` when the model is uncalibrated (then nothing alerts). Otherwise: `rule` in words (show this), `direction` (+1 alerts high, −1 low), `budget`, `threshold`, `calibrated_on`, and what was measured at it on test data: `fpr`, `recall`, `false_alarms`, per-hour rates, and the same with 3-in-a-row persistence |
 | `source` | `mode` (`replay`, or `live` for this machine's traffic — never present one as the other), `day`, `position`, `total`, `t`. For this machine's traffic also `tag` (`lag` or `live`), `state_as_of`, `lag_seconds`, `cycle`, `build_seconds`, `local_ips` (this machine's addresses, to draw it as the local node); `lag` adds `newest_packet`, `hold_seconds`, `captures`; `live` adds `window_seconds` |
-| `observed` | the current input: `edges` (per link: `sender_ip`, `receiver_ip`, `events`, `value`, `severity`), `alerts` (the latest events past the threshold), `events` |
+| `observed` | the current input: `edges` (per link: `sender_ip`, `receiver_ip`, `events`, `value`, `severity`), `alerts` (the latest scored events past the threshold), `incidents` (active operational groupings of three consecutive threshold crossings on one observed link, extended by a 120-second quiet gap), `events`. The incident grouping has no separately measured false-positive rate and is empty for uncalibrated models |
 | `predicted_edges` | one row per (seed, step): `step`, `seed_event`, `sender_ip`, `receiver_ip`, `probability`, `surprise`, `value`, `severity`, `candidates` (the leading alternative targets), `cumulative_risk`, `on_manifold`. **A predicted link has not happened** |
 | `alerts` | one per predicted link that crosses the threshold, at the first step it does (`crosses_at_step`) |
 | `current_state`, `future_states`, `rollout_steps` | `"S[t]"`, `["S[t+1]" … "S[t+K]"]`, `K` |
@@ -134,7 +134,7 @@ Run it with `python -m models.serving.parity --registry artifacts/current/servin
 | `models/serving/detect_live.py` | fast live detection: packets in, every flow scored 10 ms after its first packet (below) |
 | `models/serving/cascade.py` | the detection encoder and detector held in memory: an event's features in, a verdict out; the context encoder's memory carries across calls |
 | `models/serving/graph.py` | the stream's graph built incrementally: stable host ids, link ids, online neighbourhoods, time since last seen, reordering by `t_obs`. Each is checked against its offline twin |
-| `models/serving/emitter.py` | score to alert: 3 consecutive events above threshold on one host, and alerts with no quiet gap longer than 60 s merged into one incident |
+| `models/serving/emitter.py` | score to alert: 3 consecutive events above threshold on one host, and alerts with no quiet gap longer than 120 s merged into one incident |
 | `huggingface/model/` | a Hugging Face Inference Endpoint scoring the detector's 132-number input |
 
 Operating point: each family is served at its own threshold, committed into its head as `serve_threshold` at the 0.01%
@@ -164,7 +164,11 @@ uv run python -m models.serving.detect_live --pcap capture.pcap --once  # replay
 | detector | every head in `detector/` on `[h, s]`; each family alerts at its own committed threshold (0.01% budget), then the alert rules above |
 
 Models default to `artifacts/current` (`flow_encoder.pt`, `detection_encoder.pt`, `detector/head_*.pt`).
-`GET :8902/detections` returns the counters, recent detections, incidents and latency. With `--forecast` it also
+`GET :8902/detections` returns counters, recent detections, active `incidents`, and latency. The optional
+`--incident-db` stores opened incidents locally and returns up to 500 opened within the past three hours as
+`recent_incidents`, including those closed by the 120-second quiet gap. This history survives detector restarts;
+`--incident-import-log` can backfill earlier JSON-lines incident logs. Raw event flags are not incidents. With
+`--forecast` the detector also
 serves the `live` world-model tag at `GET :8902/forecast` ([§4](#4-serving-tags)). The launcher starts it behind a
 second `dumpcap` once a promoted run has `detection_encoder.pt`, with `--forecast` once it also has
 `live_world_model.pt`.
@@ -172,7 +176,17 @@ second `dumpcap` once a promoted run has `detection_encoder.pt`, with `--forecas
 **Latency.** Measured with a dataset capture paced in real time: a verdict 21 ms (median) and 37 ms (99th
 percentile) after `t_obs`, about 31 ms after a flow's first packet. On a quiet link the clock is the wall clock less
 `--grace` (20 ms), which gives `tshark` time to print packets captured just before `t_obs`. Under load, packets
-move the clock themselves.
+move the clock themselves. The live API measures verdict availability after inference and calibration, and exposes
+`packet_queue_depth` so a growing capture backlog is visible. When the queue is not empty, the runner does not
+advance to wall time ahead of unprocessed packets; under backlog it forms bounded larger batches to amortize model
+calls without changing the event or checkpoint thresholds.
+
+The live detector now reports `latency_from_first_packet_s` directly, in
+addition to `latency_after_t_obs_s`. Both are clamped at zero because packet
+timestamps can briefly be ahead of the serving wall clock; the cumulative
+`future_timestamp_events` count keeps that clock-skew condition visible.
+Adding the nominal 10 ms budget to `latency_after_t_obs_s` is not an exact
+capture-to-verdict measurement for flows that finish before the budget.
 
 **Throughput**, one CPU core: about 12,000 packets/s — 11,700 on 56,393 packets of DoS-Slowloris traffic, 12,500
 (2,440 flows/s) on 1,476,703 packets of DoS-Hulk traffic, peak memory 1.3 GB. The limit is Python's packet parsing
@@ -191,6 +205,13 @@ the queue.
 | the same events, at the served 0.01% thresholds | the verdict differs on 5 events (0.37%), all one burst of port probes from one host; median probability difference 2.5e-7 |
 
 **Where it can differ from training.**
+- The CICFlowMeter-trained live detector admits IPv4 TCP/UDP packets only.
+  `total_ip_packets`, `ipv6_packets_excluded`, and
+  `other_ipv4_protocol_packets_excluded` expose the actual coverage; no IPv6
+  score is inferred from the IPv4 checkpoint. Use
+  `python -m tools.live.drift_report <pcap-or-capture-folder>` to compare
+  unlabeled live prefix inputs with the checkpoint's training moments. This is
+  input drift, not measured false-positive performance.
 - A flow's 20-packet summary is final at its 20th packet or FIN. A shorter flow without a FIN is known to be finished
   only at the 120 s timeout, so its summary reaches link memory later than in training. Measured: `s` changed by at
   most 0.001 and no verdict changed.

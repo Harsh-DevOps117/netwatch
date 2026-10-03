@@ -1,871 +1,557 @@
 package cmd
 
+// dashboardHTML remains usable on an isolated monitoring host: it has no
+// remote dependencies and only loads the bundled Neue Machina font from the
+// local Go server.
 const dashboardHTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Netwatch | Network Intelligence</title>
-<!-- Tailwind CSS v4 CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-<!-- Google Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-
+<meta name="color-scheme" content="light dark">
+<title>Netwatch Intelligence Console</title>
+<script>
+(function(){
+  let preference='auto';
+  try{let query=new URLSearchParams(location.search).get('theme'),saved=localStorage.getItem('netwatch-theme');preference=saved==='dark'||saved==='light'?saved:(query==='dark'||query==='light'?query:'auto')}catch(error){}
+  window.netwatchThemePreference=preference;
+  document.documentElement.dataset.theme=preference==='auto'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):preference;
+})();
+</script>
 <style>
-  :root {
-    --bg-dark: #050505;
-    --bento-yellow: #e4ff00;
-    --bento-green: #0b5034;
-    --bento-pink: #ffcce0;
-    --bento-white: #ffffff;
-    --neon-green: #4ade80;
-    --neon-blue: #0ea5e9;
-    --panel-bg: #121212;
-  }
-
-  body {
-    font-family: 'Inter', sans-serif;
-    background-color: var(--bg-dark);
-    color: #ffffff;
-    overflow-x: hidden;
-  }
-
-  .font-display { font-family: 'Space Grotesk', sans-serif; }
-  .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-
-  /* Tab Active States */
-  .tab.active {
-    background-color: var(--bento-yellow) !important;
-    color: #000 !important;
-    box-shadow: 0 0 15px rgba(228, 255, 0, 0.4);
-  }
-
-  /* Bento Box Styles */
-  .bento-card {
-    border-radius: 32px;
-    padding: 28px;
-    position: relative;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.05);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
-  }
-  .bento-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
-  }
-
-  .bg-grad-pink-yellow {
-    background: linear-gradient(135deg, #ffd6e6 0%, #fff280 100%);
-    color: #000000;
-  }
-
-  /* Drag & Drop */
-  .dragging { opacity: 0.4; transform: scale(0.95) rotate(-1deg); }
-  .sortable { min-height: 50px; }
-  .grip { cursor: grab; opacity: 0.3; transition: opacity 0.2s; }
-  .grip:hover { opacity: 0.8; }
-  .grip:active { cursor: grabbing; }
-
-  /* Custom Scrollbar */
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: var(--bg-dark); }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-
-  .view { display: none; opacity: 0; }
-  .view.active { display: block; animation: viewFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-  @keyframes viewFadeIn {
-    from { opacity: 0; transform: translateY(15px) scale(0.99); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  /* Map Enhancements & Animations */
-  .map-edge { stroke-dasharray: 6 6; animation: dataFlow 15s linear infinite; }
-  .map-edge-fast { stroke-dasharray: 4 4; animation: dataFlow 5s linear infinite; }
-  @keyframes dataFlow { to { stroke-dashoffset: -200; } }
-
-  .pulse-ring { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-  @keyframes pulse { 0% { transform: scale(1); opacity: 0.8; stroke-width: 2px; } 100% { transform: scale(3); opacity: 0; stroke-width: 0.5px; } }
-
-  /* Utility patterns */
-  .pattern-grid { background-image: radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 24px 24px; }
-  .pattern-stripes { fill: url(#stripes); }
+@font-face{font-family:"Neue Machina";src:url("/assets/NeueMachina-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+:root{--bg:#fff;--surface:#f2f2f2;--surface2:#fff;--line:#e5e5e5;--text:#0f0f0f;--muted:#606060;--green:#2ba640;--cyan:#065fd4;--lime:#ff0000;--violet:#7c3aed;--amber:#fb8c00;--red:#ff0000;--red-hover:#cc0000;--shadow:0 1px 2px rgba(15,15,15,.08)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Neue Machina",Arial,system-ui,-apple-system,"Segoe UI",sans-serif}button,input{font:inherit}button{color:inherit}.mono{font-family:"Roboto Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace}.muted{color:var(--muted)}.hidden{display:none!important}
+.shell{min-height:100vh;display:grid;grid-template-columns:240px minmax(0,1fr);transition:grid-template-columns .2s ease}.sidebar{position:sticky;top:0;height:100vh;padding:16px 12px;border-right:1px solid var(--line);background:#fff;display:flex;flex-direction:column;z-index:10;overflow:visible;transition:padding .2s ease}.brand{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 8px 16px;overflow:hidden}.brand-mark{width:36px;height:36px;min-width:36px;border-radius:10px;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:900;letter-spacing:-.04em}.brand-copy{min-width:0;white-space:nowrap}.brand strong{display:block;font-size:18px;letter-spacing:-.02em}.brand small{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em}.rail-toggle{position:absolute;right:-13px;top:29px;width:26px;height:26px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow);z-index:2}.rail-toggle:hover{color:var(--red);border-color:#c9c9c9}.nav{display:grid;gap:4px}.nav button{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:42px;border:0;border-radius:10px;padding:9px 12px;background:transparent;text-align:left;color:var(--text);cursor:pointer;font-weight:500;overflow:hidden}.nav button:hover{background:var(--surface)}.nav button.active{background:var(--surface);font-weight:700}.nav button.active:before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:var(--red)}.nav-icon{width:24px;min-width:24px;text-align:center;color:var(--muted)}.nav-label{white-space:nowrap}.side-foot{margin-top:auto;border-top:1px solid var(--line);padding:14px 10px 4px}.side-foot>p{margin:12px 0 10px;font-size:11px;color:var(--muted)}.latency-aside h4{margin:0 0 9px;font-size:10px;text-transform:uppercase;letter-spacing:.12em}.lag-row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}.lag-row:last-child{border-bottom:0}.lag-row span{font-size:10px;color:var(--muted)}.lag-row strong{font-size:11px}.lag-note{display:block;margin-top:7px;color:var(--muted);font-size:9px;line-height:1.35}body.rail-collapsed .shell{grid-template-columns:76px minmax(0,1fr)}body.rail-collapsed .sidebar{padding-left:10px;padding-right:10px}body.rail-collapsed .brand{justify-content:center;padding-left:0;padding-right:0}body.rail-collapsed .brand-copy,body.rail-collapsed .nav-label,body.rail-collapsed .side-foot{display:none}body.rail-collapsed .nav button{justify-content:center;gap:0;padding:9px}body.rail-collapsed .nav-icon{font-size:15px}
+.main{min-width:0;padding:0 32px 48px;max-width:1600px;width:100%;margin:0 auto}.topbar{height:56px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);margin-bottom:32px}.topbar h1{font-size:16px;margin:0;font-weight:700}.topbar p{margin:1px 0 0;color:var(--muted);font-size:11px}.status-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.chip{display:inline-flex;align-items:center;gap:7px;min-height:32px;border:0;border-radius:999px;padding:6px 12px;color:var(--text);background:var(--surface);font-size:11px;font-weight:600}.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}.chip.good .dot{background:var(--green)}.chip.bad .dot{background:var(--red)}
+.view{display:none;animation:enter .18s ease}.view.active{display:block}@keyframes enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin:0 0 24px}.eyebrow{margin:0 0 7px;color:var(--red);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.16em}.section-head h2,.hero h2{margin:0;font-size:clamp(28px,3.4vw,44px);line-height:1.08;letter-spacing:-.035em}.section-head p{margin:8px 0 0;color:var(--muted);max-width:700px}.grid{display:grid;gap:16px}.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}.span-2{grid-column:span 2}.span-all{grid-column:1/-1}.card{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:none;min-width:0}.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}.card-head h3{font-size:15px;margin:0}.card-head p{font-size:11px;color:var(--muted);margin:4px 0 0}.kpi{min-height:116px;display:flex;flex-direction:column;justify-content:space-between;background:var(--surface);border-color:transparent}.kpi-label{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:700}.kpi-value{font-size:28px;font-weight:700;letter-spacing:-.035em}.kpi-note{font-size:11px;color:var(--muted)}
+.hero{position:relative;overflow:hidden;min-height:0;padding:26px 30px 30px;background:#101113;color:#fff;border:1px solid #292a2d;display:flex;flex-direction:column;gap:22px}.hero:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#ff3038}.hero:after{content:"";position:absolute;right:-100px;bottom:-250px;width:390px;height:390px;border:1px solid rgba(255,255,255,.08);border-radius:50%;pointer-events:none}.hero-header{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px}.hero-header .eyebrow{margin:0;color:#ff7378}.hero-header span{color:#9699a0;font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase}.hero-copy{position:relative;z-index:1;min-width:0;padding-top:20px;border-top:1px solid #34363a}.hero h2{max-width:960px;font-size:clamp(27px,3vw,42px);line-height:1.12;letter-spacing:-.035em}.hero-copy p{color:#b9bbc0;margin:10px 0 0;max-width:780px;font-size:13px;line-height:1.5}.hero-metrics{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;min-width:0;width:100%}.hero-metric{min-width:0;min-height:112px;padding:15px 17px;border-radius:10px;background:#202124;border:1px solid #37393d;display:flex;flex-direction:column;justify-content:space-between;gap:7px}.hero-metric .kpi-label{color:#b9bbc0;font-size:10px;line-height:1.25}.hero-measure{display:flex;align-items:baseline;gap:7px;min-width:0;flex-wrap:wrap}.hero-metric strong{display:block;color:#fff;font-size:clamp(22px,2.1vw,31px);line-height:1;letter-spacing:-.045em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.hero-unit{color:#d5d6da;font-size:11px;white-space:nowrap}.hero-metric .kpi-note{color:#a6a9af;font-size:10px;line-height:1.3}.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:10px}.legend span:before{content:"";display:inline-block;width:18px;height:3px;border-radius:9px;margin-right:6px;vertical-align:middle}.legend .observed:before{background:var(--cyan)}.legend .predicted:before{background:var(--red);border-top:1px dashed #fff}.legend .alternative:before{background:#909090}.legend .alerting:before{background:var(--amber)}
+.chart{min-height:230px;width:100%;overflow:hidden}.chart svg{display:block;width:100%;height:230px}.axis{fill:var(--muted);font-size:10px}.rate-card-head{flex-wrap:wrap}.rate-tabs{display:flex;gap:4px;padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}.rate-tabs button{border:0;border-radius:5px;background:transparent;color:var(--muted);padding:5px 8px;font-size:10px;cursor:pointer}.rate-tabs button.active{background:var(--surface2);color:var(--text);box-shadow:var(--shadow)}.rate-tabs button:focus-visible{outline:2px solid var(--red);outline-offset:2px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{border-collapse:collapse;width:100%;min-width:680px}th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;background:var(--surface);position:sticky;top:0}td{font-size:12px}tbody tr:hover{background:#fafafa}tbody tr:last-child td{border-bottom:0}.badge{display:inline-flex;border:0;border-radius:999px;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.badge.good{color:#176b29;background:#e6f4ea}.badge.warn{color:#8a4b00;background:#fff3e0}.badge.danger{color:#fff;background:var(--red)}.badge.info{color:var(--cyan);background:#e8f0fe}
+.empty{min-height:180px;border:1px dashed #c7c7c7;border-radius:12px;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);background:#fafafa}.empty strong{color:var(--text);display:block;margin-bottom:5px}.banner{border-radius:10px;padding:14px 16px;border:1px solid var(--line);margin-bottom:16px;border-left-width:4px}.banner.warn{background:#fff8ed;border-color:#f4d1a1;border-left-color:var(--amber);color:#743d00}.banner.danger{background:#fff1f1;border-color:#ffc5c5;border-left-color:var(--red);color:#8c0000}.banner.info{background:#f0f6ff;border-color:#c5d9f5;border-left-color:var(--cyan);color:#06428e}.banner p{margin:4px 0 0;color:inherit;opacity:.8;font-size:12px}.metric-list{display:grid;gap:10px}.metric-row{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:10px 0;border-bottom:1px solid var(--line)}.metric-row:last-child{border-bottom:0}.metric-row span{color:var(--muted);font-size:11px}.metric-row strong{font-size:12px;text-align:right;max-width:70%;overflow-wrap:anywhere}
+.state-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.state-toolbar input{accent-color:var(--red);min-width:190px;flex:1}.state-pill{background:var(--red);color:#fff;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800}.model-graph{height:430px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(#fafafa,#fff);overflow:hidden}.model-graph svg{width:100%;height:100%;display:block}.rank-list{display:grid;gap:8px}.rank-row{display:grid;grid-template-columns:44px 98px minmax(190px,1fr) 100px 90px;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--line)}.rank-row:last-child{border-bottom:0}.rank{font-weight:800;color:var(--red)}.link{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attention-list,.caveat-list,.alert-list{display:grid;gap:8px}.attention-item,.caveat,.alert-item{padding:13px 14px;border-radius:10px;background:var(--surface)}.attention-item strong,.alert-item strong{display:block;margin-bottom:4px}.attention-item p,.caveat,.alert-item p{margin:0;color:var(--muted);font-size:12px}.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.family{padding:14px;background:var(--surface);border-radius:10px}.family strong{display:block;font-size:22px}.family span{font-size:11px;color:var(--muted)}.subtle{font-size:11px;color:var(--muted)}
+.attention-matrix{overflow:auto;border:1px solid var(--line);border-radius:10px}.attention-matrix table{min-width:760px;table-layout:fixed}.attention-matrix th,.attention-matrix td{height:42px;width:74px;min-width:0;padding:6px 4px;text-align:center;border-right:1px solid var(--line)}.attention-matrix th:last-child,.attention-matrix td:last-child{border-right:0}.attention-matrix th:first-child,.attention-matrix td:first-child{position:sticky;left:0;z-index:1;width:168px;min-width:168px;max-width:168px;text-align:left;background:var(--surface);overflow:hidden;text-overflow:ellipsis}.attention-matrix th{font-size:8px;line-height:1.2;white-space:normal;overflow-wrap:anywhere}.attention-matrix td.heat{font-size:9px;font-weight:800;font-variant-numeric:tabular-nums}.matrix-note{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:9px}.matrix-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:5px 12px;margin-top:10px}.matrix-legend div{display:flex;gap:7px;align-items:baseline;min-width:0;font-size:9px;color:var(--muted)}.matrix-legend strong{flex:0 0 auto;color:var(--red)}.matrix-legend span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.system-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.system-card{min-width:0;min-height:132px;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.system-card.wide{grid-column:span 2}.system-label{display:block;margin-bottom:16px;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}.system-value{display:block;font-size:clamp(16px,1.7vw,24px);line-height:1.2;overflow-wrap:anywhere;word-break:break-word}.system-card.wide .system-value{font-size:13px;line-height:1.55}.system-note{display:block;margin-top:12px;color:var(--muted);font-size:10px}
+.offline-form{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.offline-form input[type=file]{min-width:0;max-width:100%;flex:1 1 260px;padding:12px;border:1px dashed var(--line);border-radius:9px;background:var(--surface)}.offline-form button{border:0;border-radius:9px;padding:12px 18px;background:var(--red);color:#fff;cursor:pointer;font-weight:700}.offline-form button:disabled{opacity:.5;cursor:wait}.offline-result{display:grid;gap:16px;margin-top:16px}.offline-result details{border:1px solid var(--line);border-radius:9px;padding:12px;margin:8px 0;background:var(--surface2)}.offline-result summary{cursor:pointer;font-weight:700}.offline-result .table-wrap{margin-top:10px}.offline-result .subtle{line-height:1.5}.offline-status{margin-top:14px;color:var(--muted);overflow-wrap:anywhere}
+.offline-upload-card{border-left:4px solid var(--red)}.offline-jump{position:fixed;right:24px;bottom:24px;z-index:9;border:0;border-radius:999px;padding:12px 17px;background:var(--red);color:#fff;box-shadow:0 8px 30px rgba(0,0,0,.18);font-weight:700;cursor:pointer}.offline-jump:hover{background:var(--red-hover)}.offline-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.offline-pane{min-width:0;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--surface2)}.offline-pane.past{border-top:3px solid var(--cyan)}.offline-pane.future{border-top:3px solid var(--red)}.offline-pane h5{margin:0 0 4px;font-size:13px}.offline-pane>p{margin:0 0 12px;color:var(--muted);font-size:11px}.offline-event{padding:10px 0;border-top:1px solid var(--line);font-size:11px}.offline-event:first-child{border-top:0}.offline-event strong{display:block;overflow-wrap:anywhere}.offline-event small{color:var(--muted)}.offline-step-tabs{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}.offline-step-tabs button{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:8px 11px;cursor:pointer}.offline-step-tabs button.active{background:var(--red);border-color:var(--red);color:#fff}.offline-step-tabs button:focus-visible,.offline-jump:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.model-graph.offline-graph{height:520px}.offline-graph svg{min-width:980px}.offline-timing{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.5}
+@media(max-width:800px){.offline-split{grid-template-columns:1fr}.offline-jump{right:12px;bottom:12px}.model-graph.offline-graph{height:420px}}
+@media(max-width:1100px){.shell,body.rail-collapsed .shell{grid-template-columns:1fr}.sidebar,body.rail-collapsed .sidebar{position:sticky;height:auto;top:0;padding:8px 16px;flex-direction:row;align-items:center;border-right:0;border-bottom:1px solid var(--line);overflow:auto}.brand,body.rail-collapsed .brand{justify-content:flex-start;padding:0 18px 0 0;min-height:40px}.brand-copy,body.rail-collapsed .brand-copy,.nav-label,body.rail-collapsed .nav-label{display:block}.brand small,.side-foot,.rail-toggle{display:none}.nav{display:flex}.nav button,body.rail-collapsed .nav button{white-space:nowrap;font-size:13px;justify-content:flex-start;gap:8px;padding:9px 12px}.nav-icon,body.rail-collapsed .nav-icon{display:none}.grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-3,.system-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.main{padding:0 16px 34px}.topbar{height:auto;padding:16px 0;align-items:flex-start;flex-direction:column}.status-row{justify-content:flex-start}.grid-4,.grid-3,.grid-2,.system-grid{grid-template-columns:1fr}.span-2,.span-all,.system-card.wide{grid-column:auto}.hero{padding:22px;gap:18px}.hero-header span{display:none}.hero-metrics{width:100%}.rank-row{grid-template-columns:45px 90px minmax(0,1fr)}.rank-row .rank-score,.rank-row .rank-severity{display:none}.model-graph{height:330px}.section-head{align-items:flex-start;flex-direction:column}.card{padding:16px}.sidebar,body.rail-collapsed .sidebar{padding:8px}.brand{display:none}.nav{min-width:max-content}.attention-matrix table{min-width:680px}.attention-matrix th:first-child,.attention-matrix td:first-child{width:140px;min-width:140px;max-width:140px}.system-card{min-height:110px}.system-value{font-size:18px}.system-card.wide .system-value{font-size:12px}}
+@media(max-width:900px){.hero-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-copy{max-width:760px}}
+@media(max-width:720px){.hero-metric{min-height:104px}}
+@media(max-width:420px){.hero-metrics{grid-template-columns:1fr}.hero-metric{min-height:88px}}
+.model-graph{height:740px;overflow:auto}.model-graph svg{width:100%;min-width:980px;height:auto;display:block}
+.model-graph.graph-empty{height:auto;min-height:180px;border:0;background:transparent}
+.graph-swipe-note{display:none}
+@media(max-width:720px){.model-graph{height:430px}.graph-swipe-note{display:block;color:var(--muted);font-size:11px;margin:8px 0 0}}
+:root{color-scheme:light;--topology-lane:#f7f9fc;--topology-aura:#fff6f6;--topology-aura-border:#ffe0e0;--topology-node:#fff;--topology-predicted-node:#fff1f1;--topology-node-border:#cbd5e1;--heat-rgb:255,0,0;--heat-weak-text:#111;--heat-strong-text:#fff}
+html[data-theme="dark"]{color-scheme:dark;--bg:#0b1018;--surface:#202a38;--surface2:#141c27;--line:#354153;--text:#edf2f9;--muted:#aebdd0;--green:#73dc87;--cyan:#83bdff;--amber:#ffbd69;--red:#ff6267;--red-hover:#ff8589;--shadow:0 2px 10px rgba(0,0,0,.3);--topology-lane:#1a2634;--topology-aura:#2d202a;--topology-aura-border:#56303a;--topology-node:#243142;--topology-predicted-node:#3b2530;--topology-node-border:#63758c;--heat-rgb:255,98,103;--heat-weak-text:#edf2f9;--heat-strong-text:#fff}
+.sidebar,.rail-toggle{background:var(--surface2)}
+.rail-toggle:hover{border-color:var(--muted)}
+.theme-toggle{cursor:pointer;border:1px solid var(--line);white-space:nowrap}
+.theme-toggle:hover,.theme-toggle:focus-visible{border-color:var(--red);background:var(--surface2)}
+.theme-toggle:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+tbody tr:hover{background:var(--surface)}
+.empty{background:var(--surface2);border-color:var(--line)}
+.model-graph{background:linear-gradient(var(--surface),var(--surface2))}
+.model-graph.graph-empty{background:transparent}
+html[data-theme="dark"] .badge.good{color:#b4f4bd;background:#193b30}
+html[data-theme="dark"] .badge.warn{color:#ffce88;background:#403022}
+html[data-theme="dark"] .badge.info{color:#b8d8ff;background:#22384f}
+html[data-theme="dark"] .banner.warn{color:#ffce88;background:#35291e;border-color:#725536;border-left-color:var(--amber)}
+html[data-theme="dark"] .banner.danger{color:#ffb9bc;background:#3b222a;border-color:#82434c;border-left-color:var(--red)}
+html[data-theme="dark"] .banner.info{color:#b8d8ff;background:#1d3044;border-color:#3e648a;border-left-color:var(--cyan)}
+html[data-theme="dark"] .attention-matrix td.heat{color:var(--text)!important}
+.calibration-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.calibration-stat{min-width:0;padding:13px 15px;border-radius:10px;background:var(--surface)}
+.calibration-stat span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.1em}
+.calibration-stat strong{display:block;margin-top:7px;font-size:16px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.calibration-disclaimer{margin:14px 0 18px;color:var(--muted);font-size:11px;line-height:1.5}
+.threshold-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 11px}
+.threshold-heading h4{margin:0;font-size:13px}.threshold-heading span{color:var(--muted);font-size:10px}
+.threshold-chart{display:grid;gap:0}
+.threshold-axis,.threshold-row{display:grid;grid-template-columns:minmax(140px,185px) minmax(0,1fr) 112px;align-items:center;gap:16px}
+.threshold-axis{padding:0 12px 8px;color:var(--muted);font-size:9px}
+.threshold-axis-scale{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
+.threshold-row{position:relative;width:100%;min-height:49px;padding:8px 12px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;cursor:help}
+.threshold-row:last-child{border-bottom:0}
+.threshold-row:hover,.threshold-row:focus-visible{z-index:3;background:var(--surface)}
+.threshold-row:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.threshold-row-name{font-size:11px;font-weight:700;overflow-wrap:anywhere}
+.threshold-row .badge{justify-self:end;white-space:nowrap;font-size:8px}
+.threshold-track{position:relative;display:block;height:24px;border:1px solid var(--line);border-radius:6px;background:repeating-linear-gradient(to right,var(--line) 0 1px,transparent 1px 25%),var(--surface2)}
+.threshold-span{position:absolute;top:11px;height:2px;background:var(--red);opacity:.65}
+.threshold-mark{position:absolute;top:5px;width:13px;height:13px;border-radius:50%;transform:translateX(-50%);box-shadow:0 0 0 2px var(--surface2)}
+.threshold-mark.checkpoint{background:var(--surface2);border:2px solid var(--muted)}
+.threshold-mark.served{background:var(--red);border:2px solid var(--red)}
+.threshold-tooltip{position:absolute;right:12px;top:calc(100% - 2px);z-index:5;display:none;min-width:230px;max-width:min(340px,calc(100vw - 40px));padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);box-shadow:var(--shadow);color:var(--text);font-size:10px;line-height:1.5;pointer-events:none}
+.threshold-tooltip strong{display:block;font-size:11px}.threshold-tooltip span{display:block;color:var(--muted)}
+.threshold-row:hover .threshold-tooltip,.threshold-row:focus-visible .threshold-tooltip{display:block}
+.threshold-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:10px}
+.threshold-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.threshold-legend .served{background:var(--red)}.threshold-legend .checkpoint{border:2px solid var(--muted)}
+.alarm-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.alarm-controls label{font-size:11px;font-weight:700}.alarm-controls select{min-height:34px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface2);color:var(--text);font:inherit}.alarm-controls .subtle{flex:1 1 270px}.alarm-toast{position:fixed;right:18px;bottom:18px;z-index:30;max-width:min(380px,calc(100vw - 36px));padding:14px 17px;border:1px solid var(--red);border-left-width:5px;border-radius:10px;background:var(--surface2);color:var(--text);box-shadow:0 10px 35px rgba(0,0,0,.22)}.alarm-toast strong{display:block;margin-bottom:4px}.alarm-toast span{font-size:11px;color:var(--muted)}
+.incident-trigger{border:0;background:transparent;padding:4px 0;color:var(--text);font-weight:700;text-align:left;cursor:pointer}.incident-trigger:hover,.incident-trigger:focus-visible{color:var(--red);text-decoration:underline}.incident-detail-cell{background:var(--surface);padding:16px!important}.incident-detail{max-height:420px;overflow:auto}.incident-detail h4{margin:0 0 8px}.incident-detail p{margin:0 0 12px;color:var(--muted)}.incident-detail table{width:100%;min-width:700px}
+@media(max-width:720px){.calibration-overview{grid-template-columns:1fr}.threshold-axis{display:none}.threshold-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}.threshold-track{grid-column:1/-1;grid-row:2}.threshold-tooltip{right:8px}}
+.graph-actions{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap}
+.graph-expand,.graph-close{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);padding:7px 11px;cursor:pointer;font-size:11px;font-weight:700}
+.graph-expand:hover,.graph-close:hover{border-color:var(--red);color:var(--red)}
+.graph-expand:focus-visible,.graph-close:focus-visible,#modelGraph:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+#modelGraph:not(.graph-empty){cursor:zoom-in}
+body.graph-modal-open{overflow:hidden}
+.graph-dialog{position:fixed;inset:0;width:calc(100vw - 32px);max-width:1600px;height:calc(100vh - 32px);max-height:1100px;margin:auto;padding:0;border:1px solid var(--line);border-radius:16px;background:var(--surface2);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.4);overflow:hidden}
+.graph-dialog::backdrop{background:rgba(5,10,18,.55);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.graph-dialog-panel{height:100%;display:flex;flex-direction:column;gap:12px;padding:18px}
+.graph-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.graph-dialog-head h2{font-size:18px;margin:0}.graph-dialog-head p{font-size:11px;color:var(--muted);margin:4px 0 0}
+.graph-dialog-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.graph-dialog .state-toolbar{flex:0 0 auto}.graph-dialog .legend{flex:0 0 auto}
+.expanded-graph{flex:1;min-height:0;height:auto;overflow:auto}
+.expanded-graph svg{width:100%;min-width:0;height:100%!important}
+.graph-dialog.detail .expanded-graph svg{width:1000px;min-width:1000px;height:auto!important;margin:0 auto}
+.graph-dialog-note{margin:0;color:var(--muted);font-size:10px}
+.protection-controls{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.protection-controls button{border:1px solid var(--line);border-radius:8px;padding:10px 13px;background:var(--surface);cursor:pointer}.protection-controls button.primary{border-color:var(--red);background:var(--red);color:#fff}.protection-controls button:disabled{opacity:.55;cursor:not-allowed}.protection-controls button.primary:disabled{border-color:var(--line);background:var(--surface);color:var(--muted);opacity:1}.protection-advice{overflow-wrap:anywhere;line-height:1.55;margin:12px 0;color:var(--text)}.protection-advice:empty{display:none}.protection-advice ul{margin:10px 0 0;padding-left:22px}.protection-advice li{margin:0 0 10px}.protection-advice p{margin:8px 0}.protection-advice strong{font-weight:700}.protection-facts{margin-top:14px;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);font-size:12px;line-height:1.5}.protection-facts:empty{display:none}.protection-status{min-height:18px;margin:8px 0;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.protection-label{display:block;margin:0 0 8px;font-size:11px;font-weight:700;color:var(--muted)}#protectionIncidentSelect{display:block;width:100%;max-width:520px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);color:var(--text)}#protectionIncidentSelect:disabled{opacity:.6}#protectionSelection{margin:11px 0 0}
+.protection-block-list{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:9px;background:var(--surface2)}.protection-block-list[hidden]{display:none}.protection-block-list h4{margin:0 0 5px}.protection-block-list>p{margin:0 0 10px;color:var(--muted);font-size:11px}.protection-block-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid var(--line)}.protection-block-row strong{display:block}.protection-block-row small{display:block;color:var(--muted);overflow-wrap:anywhere}.protection-block-row button{flex:none;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);padding:8px 12px;cursor:pointer}.protection-block-row button:disabled{opacity:.55;cursor:wait}@media(max-width:600px){.protection-block-row{align-items:flex-start;flex-direction:column}}
+@media(max-width:720px){.graph-actions{justify-content:flex-start}.graph-dialog{width:calc(100vw - 12px);height:calc(100vh - 12px);border-radius:10px}.graph-dialog-panel{padding:12px;gap:10px}.graph-dialog .state-toolbar input{min-width:120px}}
 </style>
 </head>
-<body class="antialiased selection:bg-[#e4ff00] selection:text-black min-h-screen flex flex-col">
-
-<!-- SVG Definitions -->
-<svg height="0" width="0" style="position:absolute">
-  <defs>
-    <pattern id="stripes" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-      <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" stroke-width="2.5" />
-    </pattern>
-    <linearGradient id="neonGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#e4ff00" />
-      <stop offset="100%" stop-color="#4ade80" />
-    </linearGradient>
-  </defs>
-</svg>
-
-<!-- Header -->
-<header class="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/10 h-20 flex items-center justify-between px-6 lg:px-10">
-  <div class="flex items-center gap-4 font-bold text-white tracking-tight text-2xl font-display">
-    <div class="w-12 h-12 rounded-xl bg-white text-black flex items-center justify-center relative overflow-hidden">
-      <div class="absolute inset-0 opacity-20 pattern-stripes"></div>
-      <svg viewBox="0 0 24 24" class="w-7 h-7 relative z-10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">NW</div><div class="brand-copy"><strong>Netwatch</strong><small>Broadcast console</small></div></div>
+    <button class="rail-toggle" id="railToggle" type="button" aria-label="Collapse navigation" aria-expanded="true" title="Collapse navigation">&lsaquo;</button>
+    <nav class="nav" aria-label="Dashboard sections">
+      <button class="active" data-view="overview"><span class="nav-icon">⌁</span>Overview</button>
+      <button data-view="forecast"><span class="nav-icon">◇</span>Forecast</button>
+      <button data-view="detections"><span class="nav-icon">◎</span>Incidents</button>
+      <button data-view="protection"><span class="nav-icon">◇</span>Protection</button>
+      <button data-view="network"><span class="nav-icon">⌘</span>Network</button>
+      <button data-view="offline"><span class="nav-icon">▣</span>PCAP analysis</button>
+      <button data-view="system"><span class="nav-icon">◫</span>System</button>
+    </nav>
+    <div class="side-foot">
+      <div class="latency-aside"><h4>Pipeline lag</h4><div class="lag-row"><span>Detection</span><strong class="mono" id="detectionLag">waiting</strong></div><div class="lag-row"><span>World model</span><strong class="mono" id="worldLag">waiting</strong></div><small class="lag-note" id="lagNote">Measured from original capture time.</small></div>
+      <p>Forecasts are model outputs, not facts. Detection remains the primary alert source.</p><span class="badge info">local only</span>
     </div>
-    Netwatch
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><h1>Network intelligence</h1><p id="topSubtitle">Waiting for local services</p></div>
+      <div class="status-row">
+        <button class="chip theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><span aria-hidden="true" id="themeIcon">☾</span><span id="themeLabel">Dark mode</span></button>
+        <span class="chip" id="captureChip"><i class="dot"></i><span>Capture waiting</span></span>
+        <span class="chip" id="detectionChip"><i class="dot"></i><span>Detection checking</span></span>
+        <span class="chip" id="modelChip"><i class="dot"></i><span>Forecast checking</span></span>
+        <span class="chip"><span class="mono" id="clock">--:--:--</span></span>
+      </div>
+    </header>
+
+    <section class="view active" id="overview">
+      <div class="hero card">
+        <div class="hero-header"><p class="eyebrow">Live posture</p><span>Capture + model telemetry</span></div>
+        <div class="hero-metrics"><div class="hero-metric"><span class="kpi-label">Packet rate</span><div class="hero-measure"><strong id="heroRate">—</strong><span class="hero-unit">packets/s</span></div><span class="kpi-note">Measured capture rate</span></div><div class="hero-metric"><span class="kpi-label">Network throughput</span><div class="hero-measure"><strong id="heroThroughput">—</strong></div><span class="kpi-note" id="throughputWindow">Latest completed capture window</span></div><div class="hero-metric"><span class="kpi-label">Detection throughput</span><div class="hero-measure"><strong id="detectionRate">—</strong><span class="hero-unit">events/s</span></div><span class="kpi-note">Scored · last 30 s</span></div><div class="hero-metric"><span class="kpi-label">World-model throughput</span><div class="hero-measure"><strong id="worldRate">—</strong><span class="hero-unit">events/s</span></div><span class="kpi-note">New scored · last cycle</span></div></div>
+        <div class="hero-copy"><h2 id="heroTitle">Building a view of the network.</h2><p id="heroCopy">Capture and model activity in one view. Model scores are not calibrated probabilities.</p></div>
+      </div>
+      <div class="grid grid-4" style="margin-top:16px">
+        <div class="card kpi"><span class="kpi-label">Packets</span><strong class="kpi-value" id="packetCount">0</strong><span class="kpi-note">latest capture window</span></div>
+        <div class="card kpi"><span class="kpi-label">Active flows</span><strong class="kpi-value" id="flowCount">0</strong><span class="kpi-note">deterministic telemetry</span></div>
+        <div class="card kpi"><span class="kpi-label">Observed model events</span><strong class="kpi-value" id="observedCount">0</strong><span class="kpi-note">latest ≤400 scored events</span></div>
+        <div class="card kpi"><span class="kpi-label">Forecast alerts</span><strong class="kpi-value" id="forecastAlertCount">0</strong><span class="kpi-note">secondary to detections</span></div>
+      </div>
+      <div class="grid grid-3" style="margin-top:16px">
+        <div class="card span-2"><div class="card-head rate-card-head"><div><h3>Traffic cadence</h3><p>Measured rates from completed capture windows</p></div><div class="rate-tabs" role="group" aria-label="Traffic chart metric"><button type="button" class="active" data-rate="throughput" aria-pressed="true">Throughput</button><button type="button" data-rate="packets" aria-pressed="false">Packets/s</button></div></div><div class="chart" id="trafficChart"></div></div>
+        <div class="card"><div class="card-head"><div><h3>Protocol mix</h3><p>Latest capture window</p></div></div><div class="metric-list" id="protocolMix"></div></div>
+        <div class="card span-2"><div class="card-head"><div><h3>Security indicators</h3><p>Deterministic rules from local packet capture</p></div></div><div class="alert-list" id="overviewAlerts"></div></div>
+        <div class="card"><div class="card-head"><div><h3>Model source</h3><p>What the forecast actually represents</p></div></div><div class="metric-list" id="modelSource"></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="forecast">
+      <div class="section-head"><div><p class="eyebrow">World model</p><h2>Event-by-event forecast</h2><p>S[t+k] means k imagined event steps on each seed path—not k seconds or the next k actual network events. Predicted links are not observed incidents.</p></div><span class="badge info" id="forecastStatus">checking</span></div>
+      <div id="forecastOffline" class="empty"><div><strong>Forecast service is not connected</strong><span id="forecastReason">Checking the local model endpoint…</span></div></div>
+      <div id="forecastConnected" class="hidden">
+        <div id="recallWarning"></div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Forecast time reference</h3><p id="forecastTimeSummary">Checking the observed state timestamp…</p></div></div><div class="metric-list" id="forecastTimeContext"></div><p class="calibration-disclaimer">A predicted link is a hypothetical model output, not a detected incident. Event step +k has no validated wall-clock ETA and may not be in the future relative to now when the input state is delayed.</p></div>
+        <div class="grid grid-4" id="calibrationCards"></div>
+        <div class="grid grid-3" style="margin-top:16px">
+          <div class="card span-all"><div class="card-head"><div><h3>State explorer</h3><p id="stateContext">Observed state plus selected predictions</p></div><div class="graph-actions"><div class="legend"><span class="observed">Observed</span><span class="predicted">Hypothetical link</span><span class="alternative">Alternative</span><span class="alerting">Severity set</span></div><button class="graph-expand" id="expandModelGraph" type="button" aria-haspopup="dialog" aria-controls="modelGraphDialog">Open full map ↗</button></div></div><div class="state-toolbar"><span class="state-pill" id="stateLabel">S[t]</span><input id="stateStep" type="range" min="0" max="0" value="0" aria-label="Forecast event step"><span class="subtle" id="stateStepMeaning">Next imagined events; no clock-time ETA</span></div><div class="model-graph" id="modelGraph" role="button" tabindex="0" aria-label="Open full forecast topology map" aria-haspopup="dialog" aria-controls="modelGraphDialog" style="margin-top:15px"></div><p class="graph-swipe-note" id="stateTimingNote">Blue links were observed; red links are hypothetical event steps. Swipe to inspect peers.</p></div>
+          <div class="card"><div class="card-head"><div><h3>Operating point</h3><p>Calibration and measured test behavior</p></div></div><div class="alarm-controls"><label for="worldThresholdMode">Alert threshold</label><select id="worldThresholdMode"><option value="checkpoint">Original checkpoint</option><option value="live">Four-hour live</option></select><span class="subtle" id="worldThresholdModeStatus">Original checkpoint is the default.</span></div><div class="metric-list" id="thresholdDetail"></div></div>
+          <div class="card span-2"><div class="card-head"><div><h3>Relative risk by event step</h3><p>Served score against the signed threshold; this is not probability</p></div></div><div class="chart" id="riskChart"></div></div>
+          <div class="card span-all"><div class="card-head"><div><h3>World-model attention matrix</h3><p>Seed events by attended peer; actual averaged model weights</p></div></div><div id="worldAttentionMatrix"></div><p class="subtle">— means that peer is not one of that seed’s reported peers; 0.0% means it is, and the model gave it no weight. Neither is a security verdict; only the eight strongest peers are shown.</p></div>
+        </div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Hypothetical next links</h3><p>Ranked by model score. Each +k is an event step from the observed state, not a time estimate or an incident. Path probabilities are intentionally not displayed.</p></div></div><div class="rank-list" id="predictionList"></div></div>
+        <div class="card" style="margin-top:16px"><div class="alarm-controls"><label for="worldAlarmMode">World-model popup</label><select id="worldAlarmMode"><option value="incident">Observed incidents</option><option value="off">Off</option></select><span class="subtle" id="worldAlarmStatus">Only new observed incidents trigger popups; event flags and forecast links do not.</span></div></div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Observed world-model incidents</h3><p>Click an incident to see its contributing scored events and source/destination IPs. Three threshold crossings on one link; 120-second quiet gap.</p></div></div><div class="table-wrap"><table><thead><tr><th>Opened</th><th>Observed link</th><th>Opening score</th><th>Flagged events</th><th>Severity</th></tr></thead><tbody id="worldIncidentRows"></tbody></table></div></div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Caveats from the service</h3><p>All service-provided limits are shown.</p></div></div><div class="caveat-list" id="caveatList"></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="detections">
+      <div class="section-head"><div><p class="eyebrow">Primary model alerts</p><h2>Security incidents</h2><p>Only incidents that pass the family threshold and three-event persistence rule are reported here. A 120-second quiet gap closes an incident.</p></div><span class="badge info" id="detectionStatus">checking</span></div>
+      <div id="detectionsOffline" class="empty"><div><strong>Detection service is not connected</strong><span id="detectionsReason">Checking the live endpoint…</span></div></div>
+      <div id="detectionsConnected" class="hidden">
+        <div class="grid grid-4" id="detectionStats"></div>
+        <div id="detectionInputWarning" style="margin-top:14px"></div>
+        <div id="serviceRuleSummary" style="margin-top:14px"></div>
+        <div id="detectionCalibration" style="margin-top:16px"></div>
+        <div class="card" style="margin-top:16px"><div class="alarm-controls"><label for="detectionAlarmMode">Detector popup</label><select id="detectionAlarmMode"><option value="incident">Incidents</option><option value="off">Off</option></select><span class="subtle">Only newly opened incidents trigger popups.</span></div></div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Active incidents by family</h3><p>Active counts close after a 120-second quiet gap; opened incidents remain in the history below.</p></div></div><div class="family-grid" id="familyGrid"></div></div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Detection attention matrix</h3><p>Latest scored events by historical neighbour edge; actual averaged encoder weights</p></div><span class="badge info">live</span></div><div id="detectionAttentionMatrix"></div><p class="subtle">— means that edge is not one of that event’s reported neighbour edges; 0.0% means it is, and the model gave it no weight. Neither is a security verdict; only the eight strongest edges are shown.</p></div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Recent incidents · last 3 hours</h3><p>Click an incident to inspect all linked threshold-crossing events, source/destination IPs and ports. Older incidents opened before this event ledger may not have details.</p></div></div><div class="table-wrap"><table><thead><tr><th>Incident</th><th>Sender node</th><th>Family</th><th>Opening score</th><th>Opened</th><th>Status</th></tr></thead><tbody id="incidentRows"></tbody></table></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="protection">
+      <div class="section-head"><div><p class="eyebrow">Incident response</p><h2>Protection</h2><p>Read the response guide for a detector incident, then optionally apply a local host block when it is safe and supported.</p></div><span class="badge info">Operator controlled</span></div>
+      <div class="card"><div class="card-head"><div><h3>Choose an incident</h3><p>Only detector incidents from the last 3 hours are available. Forecasts and raw event flags cannot trigger protection.</p></div></div><label class="protection-label" for="protectionIncidentSelect">Detector incident</label><select id="protectionIncidentSelect" aria-describedby="protectionSelection"><option value="">Select an incident</option></select><p class="subtle" id="protectionSelection">Select an incident to read its guide.</p></div>
+      <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Response guide</h3><p>Built on this machine from the incident's verified facts: what the flag establishes, what to check, what containment is offered and how to recover. The same incident always reads the same.</p></div></div><div class="protection-controls"><button id="protectionAdvice" type="button" disabled>Show guide</button><button class="primary" id="protectionExecute" type="button" disabled>Execute host block</button><button id="protectionBlocks" type="button" aria-expanded="false" aria-controls="protectionBlockList">Blocked IPs</button></div><p class="protection-status" id="protectionStatus">A host block is offered only for an active incident with a consistent source IP and linked traffic to this host. Explicit confirmation and firewall privileges are required.</p><div class="protection-block-list" id="protectionBlockList" hidden><h4>Blocked IPs</h4><p>Active Netwatch rules in this host's firewall. Unblocking removes the selected rule; it does not change incident history.</p><div id="protectionBlockRows" role="status">Loading firewall rules…</div></div><div class="protection-facts" id="protectionFacts"></div><div class="protection-advice" id="protectionText" aria-live="polite"></div></div>
+    </section>
+
+    <section class="view" id="network">
+      <div class="section-head"><div><p class="eyebrow">Deterministic capture</p><h2>Observed network</h2><p>Only measured packet and flow telemetry from this machine. No model-predicted links appear here.</p></div></div>
+      <div id="captureWarning"></div>
+      <div class="card"><div class="card-head"><div><h3>Local topology</h3><p>Traffic touching a local interface address</p></div><div class="legend"><span class="observed">Observed</span></div></div><div class="model-graph" id="captureGraph"></div><p class="graph-swipe-note">Swipe across the map to inspect peer hosts; the local host stays at its center.</p></div>
+      <div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Active flows</h3><p>Service tags describe ports and roles; they do not prove a flow is safe.</p></div><span class="badge info" id="flowBadge">0 flows</span></div><div class="table-wrap"><table><thead><tr><th>Initiator</th><th>Responder</th><th>Protocol</th><th>Service / role</th><th>State</th><th>Packets</th><th>Bytes</th></tr></thead><tbody id="flowRows"></tbody></table></div></div>
+    </section>
+
+    <section class="view" id="system">
+      <div class="section-head"><div><p class="eyebrow">Runtime</p><h2>System context</h2><p>The local Go server, capture interface, and model connection state.</p></div></div>
+      <div id="interfaceNotice"></div>
+      <div class="system-grid" id="systemGrid"></div>
+    </section>
+    <section class="view" id="offline">
+      <div class="section-head"><div><p class="eyebrow">Offline models</p><h2>Analyze a PCAP</h2><p>Upload a completed PCAP or PCAPNG capture for isolated detector and world-model analysis. No live capture, incident history, or live calibration is changed.</p></div><span class="badge info">Local only</span></div>
+      <div class="card offline-upload-card" id="offlineUpload"><div class="card-head"><div><h3>1 · Upload a PCAP or PCAPNG</h3><p>Choose a file here to ingest it into an isolated offline analysis. Maximum 128 MiB; one job runs at a time.</p></div></div><form class="offline-form" id="offlineForm"><input id="offlineFile" name="file" type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" required aria-label="PCAP capture"><button id="offlineSubmit" type="submit">Analyze capture</button></form><div class="offline-status" id="offlineStatus" role="status">Choose a capture to begin.</div></div>
+      <div class="offline-result" id="offlineResult"></div>
+    </section>
+  </main>
+</div>
+<dialog class="graph-dialog" id="modelGraphDialog" aria-labelledby="expandedGraphTitle">
+  <div class="graph-dialog-panel">
+    <div class="graph-dialog-head"><div><h2 id="expandedGraphTitle">Forecast topology</h2><p id="expandedStateContext">Observed state plus selected predictions</p></div><div class="graph-dialog-controls"><button class="graph-expand" id="graphScaleToggle" type="button" aria-pressed="false">Read labels</button><button class="graph-close" id="closeModelGraph" type="button" aria-label="Close full map">Close ×</button></div></div>
+    <div class="legend"><span class="observed">Observed</span><span class="predicted">Predicted</span><span class="alternative">Alternative</span><span class="alerting">Severity set</span></div>
+    <div class="state-toolbar"><span class="state-pill" id="expandedStateLabel">S[t]</span><input id="expandedStateStep" type="range" min="0" max="0" value="0" aria-label="Forecast event step in full map"><span class="subtle" id="expandedStateStepMeaning">Next imagined events; no clock-time ETA</span></div>
+    <div class="model-graph expanded-graph" id="expandedModelGraph"></div>
+    <p class="graph-dialog-note" id="graphDialogNote">All peers are fitted into this view. Choose Read labels to inspect the map at full size; press Esc to close.</p>
   </div>
-
-  <nav class="hidden xl:flex gap-1 bg-[#121212] p-1.5 rounded-full border border-white/10 shadow-inner" aria-label="Dashboard sections">
-    <button class="tab active px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="overview">Overview</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="traffic">Traffic</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="flows">Flows</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="map">Network map</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="analysis">Analysis</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="forecast">Forecast</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="system">System</button>
-    <button class="tab px-5 py-2.5 rounded-full text-sm font-semibold text-white/60 hover:text-white transition-all" data-view="alerts">Alerts</button>
-  </nav>
-
-  <div class="flex items-center gap-3 bg-[#121212] border border-white/10 px-5 py-2.5 rounded-full">
-    <div class="relative flex h-3 w-3">
-      <span id="dotPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white/40 opacity-75"></span>
-      <span id="dot" class="relative inline-flex rounded-full h-3 w-3 bg-white/40"></span>
-    </div>
-    <span id="liveText" class="text-xs font-bold tracking-widest text-white/60 uppercase">Connecting</span>
-  </div>
-</header>
-
-<!-- Main Workspace -->
-<main class="w-full max-w-[1800px] mx-auto px-6 lg:px-10 py-10 pb-32 flex-1">
-
-  <!-- Global Hero / Command Strip -->
-  <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 mb-10 p-8 rounded-[2.5rem] bg-[#121212] border border-white/5 relative overflow-hidden">
-    <div class="absolute -right-20 -top-40 w-96 h-96 bg-[#e4ff00] opacity-[0.03] blur-[100px] rounded-full"></div>
-    <div class="absolute -left-20 -bottom-40 w-96 h-96 bg-[#ffcce0] opacity-[0.03] blur-[100px] rounded-full"></div>
-
-    <div class="relative z-10">
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-[#e4ff00] mb-4">
-        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-        Deterministic Capture Engine
-      </div>
-      <h1 class="text-5xl font-display font-bold tracking-tight text-white mb-2">Live Interface Telemetry</h1>
-      <p class="text-white/50 text-base max-w-xl">Zero simulated data. Processing raw local hardware capture windows in real-time. Target interface: <span id="heroInterface" class="font-mono text-white/90 bg-white/10 px-2 py-0.5 rounded">--</span></p>
-    </div>
-
-    <div class="relative z-10 bg-black/40 backdrop-blur-md border border-white/10 rounded-3xl p-6 flex items-center gap-8 shadow-2xl">
-      <div class="flex flex-col">
-        <span class="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-1">Throughput</span>
-        <span class="text-3xl font-mono font-bold text-white flex items-baseline gap-2">
-          <span id="heroRate">0.0</span>
-          <span class="text-sm text-[#e4ff00]">p/s</span>
-        </span>
-      </div>
-      <div class="w-px h-12 bg-white/10"></div>
-      <svg class="w-32 h-12" viewBox="0 0 220 22">
-        <path style="stroke:var(--bento-yellow); stroke-width:2.5; fill:none; filter: drop-shadow(0 0 4px rgba(228,255,0,0.5));" d="M0 11h14l6-8 8 16 8-16 8 16 8-8h14l6-6 8 12 8-12 8 12 8-8h14l6-4 8 8 8-8 8 8 8-4h14"/>
-      </svg>
-    </div>
-  </div>
-
-  <!-- VIEW: OVERVIEW -->
-  <section class="view active" id="overview">
-    <div class="sortable grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" id="overviewPanels" data-order-key="bento-overview">
-
-      <!-- Card 1: Traffic Timeline -->
-      <div class="bento-card bg-grad-pink-yellow col-span-1 md:col-span-2 xl:col-span-2 shadow-[0_8px_40px_rgba(255,214,230,0.15)] flex flex-col" data-key="timeline">
-        <div class="flex justify-between items-start mb-4">
-          <div class="flex items-center gap-2 text-sm font-bold tracking-tight">
-            <div class="w-2.5 h-2.5 rounded-full bg-black"></div> Traffic Volume
-          </div>
-          <span class="grip bg-black/5 p-2 rounded-full"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
-        </div>
-        <div class="mt-2 mb-6">
-          <h3 class="text-6xl font-display font-bold tracking-tighter" id="pktsTotal">0</h3>
-          <p class="text-black/60 text-sm font-bold mt-1">Total packets in current window</p>
-        </div>
-        <div class="mt-auto h-44 relative">
-          <svg class="w-full h-full overflow-visible" viewBox="0 0 700 210" preserveAspectRatio="none" role="img" aria-label="Packets per second over captured time windows">
-            <g id="timelineAxes"></g>
-            <path id="timelineArea" fill="#000000" opacity="0.08" d="M55 165 L680 165 Z"/>
-            <path id="timeline" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="M55 165 L680 165"/>
-            <g id="timelinePoints"></g>
-          </svg>
-        </div>
-      </div>
-
-      <!-- Card 2: Protocol Donut -->
-      <div class="bento-card bg-[#e4ff00] text-black shadow-[0_8px_40px_rgba(228,255,0,0.15)] flex flex-col" data-key="donut">
-        <div class="flex justify-between items-start mb-4">
-          <div class="flex items-center gap-2 text-sm font-bold tracking-tight">
-            Protocol Share
-          </div>
-          <span class="grip bg-black/5 p-2 rounded-full"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
-        </div>
-        <div class="flex-1 flex flex-col items-center justify-center relative py-4">
-          <div class="relative w-48 h-48 drop-shadow-2xl" id="protocolDonut"></div>
-        </div>
-      </div>
-
-      <!-- Card 3: TCP Dynamics -->
-      <div class="bento-card bg-[#0b5034] text-white shadow-[0_8px_40px_rgba(11,80,52,0.3)] flex flex-col relative" data-key="tcp">
-        <div class="absolute inset-0 opacity-10 pattern-stripes text-[#4ade80]"></div>
-        <div class="relative z-10 flex justify-between items-start mb-4">
-          <div class="flex items-center gap-2 text-sm font-bold tracking-tight text-[#e4ff00]">
-            TCP Metrics
-          </div>
-          <span class="grip bg-white/10 p-2 rounded-full text-white"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
-        </div>
-        <div class="relative z-10 mt-2 mb-8">
-          <div class="flex items-center gap-3">
-            <svg class="w-8 h-8 text-[#4ade80]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            <h3 class="text-4xl font-display font-bold" id="tcpSynCount">0</h3>
-          </div>
-          <p class="text-[#4ade80]/70 text-xs font-bold uppercase tracking-wider mt-2">SYN Packets</p>
-        </div>
-        <div class="relative z-10 flex-1 flex flex-col justify-end gap-4" id="tcpBars">
-          <!-- Populated by JS -->
-        </div>
-      </div>
-
-      <!-- Card 4: Basic Metrics -->
-      <div class="bento-card bg-[#ffcce0] text-black shadow-[0_8px_40px_rgba(255,204,224,0.15)] flex flex-col" data-key="metrics">
-        <div class="flex justify-between items-start mb-4">
-          <div class="flex items-center gap-2 text-sm font-bold tracking-tight">
-            Traffic State
-          </div>
-          <span class="grip bg-black/5 p-2 rounded-full"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
-        </div>
-        <div class="flex-1 flex items-center justify-center relative">
-          <svg class="absolute w-full h-full text-black/5 animate-[spin_60s_linear_infinite]" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2 6"/>
-            <circle cx="50" cy="50" r="25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="1 8"/>
-            <path d="M50 -10v120M-10 50h120M10 10l80 80M10 90l80-80" stroke="currentColor" stroke-width="0.5"/>
-          </svg>
-          <div class="text-center z-10 bg-white/20 backdrop-blur-sm p-6 rounded-3xl border border-white/40 shadow-xl">
-            <div class="text-5xl font-display font-bold" id="activeFlows">0</div>
-            <div class="text-[11px] font-bold uppercase tracking-widest mt-2 opacity-70">Active Flows</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 5: Mini Map -->
-      <div class="bento-card bg-[#121212] text-white col-span-1 md:col-span-2 xl:col-span-2 flex flex-col p-0 border border-white/10" data-key="map_mini">
-        <div class="absolute inset-0 pattern-grid opacity-50"></div>
-        <div class="relative z-10 flex justify-between items-start p-6 pb-0">
-          <div class="flex items-center gap-2 text-sm font-bold tracking-tight text-white">
-            Topology Glimpse
-          </div>
-          <div class="flex gap-2">
-            <span class="text-xs font-bold bg-[#e4ff00] text-black px-3 py-1.5 rounded-full shadow-[0_0_10px_rgba(228,255,0,0.3)]" id="mapCountMini">0 Nodes</span>
-            <span class="grip bg-white/5 p-1.5 rounded-full text-white hover:bg-white/10"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
-          </div>
-        </div>
-        <div class="relative z-10 flex-1 w-full h-56 mt-2" id="graphMini"></div>
-      </div>
-
-      <!-- Card 6: IO Metrics -->
-      <div class="bento-card bg-white text-black shadow-[0_8px_40px_rgba(255,255,255,0.1)] flex flex-col" data-key="io">
-        <div class="flex justify-between items-start mb-6">
-          <div class="flex items-center gap-2 text-sm font-bold tracking-tight">
-            I/O Breakdown
-          </div>
-          <span class="grip bg-black/5 p-2 rounded-full"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
-        </div>
-        <div class="flex-1 flex flex-col justify-center gap-8" id="ioBars">
-          <!-- Populated by JS -->
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- VIEW: TRAFFIC -->
-  <section class="view" id="traffic">
-    <div class="bento-card bg-[#121212] border border-white/10 text-white min-h-[60vh] p-8 lg:p-12">
-      <div class="mb-10">
-        <h2 class="text-4xl font-display font-bold text-white mb-2">Deep Telemetry</h2>
-        <p class="text-white/40 font-mono text-sm">Window-level packet statistics and mathematical aggregates.</p>
-      </div>
-      <div id="deepDetail" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
-        <!-- Rendered via JS -->
-      </div>
-    </div>
-  </section>
-
-  <!-- VIEW: FLOWS -->
-  <section class="view" id="flows">
-    <div class="bento-card bg-[#121212] border border-white/10 text-white min-h-[70vh] p-0 overflow-hidden flex flex-col">
-      <div class="p-8 pb-6 border-b border-white/10 flex justify-between items-center bg-black/20">
-        <div>
-          <h2 class="text-3xl font-display font-bold text-white mb-1">Active Connections</h2>
-          <p class="text-white/40 text-sm">Real-time state tracking matrix.</p>
-        </div>
-        <div class="bg-[#e4ff00] text-black text-xs font-bold px-4 py-2 rounded-full shadow-[0_0_15px_rgba(228,255,0,0.3)] tracking-wider uppercase" id="flowCountLabel">0 Flows</div>
-      </div>
-      <div class="flex-1 overflow-x-auto p-6">
-        <table class="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th class="pb-3 px-4 font-bold uppercase tracking-wider text-[10px] text-white/40">Source</th>
-              <th class="pb-3 px-4 font-bold uppercase tracking-wider text-[10px] text-white/40">Destination</th>
-              <th class="pb-3 px-4 font-bold uppercase tracking-wider text-[10px] text-white/40">Protocol</th>
-              <th class="pb-3 px-4 font-bold uppercase tracking-wider text-[10px] text-white/40">State</th>
-              <th class="pb-3 px-4 font-bold uppercase tracking-wider text-[10px] text-white/40 text-right">Packets</th>
-              <th class="pb-3 px-4 font-bold uppercase tracking-wider text-[10px] text-white/40 text-right">Bytes</th>
-            </tr>
-          </thead>
-          <tbody id="flowTable"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- VIEW: NETWORK MAP -->
-  <section class="view" id="map">
-    <div class="bento-card bg-[#050505] border border-white/10 text-white min-h-[80vh] flex flex-col p-0 overflow-hidden relative">
-      <div class="absolute inset-0 pattern-grid opacity-30"></div>
-      <div class="absolute top-0 left-0 right-0 p-8 flex justify-between items-center z-20 pointer-events-none">
-        <div>
-          <h2 class="text-4xl font-display font-bold text-white drop-shadow-lg mb-1">Topology Map</h2>
-          <p class="text-white/50 text-sm drop-shadow-md">Only traffic to and from your PC. <span class="text-[#e4ff00]">Yellow → outbound</span> · <span class="text-[#4ade80]">Green → inbound</span>.</p>
-        </div>
-        <div class="bg-[#4ade80] text-black text-xs font-bold px-5 py-2.5 rounded-full shadow-[0_0_20px_rgba(74,222,128,0.4)] pointer-events-auto flex items-center gap-2" id="mapCountFull">
-          <div class="w-2 h-2 rounded-full bg-black animate-pulse"></div>
-          0 Nodes
-        </div>
-      </div>
-      <div class="flex-1 w-full h-full relative z-10" id="graphFull"></div>
-    </div>
-  </section>
-
-  <!-- VIEW: ANALYSIS -->
-  <section class="view" id="analysis">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[60vh]">
-      <div class="bento-card bg-grad-pink-yellow flex flex-col justify-center items-center text-center p-12">
-        <div class="text-[12px] font-bold uppercase tracking-widest text-black/50 mb-6 bg-white/30 px-4 py-2 rounded-full">Current Status</div>
-        <h2 class="text-5xl font-display font-bold text-black mb-4" id="analysisState">Waiting...</h2>
-        <p class="text-black/70 max-w-sm font-medium" id="analysisCopy">Evaluating active window against deterministic models.</p>
-      </div>
-      <div class="bento-card bg-[#121212] border border-white/10 flex flex-col p-8">
-        <h3 class="text-2xl font-display font-bold text-white mb-8">Driving Features</h3>
-        <div id="featureDetail" class="grid grid-cols-2 gap-4 flex-1"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- VIEW: FORECAST -->
-  <section class="view" id="forecast">
-    <div class="bento-card bg-[#0b5034] border border-[#4ade80]/30 min-h-[60vh] flex flex-col items-center justify-center relative overflow-hidden text-center p-12">
-      <div class="absolute inset-0 pattern-stripes opacity-10 text-[#e4ff00]"></div>
-      <div class="relative z-10">
-        <div class="inline-block border border-[#e4ff00] text-[#e4ff00] px-4 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase mb-8 shadow-[0_0_15px_rgba(228,255,0,0.2)]">World Model Offline</div>
-        <div class="text-5xl font-mono text-[#4ade80] mb-8 font-bold tracking-tighter">S[t] &rarr; S[t+1]</div>
-        <h2 class="text-3xl font-display font-bold text-white mb-4">No Predictions Available</h2>
-        <p class="text-white/60 max-w-md mx-auto">Future state forecasting is inactive. Await local World Model service integration for probabilistic attack staging.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- VIEW: SYSTEM -->
-  <section class="view" id="system">
-    <div class="bento-card bg-[#121212] border border-white/10 text-white min-h-[60vh] p-8 lg:p-12">
-      <div class="mb-10">
-        <h2 class="text-4xl font-display font-bold text-white mb-2">System Context</h2>
-        <p class="text-white/40 text-sm">Local environment and capture metrics.</p>
-      </div>
-      <div id="systemDetail" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr"></div>
-    </div>
-  </section>
-
-  <!-- VIEW: ALERTS -->
-  <section class="view" id="alerts">
-    <div class="bento-card bg-[#121212] border border-white/10 text-white min-h-[60vh] p-8 lg:p-12">
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-        <div>
-          <h2 class="text-4xl font-display font-bold text-white mb-2">Security Indicators</h2>
-          <p class="text-white/40 text-sm">Deterministic rule engine evidence.</p>
-        </div>
-        <span class="text-sm font-bold bg-[#ffcce0] text-black px-6 py-3 rounded-full shadow-[0_0_20px_rgba(255,204,224,0.3)] tracking-wider uppercase" id="alertCountLabel">0 Alerts</span>
-      </div>
-      <div id="alertList" class="flex flex-col gap-5"></div>
-    </div>
-  </section>
-
-</main>
+</dialog>
+<div class="alarm-toast hidden" id="alarmToast" role="status" aria-live="polite"><strong id="alarmToastTitle"></strong><span id="alarmToastDetail"></span></div>
 
 <script>
-const $ = function(id) { return document.getElementById(id); };
-const num = function(x) { return Number(x||0).toLocaleString(); };
-const esc = function(x) { return String(x??'').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
-const bytes = function(x) {
-  x = +x||0; let u=['B','KB','MB','GB'], i=0;
-  while(x>=1024 && i<3) { x/=1024; i++; }
-  return x.toFixed(i?1:0)+' '+u[i];
+const $=function(id){return document.getElementById(id)};
+const esc=function(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+const number=function(v){return Number(v||0).toLocaleString()};
+const bytes=function(v){v=Number(v||0);let units=['B','KB','MB','GB'],i=0;while(v>=1024&&i<3){v/=1024;i++}return v.toFixed(i?1:0)+' '+units[i]};
+const bitRate=function(bits){let value=Math.max(0,Number(bits)||0),units=['bps','Kbps','Mbps','Gbps'],i=0;while(value>=1000&&i<units.length-1){value/=1000;i++}return value.toFixed(value>=100?0:value>=10?1:2)+' '+units[i]};
+const score=function(v){return Number(v||0).toFixed(5)};
+const stamp=function(v){if(!v)return '—';let d=new Date(Number(v)*1000);return isNaN(d)?'—':d.toLocaleString()};
+const ordinal=function(n){let m=n%100;if(m>=11&&m<=13)return n+'th';return n+({1:'st',2:'nd',3:'rd'}[n%10]||'th')};
+const empty=function(title,copy){return '<div class="empty"><div><strong>'+esc(title)+'</strong><span>'+esc(copy||'')+'</span></div></div>'};
+const row=function(label,value){return '<div class="metric-row"><span>'+esc(label)+'</span><strong class="mono">'+esc(value)+'</strong></div>'};
+const kpi=function(label,value,note){return '<div class="card kpi"><span class="kpi-label">'+esc(label)+'</span><strong class="kpi-value">'+esc(value)+'</strong><span class="kpi-note">'+esc(note)+'</span></div>'};
+
+let telemetry={status:{},current:null,history:[],flows:[],graph:{},alerts:[],direction:{},system:{}};
+let rateChartMode='throughput';
+document.querySelectorAll('[data-rate]').forEach(function(button){button.addEventListener('click',function(){rateChartMode=button.dataset.rate;document.querySelectorAll('[data-rate]').forEach(function(other){let active=other===button;other.classList.toggle('active',active);other.setAttribute('aria-pressed',String(active))});renderTraffic(telemetry.history||[])})});
+let forecast=null,detections=null,selectedStep=Math.max(0,Number(new URLSearchParams(location.search).get('step'))||0);
+let selectedWorldIncident=null,selectedDetectionIncident=null,detectorIncidentCache=new Map();
+let hostnamesByIP={};
+let uiModeOverride={world:null,detection:null};
+document.addEventListener('change',async function(event){let kind=event.target.id==='worldThresholdMode'?'world':event.target.id==='detectionThresholdMode'?'detection':null;if(!kind)return;let mode=event.target.value;uiModeOverride[kind]=mode;event.target.disabled=true;try{let response=await fetch('/api/'+kind+'-threshold-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:mode})});let payload=await response.json();if(!response.ok)throw Error(payload.error||'Threshold change failed');await pollModels()}catch(error){uiModeOverride[kind]=null;showInAppAlarm('Threshold unchanged',String(error));await pollModels()}finally{let current=$(kind+'ThresholdMode');if(current)current.disabled=false}});
+let alarmState={world:{primed:false,seen:new Set()},detection:{primed:false,seen:new Set()}},alarmToastTimer=null;
+function alarmMode(kind){return $(kind+'AlarmMode').value}
+['world','detection'].forEach(function(kind){let control=$(kind+'AlarmMode');try{let saved=localStorage.getItem('netwatch-'+kind+'-alarm');control.value=saved==='off'?'off':'incident'}catch(error){}control.addEventListener('change',function(){try{localStorage.setItem('netwatch-'+kind+'-alarm',control.value)}catch(error){}})});
+function showInAppAlarm(title,detail){$('alarmToastTitle').textContent=title;$('alarmToastDetail').textContent=detail;$('alarmToast').classList.remove('hidden');clearTimeout(alarmToastTimer);alarmToastTimer=setTimeout(function(){$('alarmToast').classList.add('hidden')},6500)}
+function processAlarms(kind,incidents){let state=alarmState[kind],fresh=[];incidents.forEach(function(x){let key='i:'+x.key;if(!state.seen.has(key)){state.seen.add(key);fresh.push(x)}});if(state.seen.size>4000)state.seen=new Set(Array.from(state.seen).slice(-2000));if(!state.primed){state.primed=true;return}if(alarmMode(kind)==='off'||!fresh.length)return;let first=fresh[0];showInAppAlarm((kind==='world'?'World model':'Detector')+': '+fresh.length+' new incident'+(fresh.length===1?'':'s'),first.label+(fresh.length>1?' and '+(fresh.length-1)+' more':''))}
+let themePreference=window.netwatchThemePreference||'auto';
+function syncThemeToggle(){let dark=document.documentElement.dataset.theme==='dark';$('themeToggle').setAttribute('aria-pressed',String(dark));$('themeToggle').setAttribute('aria-label',dark?'Switch to light mode':'Switch to dark mode');$('themeLabel').textContent=dark?'Light mode':'Dark mode';$('themeIcon').textContent=dark?'☀':'☾'}
+$('themeToggle').addEventListener('click',function(){themePreference=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=themePreference;try{localStorage.setItem('netwatch-theme',themePreference)}catch(error){}syncThemeToggle()});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(event){if(themePreference==='auto'){document.documentElement.dataset.theme=event.matches?'dark':'light';syncThemeToggle()}});
+syncThemeToggle();
+
+document.querySelectorAll('.nav button').forEach(function(button){Array.from(button.childNodes).forEach(function(node){if(node.nodeType===3&&node.textContent.trim()){let label=document.createElement('span');label.className='nav-label';label.textContent=node.textContent.trim();button.setAttribute('aria-label',label.textContent);button.title=label.textContent;button.replaceChild(label,node)}});button.addEventListener('click',function(){document.querySelectorAll('.nav button').forEach(function(x){x.classList.remove('active')});document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});button.classList.add('active');$(button.dataset.view).classList.add('active')})});
+let reloaded=performance.getEntriesByType('navigation').some(function(entry){return entry.type==='reload'});
+let initialView=reloaded?'overview':location.hash.slice(1)|| (location.pathname==='/offline'?'offline':'');
+let initialButton=Array.from(document.querySelectorAll('.nav button')).find(function(button){return button.dataset.view===initialView});
+if(initialButton)initialButton.click();
+if(reloaded){history.scrollRestoration='manual';window.addEventListener('load',function(){window.scrollTo(0,0)})}
+$('railToggle').addEventListener('click',function(){let collapsed=document.body.classList.toggle('rail-collapsed');this.innerHTML=collapsed?'&rsaquo;':'&lsaquo;';this.setAttribute('aria-expanded',String(!collapsed));this.setAttribute('aria-label',collapsed?'Expand navigation':'Collapse navigation');this.title=collapsed?'Expand navigation':'Collapse navigation'});
+setInterval(function(){$('clock').textContent=new Date().toLocaleTimeString()},1000);
+
+function setChip(id,good,text){let chip=$(id);chip.classList.remove('warming');chip.classList.toggle('good',good);chip.classList.toggle('bad',!good);chip.querySelector('span').textContent=text}
+function forecastInitializing(f){return !!f.device&&f.status==='NOT_CONNECTED'&&/live runner started|no complete flow yet|capture file\(s\) in the window, no packets yet/.test(f.reason||'')}
+function renderModelChips(){let d=detections||{},f=forecast||{},detectorReady=d.status==='RUNNING',forecastReady=f.status==='CONNECTED',warming=forecastInitializing(f);setChip('detectionChip',detectorReady,detectorReady?'Detection live':'Detection offline');setChip('modelChip',forecastReady,forecastReady?'Forecast ready':warming?'Forecast initializing':'Forecast offline');if(warming){$('modelChip').classList.remove('bad');$('modelChip').classList.add('warming')}$('modelChip').title=f.reason||'';$('detectionChip').title=d.reason||''}
+
+function renderTelemetry(data){telemetry=data||telemetry;let st=telemetry.status||{},c=telemetry.current,flows=telemetry.flows||[],alerts=telemetry.alerts||[];
+  setChip('captureChip',!!st.connected&&!st.route_mismatch,st.route_mismatch?'Capture on inactive route':st.connected?'Capture live':'Capture offline');
+  $('topSubtitle').textContent=(st.interface||'No interface')+' · '+(st.connected?'measured packet telemetry':'model dashboard mode');
+  $('heroRate').textContent=c?Number(c.packets_per_second||0).toFixed(1):'—';$('heroThroughput').textContent=c?bitRate(Number(c.bytes_per_second||0)*8):'—';$('throughputWindow').textContent=c?'latest '+number(c.duration_seconds)+' s window'+(st.connected?'':' · capture offline'):'waiting for a capture window';$('packetCount').textContent=c?number(c.total_packets):'0';$('flowCount').textContent=number(flows.length);
+  $('heroTitle').textContent=st.route_mismatch?'Capture is on a different interface from the active route.':alerts.length?'Rule-based indicators need review.':(st.connected?'Traffic is within configured rules.':'Capture is offline. Forecast is available.');
+  renderTraffic(telemetry.history||[]);renderProtocols(c);renderLocalAlerts(alerts);renderFlows(flows);renderCaptureGraph();renderSystem();
+  $('captureWarning').innerHTML=st.route_mismatch?'<div class="banner warn"><strong>Capture interface is stale.</strong><p>NetWatch is bound to '+esc(st.interface)+' while the active route uses '+esc(st.active_route_interface)+'. Restart the NetWatch service bundle on the active interface; model counters may otherwise stop updating.</p></div>':st.connected?'':'<div class="banner warn"><strong>Packet capture is offline.</strong><p>'+esc(st.capture_error||'Install tshark or tcpdump and grant capture permission. The model panels continue to work.')+'</p></div>';
+}
+
+function renderTraffic(history){
+  let box=$('trafficChart'),rows=history.slice(-36);
+  if(!rows.length){box.innerHTML=empty('Waiting for a completed window','Throughput appears after the first capture interval.');return}
+  let throughput=rateChartMode==='throughput',raw=rows.map(function(x){return Math.max(0,Number(throughput?Number(x.bytes_per_second||0)*8:x.packets_per_second||0))});
+  let peak=Math.max(...raw),scale=throughput?(peak>=1e9?1e9:peak>=1e6?1e6:peak>=1e3?1e3:1):1,unit=throughput?({1:'bps',1000:'Kbps',1000000:'Mbps',1000000000:'Gbps'}[scale]):'packets/s';
+  let values=raw.map(function(v){return v/scale}),w=800,h=230,p=48,max=Math.max(1,...values),pts=values.map(function(v,i){return [p+(w-p*2)*(values.length===1?0:i/(values.length-1)),h-p-(h-p*2)*v/max]});
+  let path='M '+pts.map(function(x){return x[0].toFixed(1)+' '+x[1].toFixed(1)}).join(' L '),grid='';
+  for(let i=0;i<5;i++){let y=p+(h-p*2)*i/4,label=max*(4-i)/4;grid+='<line x1="'+p+'" y1="'+y+'" x2="'+(w-p)+'" y2="'+y+'" stroke="var(--line)"/><text class="axis" x="2" y="'+(y+4)+'">'+(throughput?label.toFixed(label>=10?0:2):label.toFixed(0))+'</text>'}
+  let dots=pts.map(function(point,i){let label=throughput?bitRate(raw[i]):raw[i].toFixed(1)+' packets/s';return '<circle cx="'+point[0]+'" cy="'+point[1]+'" r="4" fill="var(--red)"><title>Window '+number(rows[i].window_index)+': '+label+' over '+number(rows[i].duration_seconds)+' s</title></circle>'}).join('');
+  box.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" role="img" aria-label="'+(throughput?'Throughput':'Packet rate')+' across the last '+rows.length+' completed capture windows">'+grid+'<text x="'+p+'" y="20" fill="var(--muted)" font-size="11">'+unit+' · latest '+number(rows[rows.length-1].duration_seconds)+' s windows</text><path d="'+path+' L '+pts[pts.length-1][0]+' '+(h-p)+' L '+p+' '+(h-p)+' Z" fill="rgba(var(--heat-rgb),.07)"/><path d="'+path+'" fill="none" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>'+dots+'</svg>'
+}
+function renderProtocols(c){if(!c){$('protocolMix').innerHTML=empty('No capture window','Protocol counts are unavailable.');return}let all=Math.max(1,Number(c.total_packets||0)),items=[['TCP',c.tcp_packets],['UDP',c.udp_packets],['DNS',c.dns_packets],['ICMP',c.icmp_packets]];$('protocolMix').innerHTML=items.map(function(x){let pct=100*Number(x[1]||0)/all;return '<div><div class="metric-row"><span>'+x[0]+'</span><strong>'+number(x[1])+' · '+pct.toFixed(1)+'%</strong></div><div style="height:5px;background:var(--line);border-radius:5px;overflow:hidden"><i style="display:block;height:100%;width:'+pct+'%;background:var(--red)"></i></div></div>'}).join('')}
+function severityBadge(value){let s=String(value||'').toUpperCase(),kind=s==='HIGH'?'danger':s==='MEDIUM'?'warn':'info';return '<span class="badge '+kind+'">'+esc(s||'INFO')+'</span>'}
+function renderLocalAlerts(items){
+  if(!items.length){$('overviewAlerts').innerHTML=empty('No deterministic indicators','No configured rule threshold was crossed in captured windows.');return}
+  let groups=new Map();
+  items.forEach(function(x){let source=x.source_ip||'',destination=x.destination_ip||'',key=[x.type,x.protocol,source,destination].join('|'),group=groups.get(key)||{latest:x,count:0};group.latest=x;group.count++;groups.set(key,group)});
+  $('overviewAlerts').innerHTML=Array.from(groups.values()).slice(-8).reverse().map(function(group){
+    let x=group.latest,source=x.source_ip||'',destination=x.destination_ip||'',scope=source&&destination?source+' → '+destination:source?'Source '+source:destination?'Destination '+destination:'Network-wide '+(x.protocol||'traffic');
+    return '<div class="alert-item">'+severityBadge(x.severity)+'<strong style="margin-top:8px">'+esc(x.type||'Indicator')+(group.count>1?' · '+number(group.count)+' windows':'')+'</strong><p>'+esc(scope)+' · '+esc(x.reason||'')+'</p></div>'
+  }).join('')
+}
+function renderFlows(items){$('flowBadge').textContent=items.length+' flows';$('flowRows').innerHTML=items.length?items.slice(0,150).map(function(f){return '<tr><td class="mono">'+esc(f.initiator_ip)+':'+number(f.initiator_port)+'</td><td class="mono">'+esc(f.responder_ip)+':'+number(f.responder_port)+'</td><td>'+esc(f.protocol)+'</td><td>'+esc(f.state)+'</td><td>'+number(f.total_packets)+'</td><td>'+bytes(f.total_bytes)+'</td></tr>'}).join(''):'<tr><td colspan="6">No active flows.</td></tr>'}
+
+function renderCaptureGraph(){let g=telemetry.graph||{},sys=telemetry.system||{},locals=sys.interface_ips||[],edges=(g.edges||[]).filter(function(e){return locals.includes(e.src_ip)!==locals.includes(e.dst_ip)});(g.nodes||[]).forEach(function(node){if(node.ip&&node.hostnames&&node.hostnames.length)hostnamesByIP[node.ip]={name:String(node.hostnames[0]),seen:Date.now()}});setTopologyGraph('captureGraph',topologySVG(edges,[],[],locals,0,'capture'));if(forecast&&forecast.status==='CONNECTED')renderState()}
+
+function renderSystem(){let st=telemetry.status||{},sys=telemetry.system||{},selected=sys.network_interface||st.interface||'Unavailable',active=sys.active_route_interface||'',items=[['Hostname',sys.hostname||'Unknown','Local capture host',false],['Operating system',sys.operating_system||'Unknown','Go runtime target',false],['Capture interface',selected,st.connected?'Capture connected':'Capture offline',false],['Active route',active||'Unavailable','Interface currently carrying the default route',false],['Local addresses',(sys.interface_ips||[]).join(' · ')||'None reported','Used to identify this machine in network views',true],['MAC address',sys.mac_address||'Unavailable','Selected capture interface',false],['Dashboard uptime',number(st.capture_duration_seconds||0)+' s','Local server process',false]];$('systemGrid').innerHTML=items.map(function(x){return '<article class="system-card'+(x[3]?' wide':'')+'"><span class="system-label">'+esc(x[0])+'</span><strong class="system-value mono">'+esc(x[1])+'</strong><span class="system-note">'+esc(x[2])+'</span></article>'}).join('');$('interfaceNotice').innerHTML=active&&selected!==active?'<div class="banner warn">Capture is still bound to '+esc(selected)+' while the active route is '+esc(active)+'. Restart Netwatch with automatic interface selection (or specify the LAN interface) to switch all model services together.</div>':''}
+
+function worldStateAge(source){return source.state_as_of?Math.max(0,Date.now()/1000-Number(source.state_as_of)):Number(source.lag_seconds||0)}
+function ageSince(timestamp){if(!Number.isFinite(Number(timestamp))||Number(timestamp)<=0)return 'age unavailable';let seconds=Math.max(0,Math.floor(Date.now()/1000-Number(timestamp)));if(seconds<60)return seconds+' s ago';if(seconds<3600)return Math.floor(seconds/60)+' min '+seconds%60+' s ago';return Math.floor(seconds/3600)+' h '+Math.floor(seconds%3600/60)+' min ago'}
+function renderForecastTime(){let source=forecast.source||{},live=source.mode==='live',eventTime=source.t,cutoff=source.state_as_of,capture=source.newest_packet,horizon=Number(forecast.rollout_steps||0),paths=new Set((forecast.predicted_edges||[]).map(function(x){return x.seed_event})).size;$('forecastTimeSummary').textContent=live?'The model begins from observed traffic, not the current wall-clock moment.':'This is a recorded replay, not current traffic.';$('forecastTimeContext').innerHTML=row('Latest scored event',eventTime?stamp(eventTime)+(live?' · '+ageSince(eventTime):' · recorded'):'Not supplied')+row('Eligible capture cutoff',cutoff?stamp(cutoff)+(live?' · '+ageSince(cutoff):''):'Not supplied')+row('Newest packet in model input',capture?stamp(capture)+(live?' · '+ageSince(capture):''):'Not supplied')+row('Rollout horizon','Up to '+horizon+' imagined event step'+(horizon===1?'':'s')+' on each of '+paths+' seed path'+(paths===1?'':'s'))+row('Wall-clock ETA','Not predicted; the internal 1 s gap is only a simulation assumption')}
+function renderForecast(f){forecast=f||{};let connected=forecast.status==='CONNECTED',source=forecast.source||{},warming=forecastInitializing(f);renderModelChips();$('forecastStatus').textContent=connected?'connected':warming?'initializing':'offline';$('forecastStatus').className='badge '+(connected?'good':warming?'warn':'danger');$('forecastOffline').classList.toggle('hidden',connected);$('forecastConnected').classList.toggle('hidden',!connected);$('forecastOffline').querySelector('strong').textContent=warming?'Forecast initializing':'Forecast service is not connected';$('forecastReason').textContent=warming?'The '+forecast.device.toUpperCase()+' service is preparing its first complete-flow forecast. Capture processing can take several minutes after a restart.':forecast.reason||'The service returned NOT_CONNECTED.';$('worldLag').textContent=connected&&source.mode==='live'?worldStateAge(source).toFixed(1)+' s':connected?'replay':warming?'initializing':'offline';if(!connected){if($('modelGraphDialog').open)$('modelGraphDialog').close();$('observedCount').textContent='0';$('forecastAlertCount').textContent='0';$('modelSource').innerHTML=empty(warming?'Forecast initializing':'Forecast offline',warming?$('forecastReason').textContent:forecast.reason||'No model payload.');return}
+  let src=forecast.source||{},t=forecast.threshold;$('observedCount').textContent=number((forecast.observed||{}).events);$('forecastAlertCount').textContent=number((forecast.alerts||[]).length);
+  let sourceName=src.mode==='replay'?'Recorded dataset · '+(src.day||'unknown day'):(src.day||'this machine')+' · '+(src.tag||'untagged');$('modelSource').innerHTML=row('Mode',src.mode||'unknown')+row('Source',sourceName)+row('State as of',src.state_as_of?stamp(src.state_as_of):'Not supplied')+row('Lag',src.mode==='live'?worldStateAge(src).toFixed(0)+' s':'Recorded replay')+row('Epoch',t?t.epoch:'uncalibrated');
+  selectedStep=Math.min(selectedStep,Number(forecast.rollout_steps||0));$('stateStep').max=String(forecast.rollout_steps||0);$('stateStep').value=String(selectedStep);$('expandedStateStep').max=$('stateStep').max;$('expandedStateStep').value=String(selectedStep);
+  renderForecastTime();
+  let recall=t?Number(t.recall||0):null;$('recallWarning').innerHTML=!t?'<div class="banner danger"><strong>Checkpoint is uncalibrated.</strong><p>Nothing alerts until a threshold is served.</p></div>':recall===0?'<div class="banner danger"><strong>Measured test recall is 0.000%.</strong><p>This checkpoint is not a working detector yet. Forecast alerts must not be treated as primary detections.</p></div>':'<div class="banner info"><strong>Forecast alerts are secondary.</strong><p>Measured test recall is '+(100*recall).toFixed(3)+'%. Use the early detection service as the primary alert source.</p></div>';
+  $('calibrationCards').innerHTML=kpi('Source tag',src.tag||src.mode||'unknown',src.mode==='replay'?'recorded dataset':'served forecast product')+kpi('Model score',forecast.score||'unknown','score, not calibrated probability')+kpi('Rollout',number(forecast.rollout_steps)+' steps','one imagined event per step')+kpi('Events scored',number(forecast.events_scored),'service total');
+  $('thresholdDetail').innerHTML=t?row('Rule',t.rule||'—')+row('Calibrated on',t.calibrated_on||'—')+row('Measured recall',(100*Number(t.recall||0)).toFixed(3)+'%')+row('Measured FPR',(100*Number(t.fpr||0)).toFixed(4)+'%')+row('False alarms',number(t.false_alarms)+' / '+Number(t.test_hours||0).toFixed(2)+' h')+row('False incidents / h',Number(t.false_incidents_per_hour||0).toFixed(3))+row('Budget',Number(t.budget||0).toPrecision(3)):row('Threshold','uncalibrated');
+  renderState();renderRisk();renderPredictions();renderWorldAlerts();renderAttention();renderCaveats();renderWorldCalibration();
+}
+
+function calibrationProgress(c){return (Number(c.elapsed_s||0)/3600).toFixed(2)+'/'+(Number(c.window_s||14400)/3600).toFixed(2)+' h'}
+function renderWorldCalibration(){let t=forecast.threshold||{},c=t.live_calibration;if(!c)return;let selection=t.threshold_mode||{};if(uiModeOverride.world===selection.requested)uiModeOverride.world=null;let control=$('worldThresholdMode');control.options[1].disabled=!selection.live_ready;control.value=uiModeOverride.world||selection.requested||'checkpoint';$('worldThresholdModeStatus').textContent=selection.live_ready?(selection.effective==='live'?'Four-hour live threshold serving.':'Original checkpoint serving; live threshold available.'):'Original checkpoint serving; live threshold unlocks after four hours.';let line=c.ready?'Four-hour live threshold available':'Collecting '+calibrationProgress(c)+' of continuous traffic';$('thresholdDetail').innerHTML=row('Live threshold calibration',line)+row('Scored flows',number(c.samples))+row('Served threshold',score(t.threshold))+row('Checkpoint threshold',score(c.baseline_threshold))+row('Checkpoint calibration',t.checkpoint_calibrated_on||'validation labels')+row('Score-tail target',(100*Number(c.target_exceedance_budget||0)).toFixed(3)+'% · not false-positive rate')+row('Model scores','Checkpoint output unchanged; no probability refit')+$('thresholdDetail').innerHTML;}
+function renderDetectionCalibration(){
+  let thresholds=detections.thresholds||{},names=Object.keys(thresholds).sort(function(a,b){return a.localeCompare(b)}),box=$('detectionCalibration');
+  if(!names.length){box.innerHTML='';return}
+  let first=names.map(function(name){return thresholds[name].live_calibration}).find(Boolean);
+  let precise=function(value){return value==null||!Number.isFinite(Number(value))?'—':Number(value).toFixed(8)};
+  let progress=first?(first.ready?'Four-hour window complete':'Collecting '+calibrationProgress(first)+' of continuous traffic'):'Checkpoint and adaptive operating points';
+  let summary=first?'<div class="calibration-overview"><div class="calibration-stat"><span>Live window</span><strong class="mono">'+esc(calibrationProgress(first))+'</strong></div><div class="calibration-stat"><span>Scored flows per family</span><strong class="mono">'+number(first.samples)+'</strong></div><div class="calibration-stat"><span>Score-tail target</span><strong class="mono">'+(100*Number(first.target_exceedance_budget||0)).toFixed(3)+'%</strong></div></div>':'';
+  let selection=detections.threshold_mode||{};if(uiModeOverride.detection===selection.requested)uiModeOverride.detection=null;
+  let choice=uiModeOverride.detection||selection.requested||'checkpoint',ready=!!selection.live_ready;
+  let controls='<div class="alarm-controls"><label for="detectionThresholdMode">Alert threshold</label><select id="detectionThresholdMode"><option value="checkpoint"'+(choice==='checkpoint'?' selected':'')+'>Original checkpoint</option><option value="live"'+(choice==='live'?' selected':'')+(ready?'':' disabled')+'>Four-hour live</option></select><span class="subtle">'+(ready?(selection.effective==='live'?'Four-hour live threshold serving.':'Original checkpoint serving; live threshold available.'):'Original checkpoint serving; live threshold unlocks after all families complete four hours.')+'</span></div>';
+  let rows=names.map(function(name){
+    let t=thresholds[name]||{},c=t.live_calibration||{},mode=t.threshold_source==='live_unlabeled_score_tail'?'Four-hour live':t.adaptive_ready?'Adaptive active':t.adaptive?'Learning':'Checkpoint',kind=mode==='Four-hour live'?'good':t.adaptive_ready?'info':t.adaptive?'warn':'info';
+    let served=t.threshold,baseline=t.baseline_threshold==null?c.baseline_threshold:t.baseline_threshold;
+    let pct=function(value){return (100*Math.max(0,Math.min(1,Number(value)||0))).toFixed(5)},a=Number(pct(baseline)),b=Number(pct(served));
+    let detail=name+': served '+precise(served)+', checkpoint '+precise(baseline)+', '+mode;
+    return '<button class="threshold-row" type="button" title="'+esc(detail)+'" aria-label="'+esc(detail)+'"><span class="threshold-row-name">'+esc(name)+'</span><span class="threshold-track" aria-hidden="true"><span class="threshold-span" style="left:'+Math.min(a,b)+'%;width:'+Math.abs(a-b)+'%"></span><i class="threshold-mark checkpoint" style="left:'+a+'%"></i><i class="threshold-mark served" style="left:'+b+'%"></i></span><span class="badge '+kind+'">'+mode+'</span><span class="threshold-tooltip"><strong>Served '+esc(precise(served))+'</strong><span>Checkpoint '+esc(precise(baseline))+'</span><span>'+mode+'</span></span></button>'
+  }).join('');
+  box.innerHTML='<div class="card"><div class="card-head"><div><h3>Detection thresholds</h3><p>'+esc(progress)+'. Served score thresholds by attack family.</p></div></div>'+controls+summary+'<p class="calibration-disclaimer">Live traffic has no labels. Only thresholds are fitted after four continuous hours; checkpoint model outputs remain unchanged and no probabilities are refit. The score-tail target is not a measured false-positive rate, and checkpoint validation metrics do not automatically apply to live traffic.</p><div class="threshold-heading"><h4>Family thresholds</h4><span>Hover or focus a family for exact values</span></div><div class="threshold-chart"><div class="threshold-axis"><span>Family</span><span class="threshold-axis-scale"><span>0</span><span>0.25</span><span>0.50</span><span>0.75</span><span>1</span></span><span>Status</span></div>'+rows+'</div><div class="threshold-legend"><span><i class="served"></i>Served threshold</span><span><i class="checkpoint"></i>Checkpoint floor</span></div></div>';
+}
+
+$('stateStep').addEventListener('input',function(){selectedStep=Number(this.value);renderState()});
+$('expandedStateStep').addEventListener('input',function(){selectedStep=Number(this.value);renderState()});
+function openModelGraph(){if($('modelGraph').classList.contains('graph-empty')||!$('modelGraph').querySelector('svg'))return;let dialog=$('modelGraphDialog');if(dialog.open)return;dialog.classList.remove('detail');$('graphScaleToggle').textContent='Read labels';$('graphScaleToggle').setAttribute('aria-pressed','false');$('graphDialogNote').textContent='Red links are hypothetical next events, not current incidents; there is no wall-clock ETA. Choose Read labels to inspect the map at full size; press Esc to close.';dialog.showModal();document.body.classList.add('graph-modal-open');renderState();$('closeModelGraph').focus()}
+$('expandModelGraph').addEventListener('click',openModelGraph);
+$('modelGraph').addEventListener('click',openModelGraph);
+$('modelGraph').addEventListener('keydown',function(event){if(event.key==='Enter'||event.key===' '){event.preventDefault();openModelGraph()}});
+$('graphScaleToggle').addEventListener('click',function(){let detail=$('modelGraphDialog').classList.toggle('detail'),graph=$('expandedModelGraph');this.textContent=detail?'Fit all':'Read labels';this.setAttribute('aria-pressed',String(detail));$('graphDialogNote').textContent=detail?'Actual-size map: scroll to inspect every peer. Red links remain hypothetical events with no ETA.':'Red links are hypothetical next events, not current incidents; there is no wall-clock ETA. Choose Read labels to inspect the map at full size.';graph.scrollLeft=detail?Math.max(0,(graph.scrollWidth-graph.clientWidth)/2):0;graph.scrollTop=detail?Math.max(0,(graph.scrollHeight-graph.clientHeight)/2):0});
+$('closeModelGraph').addEventListener('click',function(){$('modelGraphDialog').close()});
+$('modelGraphDialog').addEventListener('click',function(event){if(event.target===this)this.close()});
+$('modelGraphDialog').addEventListener('close',function(){document.body.classList.remove('graph-modal-open')});
+function renderState(){if(!forecast||forecast.status!=='CONNECTED')return;let observed=(forecast.observed||{}).edges||[],predicted=(forecast.predicted_edges||[]).filter(function(e){return Number(e.step)<=selectedStep}),current=(forecast.predicted_edges||[]).filter(function(e){return Number(e.step)===selectedStep}),alts=[];current.forEach(function(e){(e.candidates||[]).slice(0,3).forEach(function(c){alts.push({a:e.sender_ip,b:c.ip,severity:c.severity||''})})});let src=forecast.source||{},age=src.mode==='live'&&src.t?'latest scored event '+ageSince(src.t):'recorded replay',paths=new Set(predicted.map(function(e){return e.seed_event})).size;$('stateLabel').textContent=selectedStep===0?(forecast.current_state||'S[t]'):'S[t+'+selectedStep+']';$('stateContext').textContent=selectedStep===0?'Observed input only · '+age:('Observed input plus '+predicted.length+' hypothetical links across '+paths+' seed paths through event step +'+selectedStep+' · '+age);$('stateStepMeaning').textContent=selectedStep===0?'Observed model state; no imagined events':'Step +'+selectedStep+' per seed path · no ETA';$('expandedStateStepMeaning').textContent=$('stateStepMeaning').textContent;$('stateTimingNote').textContent=selectedStep===0?'Blue links were observed. The state timestamp above shows how far behind live capture it is.':'Red links are hypothetical, not detected incidents. Event step +'+selectedStep+' has no time ETA and may already have occurred since the delayed input state.';$('stateStep').value=String(selectedStep);$('expandedStateStep').value=String(selectedStep);$('expandedStateLabel').textContent=$('stateLabel').textContent;$('expandedStateContext').textContent=$('stateContext').textContent;setTopologyGraph('modelGraph',topologySVG(observed,predicted,alts,src.local_ips||[],selectedStep,'state'));if($('modelGraphDialog').open)setTopologyGraph('expandedModelGraph',topologySVG(observed,predicted,alts,src.local_ips||[],selectedStep,'expanded'))}
+function renderRisk(){let values=forecast.step_value||[],shares=forecast.alert_share||[];if(!values.length){$('riskChart').innerHTML=empty('No step scores','The service did not return step_value.');return}let w=800,h=230,p=40,t=forecast.threshold,threshold=t?Number(t.direction||1)*Number(t.threshold||0):null,all=values.slice();if(threshold!=null)all.push(threshold);let min=Math.min(...all),max=Math.max(...all);if(max===min){max+=1;min-=1}let xy=function(v,i){return [p+(w-p*2)*(values.length===1?0:i/(values.length-1)),h-p-(h-p*2)*(v-min)/(max-min)]};let pts=values.map(xy),path='M '+pts.map(function(x){return x[0].toFixed(1)+' '+x[1].toFixed(1)}).join(' L '),thresholdLine='';if(threshold!=null){let y=xy(threshold,0)[1];thresholdLine='<line x1="'+p+'" y1="'+y+'" x2="'+(w-p)+'" y2="'+y+'" stroke="var(--amber)" stroke-dasharray="7 6"/><text x="'+(w-p)+'" y="'+(y-7)+'" text-anchor="end" fill="var(--amber)" font-size="10">threshold '+score(threshold)+'</text>'}let dots=pts.map(function(x,i){return '<circle cx="'+x[0]+'" cy="'+x[1]+'" r="4" fill="var(--red)"/><text x="'+x[0]+'" y="'+(h-12)+'" text-anchor="middle" fill="var(--muted)" font-size="9">'+(i+1)+'</text><title>Step '+(i+1)+': score '+score(values[i])+', alert share '+Number(shares[i]||0).toFixed(3)+'</title>'}).join('');$('riskChart').innerHTML='<svg viewBox="0 0 '+w+' '+h+'">'+thresholdLine+'<path d="'+path+'" fill="none" stroke="var(--red)" stroke-width="3"/>'+dots+'<text x="'+p+'" y="16" fill="var(--muted)" font-size="10">'+esc(forecast.score||'score')+' · event steps, not time</text></svg>'}
+function renderPredictions(){let items=(forecast.predicted_edges||[]).slice(),direction=forecast.threshold?Number(forecast.threshold.direction||1):1;items.sort(function(a,b){return Number(a.step)-Number(b.step)||(direction*Number(b.value)-direction*Number(a.value))});if(!items.length){$('predictionList').innerHTML=empty('No predicted links','The connected service returned no rollout edges.');return}$('predictionList').innerHTML=items.slice(0,30).map(function(x,i){return '<div class="rank-row" title="Hypothetical event +'+number(x.step)+' on seed '+number(x.seed_event)+'; no wall-clock ETA; not observed"><span class="rank">'+ordinal(i+1)+'</span><span class="badge info">Event +'+number(x.step)+'</span><span class="link mono">'+esc(x.sender_ip)+' → '+esc(x.receiver_ip)+'</span><span class="rank-score mono">'+score(x.value)+'</span><span class="rank-severity">'+(x.severity?severityBadge(x.severity):'<span class="muted">not alerting</span>')+'</span></div>'}).join('')}
+function renderWorldAlerts(){
+  let source=forecast.observed||{},incidents=(source.incidents||[]).slice().reverse();
+  $('worldIncidentRows').innerHTML=incidents.length?incidents.map(function(x,index){let key=x.id||[x.opened,x.sender_ip,x.receiver_ip].join('|'),open=selectedWorldIncident===key,when=forecast.source&&forecast.source.mode==='live'?' · '+ageSince(x.opened):'';return '<tr><td><button type="button" class="incident-trigger" data-world-index="'+index+'" aria-expanded="'+open+'">'+stamp(x.opened)+esc(when)+' '+(open?'▾':'▸')+'</button></td><td class="mono">'+esc(x.sender_ip)+' → '+esc(x.receiver_ip)+'</td><td class="mono">'+score(x.opening_score)+'</td><td>'+number(x.events)+'</td><td>'+severityBadge(x.severity)+'</td></tr>'+(open?'<tr><td colspan="5" class="incident-detail-cell">'+worldIncidentDetail(x)+'</td></tr>':'')}).join(''):'<tr><td colspan="5">No observed world-model incidents in the current window.</td></tr>';
+  $('worldAlarmStatus').textContent=Object.prototype.hasOwnProperty.call(source,'incidents')?'Only new observed incidents trigger popups; event flags and forecast links do not.':'Incident grouping is unavailable; world-model popups are paused.';
+  processAlarms('world',incidents.map(function(x){return {key:x.id||[x.opened,x.sender_ip,x.receiver_ip].join('|'),label:x.sender_ip+' → '+x.receiver_ip}}))
+}
+function worldIncidentDetail(incident){let events=incident.related_events||[];if(!events.length)return '<div class="incident-detail">No linked event details in this forecast window.</div>';return '<div class="incident-detail"><h4>Contributing observed events</h4><p>These are scored threshold crossings on this link, not imagined forecast events.</p><table><thead><tr><th>Observed</th><th>Event</th><th>Source IP</th><th>Destination IP</th><th>Score</th><th>Severity</th></tr></thead><tbody>'+events.map(function(x){return '<tr><td>'+stamp(x.t)+'</td><td class="mono">#'+number(x.event_id)+'</td><td class="mono">'+esc(x.sender_ip)+'</td><td class="mono">'+esc(x.receiver_ip)+'</td><td class="mono">'+score(x.value)+'</td><td>'+severityBadge(x.severity)+'</td></tr>'}).join('')+'</tbody></table></div>'}
+$('worldIncidentRows').addEventListener('click',function(event){let button=event.target.closest('button[data-world-index]');if(!button)return;let incidents=((forecast||{}).observed||{}).incidents||[],item=incidents.slice().reverse()[Number(button.dataset.worldIndex)];if(!item)return;let key=item.id||[item.opened,item.sender_ip,item.receiver_ip].join('|');selectedWorldIncident=selectedWorldIncident===key?null:key;renderWorldAlerts()});
+function renderAttentionMatrix(id,items,options){let box=$(id),rows=(items||[]).slice(-8),totals={};rows.forEach(function(row){(row.attended||[]).forEach(function(peer){let key=String(options.peer(peer));totals[key]=(totals[key]||0)+Number(peer.attention||0)})});let columns=Object.keys(totals).sort(function(a,b){return totals[b]-totals[a]}).slice(0,8);if(!rows.length||!columns.length){box.innerHTML=empty('Waiting for attention','The matrix appears after a scored event has a valid neighbourhood.');return}let label=function(column,index){return options.compactColumns?'E'+(index+1):column};let head='<tr><th>'+esc(options.corner)+'</th>'+columns.map(function(column,index){return '<th class="mono" title="'+esc(column)+'">'+esc(label(column,index))+'</th>'}).join('')+'</tr>';let body=rows.map(function(row){let values={};(row.attended||[]).forEach(function(peer){values[String(options.peer(peer))]=Number(peer.attention||0)});return '<tr><td class="mono" title="'+esc(options.row(row))+'">'+esc(options.row(row))+'</td>'+columns.map(function(column){let value=Math.max(0,Math.min(1,values[column]||0)),alpha=.04+.86*Math.sqrt(value),color=value>.42?'#fff':'#111';return '<td class="heat mono" style="background:rgba(255,0,0,'+alpha.toFixed(3)+');color:'+color+'" title="attention '+(100*value).toFixed(3)+'%">'+(Object.prototype.hasOwnProperty.call(values,column)?(100*value).toFixed(1)+'%':'—')+'</td>'}).join('')+'</tr>'}).join('');let newest=Math.max.apply(null,rows.map(function(row){return Number(options.time(row)||0)})),legend=options.compactColumns?'<div class="matrix-legend">'+columns.map(function(column,index){return '<div><strong class="mono">'+label(column,index)+'</strong><span class="mono" title="'+esc(column)+'">'+esc(column)+'</span></div>'}).join('')+'</div>':'';box.innerHTML='<div class="attention-matrix"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+legend+'<div class="matrix-note"><span>Darker red = more attention. Only the eight strongest columns are displayed.</span><span class="mono">updated '+(newest?stamp(newest):'this forecast cycle')+'</span></div>'}
+function renderAttention(){renderAttentionMatrix('worldAttentionMatrix',forecast.explanation||[],{corner:'Seed event / peer',row:function(x){return (x.sender_ip||'seed '+x.seed_event)+' → '+(x.receiver_ip||'?')},peer:function(p){return p.ip||String(p.node)},time:function(x){return x.t}})}
+function renderCaveats(){let items=forecast.caveats||[];$('caveatList').innerHTML=items.length?items.map(function(x){return '<div class="caveat">'+esc(x)+'</div>'}).join(''):empty('No caveats returned','The service did not include caveat text.')}
+
+function detectionThreshold(value){let threshold=value&&typeof value==='object'?value.threshold:value;return threshold==null?'unavailable':Number(threshold).toFixed(4)}
+function renderDetections(d){detections=d||{};let connected=detections.status!=='NOT_CONNECTED'&&!detections.reason;let hasShape=Object.prototype.hasOwnProperty.call(detections,'events_scored');connected=connected&&hasShape;$('detectionStatus').textContent=connected?'connected':'offline';$('detectionStatus').className='badge '+(connected?'good':'danger');$('detectionsOffline').classList.toggle('hidden',connected);$('detectionsConnected').classList.toggle('hidden',!connected);$('detectionsReason').textContent=detections.reason||'No detection payload.';if(!connected){$('detectionLag').textContent='offline';return}let lat=detections.latency_after_t_obs_s||{},captureToObservation=Number(detections.budget_s||0),medianTotal=captureToObservation+Number(lat.median||0),p99Total=captureToObservation+Number(lat.p99||0),fam=detections.incidents_by_family||{},thresholds=detections.thresholds||{},incidentTotal=Object.keys(fam).reduce(function(total,k){return total+Number(fam[k]||0)},0);$('detectionLag').textContent=(1000*medianTotal).toFixed(0)+' ms';$('lagNote').textContent='From first captured packet: detection median '+(1000*medianTotal).toFixed(0)+' ms (p99 '+(1000*p99Total).toFixed(0)+' ms); world model shows state age.';$('detectionStats').innerHTML=kpi('Events scored',number(detections.events_scored),'internal model inputs')+kpi('Active incidents',number(incidentTotal),'open operator-facing alerts')+kpi('Median latency',p99Total?(1000*medianTotal).toFixed(1)+' ms':'—',(p99Total?'from first captured packet':'no event scored in the last minute')+' · '+number(detections.packet_queue_depth||0)+' queued packets')+kpi('P99 latency',p99Total?(1000*p99Total).toFixed(1)+' ms':'—','from first captured packet');let keys=Object.keys(fam).filter(function(k){return Number(fam[k])>0}).sort(function(a,b){return Number(fam[b])-Number(fam[a])});$('familyGrid').innerHTML=keys.length?keys.map(function(k){let t=thresholds[k]||{},mode=t.threshold_source==='live_unlabeled_score_tail'?'4h live threshold':t.adaptive?(t.adaptive_ready?'adaptive · '+number(t.adaptive_samples)+' samples':'learning · '+number(t.adaptive_samples)+'/'+number(t.adaptive_warmup)):'checkpoint';return '<div class="family"><strong>'+number(fam[k])+'</strong><span>'+esc(k)+' · '+mode+' · threshold '+detectionThreshold(t)+'</span></div>'}).join(''):empty('No active incidents','No family currently has an open incident.');renderAttentionMatrix('detectionAttentionMatrix',detections.attention||[],{corner:'Scored event / edge key',compactColumns:true,row:function(x){return '#'+x.event_id+' '+(x.sender_ip||x.sender)+' → '+(x.receiver_ip||x.receiver)},peer:function(p){return p.edge||p.sender+' → '+p.receiver},time:function(x){return x.t_obs}});let activeIncidents=detections.incidents||[],activeKeys=new Set(activeIncidents.map(function(x){return [x.family,x.incident,x.t].join('|')})),incidents=(detections.recent_incidents||activeIncidents).slice().reverse();$('incidentRows').innerHTML=incidents.length?incidents.map(function(x){let active=activeKeys.has([x.family,x.incident,x.t].join('|'));return '<tr><td>#'+number(x.incident)+'</td><td class="mono">'+esc(x.key)+'</td><td><span class="badge danger">'+esc(x.family)+'</span></td><td class="mono">'+score(x.score)+'</td><td>'+stamp(x.t)+'</td><td><span class="badge '+(active?'good':'info')+'">'+(active?'Active':'Closed')+'</span></td></tr>'}).join(''):'<tr><td colspan="6">No incidents opened in the last 3 hours.</td></tr>'}
+
+const renderDetectionsBase=renderDetections;
+renderDetections=function(d){
+  let rawNegative=Number(d&&d.latency_after_t_obs_s&&d.latency_after_t_obs_s.median)<0;
+  if(d&&Object.prototype.hasOwnProperty.call(d,'events_scored')){
+    d=Object.assign({},d);
+    if(d.latency_from_first_packet_s){d.budget_s=0;d.latency_after_t_obs_s=d.latency_from_first_packet_s}
+    else{let budget=Number(d.budget_s||0),lag=d.latency_after_t_obs_s||{};d.latency_after_t_obs_s={median:Math.max(-budget,Number(lag.median||0)),p99:Math.max(-budget,Number(lag.p99||0))}}
+  }
+  renderDetectionsBase(d);
+  if(rawNegative&&!d.latency_from_first_packet_s){$('lagNote').textContent+=' Raw packet timestamps run ahead of the serving clock; restart the detector for direct latency and skew counts.'}
+  if(d&&d.future_timestamp_events){$('lagNote').textContent+=' '+number(d.future_timestamp_events)+' packet timestamps were ahead of the serving clock; latency is floored at zero.'}
+  let total=Number(d&&d.total_ip_packets||0),ipv6=Number(d&&d.ipv6_packets_excluded||0),share=total?100*ipv6/total:0;
+  $('detectionInputWarning').innerHTML=share>=10?'<div class="banner warn">'+share.toFixed(1)+'% of parsed IP packets ('+number(ipv6)+' of '+number(total)+') are IPv6 and not scored by this IPv4-trained checkpoint. The displayed incident rate applies only to eligible IPv4 TCP/UDP flows. IPv6 needs a separately trained and validated model.</div>':'';
+  let suppressed=(d&&d.suppressed_incidents)||[];
+  $('serviceRuleSummary').innerHTML=suppressed.length?'<div class="banner">'+number(suppressed.length)+' INFILTRATION incident(s) suppressed by deterministic service rules. Raw model scores and incidents remain in the API. A service port alone is not a whitelist.</div>':'';
 };
-
-function emptyState(msg, isDark) {
-  let c = isDark ? 'text-white/30 border-white/10 bg-white/5' : 'text-black/40 border-black/10 bg-black/5';
-  return '<div class="w-full h-full min-h-[200px] flex flex-col items-center justify-center p-8 text-center border border-dashed rounded-3xl ' + c + '"><p class="text-sm font-bold uppercase tracking-wider">' + msg + '</p></div>';
+function renderDetectionEvents(){
+  processAlarms('detection',(detections.recent_incidents||detections.incidents||[]).map(function(x){return {key:[x.family,x.incident,x.t].join('|'),label:x.family+' on sender node '+x.key}}))
 }
-
-function dataBlock(label, value, accent) {
-  let color = accent ? 'text-[' + accent + ']' : 'text-white';
-  let vStr = String(value);
-  let sizeClass = vStr.length > 22 ? 'text-sm leading-relaxed break-all' : 'text-2xl';
-  return '<div class="bg-white/5 rounded-2xl p-6 border border-white/5 hover:bg-white/10 transition-colors h-full flex flex-col justify-center"><div class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 flex-none">' + label + '</div><div class="' + sizeClass + ' font-mono font-bold ' + color + '">' + vStr + '</div></div>';
-}
-
-// Navigation Tabs
-document.querySelectorAll('.tab').forEach(function(b) {
-  b.onclick = function() {
-    document.querySelectorAll('.tab').forEach(function(x) { x.classList.remove('active'); });
-    document.querySelectorAll('.view').forEach(function(x) { x.classList.remove('active'); });
-    b.classList.add('active');
-    $(b.dataset.view).classList.add('active');
-  };
-});
-
-// Drag and Drop (Overview Only)
-const gripSVG = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
-function loadOrder(key) { try { let o = JSON.parse(localStorage.getItem('nw_order_'+key)); return Array.isArray(o) ? o : null; } catch(e) { return null; } }
-function saveOrder(key,arr) { try { localStorage.setItem('nw_order_'+key, JSON.stringify(arr)); } catch(e) {} }
-function dragAfterElement(container,y,x) {
-  const els = [...container.querySelectorAll(':scope > [data-key]:not(.dragging)')];
-  return els.reduce(function(closest, el) {
-    const box = el.getBoundingClientRect();
-    const offset = (y - box.top - box.height/2);
-    if(offset < 0 && offset > closest.offset) return {offset:offset, element:el};
-    return closest;
-  },{offset:-Infinity}).element;
-}
-function initSortable(container) {
-  if(!container) return;
-  const key = container.dataset.orderKey;
-  if(!key) return;
-  const saved = loadOrder(key);
-  if(saved) {
-    const map = {};
-    [...container.children].forEach(function(c) { if(c.dataset && c.dataset.key) map[c.dataset.key] = c; });
-    saved.forEach(function(k) { if(map[k]) { container.appendChild(map[k]); delete map[k]; } });
-    Object.values(map).forEach(function(c) { container.appendChild(c); });
+function detectorIncidentKey(x){return [x.family,x.incident,x.t].join('|')}
+function detectorIncidentDetail(incident){let cached=detectorIncidentCache.get(detectorIncidentKey(incident));if(!cached)return '<div class="incident-detail">Loading linked events…</div>';if(cached.error)return '<div class="incident-detail">'+esc(cached.error)+'</div>';let events=cached.events||[];if(!events.length)return '<div class="incident-detail">No event details were recorded for this incident. Incidents opened before the linked-event ledger was enabled retain their summary only.</div>';return '<div class="incident-detail"><h4>Contributing threshold-crossing events · '+(cached.truncated?'first '+number(events.length)+' of '+number(cached.total):number(events.length))+'</h4><p>Grouped by sender '+esc(events[0].sender_ip||incident.key)+'. Source and destination show each flow’s observed IPs and ports.</p><table><thead><tr><th>Observed</th><th>Event</th><th>Source IP : port</th><th>Destination IP : port</th><th>Protocol</th><th>Score</th><th>Threshold</th></tr></thead><tbody>'+events.map(function(x){let protocol=Number(x.protocol)===6?'TCP':Number(x.protocol)===17?'UDP':String(x.protocol);return '<tr><td>'+stamp(x.t_obs)+'</td><td class="mono">#'+number(x.event_id)+'</td><td class="mono">'+esc(x.src)+':'+number(x.src_port)+'</td><td class="mono">'+esc(x.dst)+':'+number(x.dst_port)+'</td><td>'+esc(protocol)+'</td><td class="mono">'+score(x.score)+'</td><td class="mono">'+score(x.threshold)+'</td></tr>'}).join('')+'</tbody></table></div>'}
+function renderDetectionIncidents(){if(!detections||detections.status==='NOT_CONNECTED')return;let active=detections.incidents||[],activeKeys=new Set(active.map(detectorIncidentKey)),incidents=(detections.recent_incidents||active).slice().reverse();$('incidentRows').innerHTML=incidents.length?incidents.map(function(x,index){let key=detectorIncidentKey(x),open=selectedDetectionIncident===key;return '<tr><td><button type="button" class="incident-trigger" data-detection-index="'+index+'" aria-expanded="'+open+'">#'+number(x.incident)+' '+(open?'▾':'▸')+'</button></td><td class="mono">'+esc(x.key)+'</td><td><span class="badge danger">'+esc(x.family)+'</span></td><td class="mono">'+score(x.score)+'</td><td>'+stamp(x.t)+'</td><td><span class="badge '+(activeKeys.has(key)?'good':'info')+'">'+(activeKeys.has(key)?'Active':'Closed')+'</span></td></tr>'+(open?'<tr><td colspan="6" class="incident-detail-cell">'+detectorIncidentDetail(x)+'</td></tr>':'')}).join(''):'<tr><td colspan="6">No incidents opened in the last 3 hours.</td></tr>';let selected=incidents.find(function(x){return detectorIncidentKey(x)===selectedDetectionIncident});if(selected&&!detectorIncidentCache.has(selectedDetectionIncident))loadDetectorIncident(selected)}
+let detectorIncidentLoading=new Set();
+async function loadDetectorIncident(incident){let key=detectorIncidentKey(incident);if(detectorIncidentLoading.has(key))return;detectorIncidentLoading.add(key);try{let query=new URLSearchParams({family:incident.family,incident:String(incident.incident),opened_at:String(incident.t)}),response=await fetch('/api/detection-incident-events?'+query,{cache:'no-store'});if(!response.ok)throw Error('Incident event request failed: '+response.status);detectorIncidentCache.set(key,await response.json())}catch(error){detectorIncidentCache.set(key,{events:[],error:String(error)})}finally{detectorIncidentLoading.delete(key);if(selectedDetectionIncident===key)renderDetectionIncidents()}}
+$('incidentRows').addEventListener('click',function(event){let button=event.target.closest('button[data-detection-index]');if(!button)return;let incidents=(detections.recent_incidents||detections.incidents||[]).slice().reverse(),item=incidents[Number(button.dataset.detectionIndex)];if(!item)return;let key=detectorIncidentKey(item);selectedDetectionIncident=selectedDetectionIncident===key?null:key;renderDetectionIncidents()});
+let protectionPlan=null,protectionSelectionKey=null,protectionRequesting=false,protectionBlocks=[];
+function selectedProtectionIncident(){let current=detections||{};return (current.recent_incidents||current.incidents||[]).find(function(x){return detectorIncidentKey(x)===selectedDetectionIncident})}
+function renderProtectionSelection(){
+  let selector=$('protectionIncidentSelect'),current=detections||{},incidents=(current.recent_incidents||current.incidents||[]).slice().reverse();
+  let active=new Set((current.incidents||[]).map(detectorIncidentKey)),keys=incidents.map(detectorIncidentKey),signature=JSON.stringify(keys.map(function(key){return [key,active.has(key)]}));
+  if(selector.dataset.incidents!==signature){
+    selector.replaceChildren(new Option('Select an incident',''));
+    incidents.forEach(function(item){let key=detectorIncidentKey(item),state=active.has(key)?'active':'closed';selector.add(new Option('#'+item.incident+' · '+item.family+' · sender node '+item.key+' ('+state+')',key))});
+    selector.dataset.incidents=signature;
   }
-  let dragEl = null;
-  [...container.children].forEach(function(child) {
-    if(!child.dataset || !child.dataset.key) return;
-    const handle = child.querySelector('.grip');
-    if(handle) {
-      handle.onmousedown = function() { child.draggable = true; };
-      handle.onmouseup = function() { child.draggable = false; };
-    }
-    child.ondragstart = function(e) {
-      dragEl = child;
-      setTimeout(function() { child.classList.add('dragging'); }, 0);
-      e.dataTransfer.effectAllowed = 'move';
-    };
-    child.ondragend = function() {
-      child.classList.remove('dragging');
-      child.draggable = false;
-      dragEl = null;
-      saveOrder(key, [...container.children].filter(function(c) { return c.dataset && c.dataset.key; }).map(function(c) { return c.dataset.key; }));
-    };
+  let selected=selectedProtectionIncident(),key=selected?detectorIncidentKey(selected):null;
+  if(!selected)selectedDetectionIncident=null;
+  selector.disabled=!incidents.length;
+  selector.value=key||'';
+  if(key!==protectionSelectionKey){protectionSelectionKey=key;protectionPlan=null;$('protectionExecute').disabled=true;$('protectionText').replaceChildren();$('protectionFacts').textContent='';$('protectionStatus').textContent=selected?(active.has(key)?'Open the guide to review containment options. No firewall change occurs until you confirm it.':'This incident is closed. Its guide is available, but the host-block button requires an active incident.'):'Select an incident to read its guide.'}
+  $('protectionSelection').textContent=selected?'Incident #'+selected.incident+' · '+selected.family+' · sender node '+selected.key:'Select an incident to read its guide.';
+  $('protectionAdvice').disabled=!selected||protectionRequesting;
+}
+$('protectionIncidentSelect').addEventListener('change',function(){selectedDetectionIncident=this.value||null;renderDetectionIncidents();renderProtectionSelection()});
+async function protectionRequest(path,payload){let response=await fetch('/api/protection/'+path,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','X-Netwatch-Action':'protection'},body:JSON.stringify(payload)});if(!response.ok)throw Error((await response.text()).slice(0,500));return response.json()}
+function renderProtectionAdvice(advice){
+  let target=$('protectionText'),list=null;target.replaceChildren();
+  String(advice||'').split(/\r?\n/).forEach(function(raw){
+    let line=raw.trim();if(!line)return;
+    let bullet=line.match(/^(?:[-*•]|\d+[.)])\s+/),item;
+    if(bullet){if(!list){list=document.createElement('ul');target.appendChild(list)}item=document.createElement('li');list.appendChild(item);line=line.slice(bullet[0].length)}
+    else{list=null;item=document.createElement('p');target.appendChild(item)}
+    line.split('**').forEach(function(part,index){if(!part)return;if(index%2){let strong=document.createElement('strong');strong.textContent=part;item.appendChild(strong)}else item.appendChild(document.createTextNode(part))});
   });
-  if(!container._dragBound) {
-    container._dragBound = true;
-    container.addEventListener('dragover', function(e) {
-      if(!dragEl) return;
-      e.preventDefault();
-      const after = dragAfterElement(container, e.clientY, e.clientX);
-      if(after == null) container.appendChild(dragEl);
-      else container.insertBefore(dragEl, after);
-    });
-  }
 }
-document.querySelectorAll('.sortable').forEach(initSortable);
-
-function render(d) {
-  let c = d.current, st = d.status || {}, sys = d.system || {};
-
-  // Header state
-  $('dot').classList.replace('bg-white/40', 'bg-[#e4ff00]');
-  $('dotPing').classList.replace('bg-white/40', 'bg-[#e4ff00]');
-  $('liveText').textContent = 'LIVE';
-  $('liveText').classList.replace('text-white/60', 'text-[#e4ff00]');
-
-  $('heroRate').textContent = c ? (c.packets_per_second||0).toFixed(1) : '0.0';
-  $('heroInterface').textContent = st.interface || '--';
-
-  if(!c) return;
-
-  let direction = d.direction || {}, flows = d.flows || [], alerts = d.alerts || [], history = d.history || [];
-
-  // Overview Counters
-  $('pktsTotal').textContent = num(c.total_packets);
-  $('tcpSynCount').textContent = num(c.syn_count);
-  $('activeFlows').textContent = num(flows.length);
-  $('flowCountLabel').textContent = flows.length + ' Flows';
-
-  timeline(history);
-  donut(c);
-  tcpBarsView(c);
-  ioBarsView(direction);
-  details(c);
-  flowsView(flows);
-
-  // Map renders (Mini and Full)
-  mapView(d.graph || {}, sys.interface_ips || [], sys.gateway_ip || '', 'graphMini', true);
-  mapView(d.graph || {}, sys.interface_ips || [], sys.gateway_ip || '', 'graphFull', false);
-
-  alertsView(alerts);
-  analysisView(c, alerts);
-  systemView(sys, st, c);
+function renderProtectionFacts(plan){let source=plan.source_ip?'Source '+plan.source_ip+' ('+plan.source_scope+')':'Source not verified';$('protectionFacts').textContent='Detector model flag · '+(plan.active?'Active':'Closed')+' incident · '+source+' · '+number(plan.linked_events)+' linked events. The guide below is built from these facts alone.'}
+$('protectionAdvice').addEventListener('click',async function(){let incident=selectedProtectionIncident();if(!incident){$('protectionStatus').textContent='Select a detector incident first.';return}protectionRequesting=true;$('protectionAdvice').disabled=true;$('protectionStatus').textContent='Building the guide…';$('protectionText').replaceChildren();$('protectionFacts').textContent='';protectionPlan=null;$('protectionExecute').disabled=true;try{let plan=await protectionRequest('advice',{family:incident.family,incident:incident.incident,opened_at:incident.t});if(selectedDetectionIncident!==detectorIncidentKey(incident))return;protectionPlan=plan;renderProtectionFacts(plan);renderProtectionAdvice(plan.advice);$('protectionStatus').textContent=plan.can_execute?'Optional action: '+plan.action+' A host block persists until removed and cannot stop a distributed attack.':plan.reason;$('protectionExecute').disabled=!plan.can_execute}catch(error){$('protectionStatus').textContent='Guide unavailable: '+String(error)}finally{protectionRequesting=false;renderProtectionSelection()}});
+$('protectionExecute').addEventListener('click',async function(){let plan=protectionPlan;if(!plan||!plan.can_execute)return;let phrase=plan.confirmation,confirmation=prompt('This will block inbound traffic from '+plan.source_ip+' on this host until removed. '+plan.action+' For distributed attacks, also contact your ISP/CDN. Type '+phrase+' to continue:');if(confirmation!==phrase)return;$('protectionExecute').disabled=true;$('protectionStatus').textContent='Adding local firewall rule… Approve the Windows administrator prompt if it appears.';try{let result=await protectionRequest('execute',{token:plan.token,confirmation:confirmation});protectionPlan=null;$('protectionStatus').textContent='Blocked '+result.source_ip+' with rule '+result.rule+'. Open Blocked IPs to review or unblock it.';if(!$('protectionBlockList').hidden)loadProtectionBlocks()}catch(error){protectionPlan=null;$('protectionStatus').textContent='No block confirmed: '+String(error)+' Open the guide again before retrying.'}});
+async function loadProtectionBlocks(){let rows=$('protectionBlockRows');rows.textContent='Checking host firewall…';try{let response=await fetch('/api/protection/blocks',{cache:'no-store'});if(!response.ok)throw Error((await response.text()).slice(0,300));let result=await response.json();protectionBlocks=result.blocks||[];$('protectionBlocks').textContent='Blocked IPs'+(protectionBlocks.length?' ('+protectionBlocks.length+')':'');rows.innerHTML=protectionBlocks.length?protectionBlocks.map(function(block,index){return '<div class="protection-block-row"><div><strong class="mono">'+esc(block.source_ip)+'</strong><small class="mono">'+esc(block.rule)+'</small></div><button type="button" data-unblock-index="'+index+'" aria-label="Unblock '+esc(block.source_ip)+'">Unblock</button></div>'}).join(''):'No active Netwatch host-firewall blocks.'}catch(error){rows.textContent='Could not read firewall blocks: '+String(error)}}
+$('protectionBlocks').addEventListener('click',function(){let panel=$('protectionBlockList');panel.hidden=!panel.hidden;this.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)loadProtectionBlocks()});
+$('protectionBlockRows').addEventListener('click',async function(event){let button=event.target.closest('button[data-unblock-index]');if(!button)return;let block=protectionBlocks[Number(button.dataset.unblockIndex)];if(!block||!confirm('Remove Netwatch firewall block for '+block.source_ip+'?'))return;button.disabled=true;button.textContent='Removing…';try{await protectionRequest('blocks/unblock',{source_ip:block.source_ip,rule:block.rule});$('protectionStatus').textContent='Firewall block removed for '+block.source_ip+'.';await loadProtectionBlocks()}catch(error){$('protectionStatus').textContent='Could not unblock '+block.source_ip+': '+String(error);button.disabled=false;button.textContent='Unblock'}});
+$('incidentRows').addEventListener('click',function(){renderProtectionSelection()});
+function renderModelRates(){let detectorRate=detections&&detections.status==='RUNNING'?detections.events_per_second:null,worldSource=(forecast||{}).source||{},worldRate=forecast&&forecast.status==='CONNECTED'?worldSource.events_per_second:null;$('detectionRate').textContent=detectorRate==null?'—':Number(detectorRate).toFixed(2);$('worldRate').textContent=worldRate==null?'—':Number(worldRate).toFixed(2)}
+async function pollModels(){let results=await Promise.allSettled(['/api/forecast','/api/detections'].map(async function(url){let response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('HTTP '+response.status);return response.json()}));let payloads=results.map(function(result){return result.status==='fulfilled'?result.value:{status:'NOT_CONNECTED',reason:String(result.reason)}});renderForecast(payloads[0]);renderDetections(payloads[1]);renderModelChips();renderDetectionIncidents();renderDetectionEvents();renderDetectionCalibration();renderModelRates();let active=(detections.incidents||[]).find(function(x){return detectorIncidentKey(x)===selectedDetectionIncident});if(active&&detectorIncidentCache.has(selectedDetectionIncident))loadDetectorIncident(active)}
+let lastTelemetryAt=0,telemetryPending=false;
+async function pollTelemetry(){if(telemetryPending||Date.now()-lastTelemetryAt<5000)return;telemetryPending=true;try{let response=await fetch('/api/telemetry',{cache:'no-store',signal:AbortSignal.timeout(5000)});if(!response.ok)throw Error('HTTP '+response.status);let snapshot=await response.json();renderTelemetry(snapshot);lastTelemetryAt=Date.now()}catch(error){setChip('captureChip',false,'Dashboard reconnecting')}finally{telemetryPending=false}}
+let stream=new EventSource('/api/stream');stream.addEventListener('telemetry',function(event){try{renderTelemetry(JSON.parse(event.data));lastTelemetryAt=Date.now()}catch(error){console.error(error)}});stream.onerror=function(){pollTelemetry()};
+pollTelemetry();setInterval(pollTelemetry,5000);
+pollModels();renderProtectionSelection();setInterval(function(){pollModels().then(renderProtectionSelection)},2000);
+function setTopologyGraph(id,markup){let box=$(id),hadGraph=box.dataset.topologySeen==='1',left=box.scrollLeft,top=box.scrollTop,hasGraph=markup.startsWith('<svg');box.innerHTML=markup;box.classList.toggle('graph-empty',!hasGraph);if(hasGraph){box.scrollLeft=hadGraph?left:Math.max(0,(box.scrollWidth-box.clientWidth)/2);box.scrollTop=hadGraph?top:0;box.dataset.topologySeen='1'}else{box.dataset.topologySeen='0'}}
+function topologySVG(observed,predicted,alternatives,locals,step,kind){
+  let raw=[],traffic={},endpoints=new Set();
+  function add(e,type,a,b){if(!a||!b||a===b)return;a=String(a);b=String(b);let weight=Math.max(1,Number(e.events||e.packet_count||1));raw.push({a:a,b:b,type:type,severity:e.severity||'',weight:weight,step:type==='predicted'?Number(e.step||0):0});endpoints.add(a);endpoints.add(b);traffic[a]=(traffic[a]||0)+weight;traffic[b]=(traffic[b]||0)+weight}
+  (observed||[]).forEach(function(e){add(e,'observed',e.sender_ip||e.src_ip,e.receiver_ip||e.dst_ip)});
+  (predicted||[]).forEach(function(e){add(e,'predicted',e.sender_ip,e.receiver_ip)});
+  (alternatives||[]).forEach(function(e){add(e,'alternative',e.a,e.b)});
+  if(!raw.length)return empty('No links to draw','Observed links appear as traffic is scored.');
+  let localIPs=(locals||[]).map(String),present=localIPs.filter(function(ip){return endpoints.has(ip)}),hubIP=present[0]||Array.from(endpoints).sort(function(a,b){return (traffic[b]||0)-(traffic[a]||0)||a.localeCompare(b)})[0],hubIPs=new Set(present.length?localIPs:[hubIP]),hub='@local-host',peers=new Map(),links=new Map();
+  raw.forEach(function(e){let a=hubIPs.has(e.a)?hub:e.a,b=hubIPs.has(e.b)?hub:e.b;if(a===b)return;let key=[e.type,a,b,e.severity].join('|'),old=links.get(key);if(old){old.weight+=e.weight;if(e.step)old.step=old.step?Math.min(old.step,e.step):e.step}else{links.set(key,{a:a,b:b,type:e.type,severity:e.severity,weight:e.weight,step:e.step})}[a,b].forEach(function(ip){if(ip===hub)return;let p=peers.get(ip)||{ip:ip,weight:0,observed:false,predicted:false,alternative:false,severity:false};p.weight+=e.weight;p[e.type]=true;p.severity=p.severity||!!e.severity;peers.set(ip,p)})});
+  let rank=function(p){return (p.predicted?1000000:0)+(p.severity?200000:0)+(p.observed?10000:0)+Math.log1p(p.weight)*100},ranked=Array.from(peers.values()).sort(function(a,b){return rank(b)-rank(a)||a.ip.localeCompare(b.ip)}),limit=kind==='expanded'?ranked.length:Math.max(18,ranked.filter(function(p){return p.predicted}).length),shown=ranked.slice(0,limit),shownIPs=new Set(shown.map(function(p){return p.ip}));
+  let privateIP=function(ip){let p=ip.split('.').map(Number),v=ip.toLowerCase();return p.length===4&&(p[0]===10||p[0]===127||p[0]===192&&p[1]===168||p[0]===172&&p[1]>=16&&p[1]<=31||p[0]===169&&p[1]===254)||v.startsWith('fe80:')||v.startsWith('fc')||v.startsWith('fd')},left=[],right=[];
+  shown.sort(function(a,b){return a.ip.localeCompare(b.ip)}).forEach(function(p){let preferred=privateIP(p.ip)?left:right,other=preferred===left?right:left;(preferred.length<=other.length+1?preferred:other).push(p)});
+  let rowGap=kind==='expanded'?40:58,nodeHeight=kind==='expanded'?38:46,h=Math.max(520,130+Math.max(left.length,right.length)*rowGap),cy=h/2,pos={};pos[hub]=[500,cy];[left,right].forEach(function(side,index){side.forEach(function(p,i){pos[p.ip]=[index?855:145,cy+(i-(side.length-1)/2)*rowGap]})});
+  let sys=telemetry.system||{},sameHost=kind!=='offline'&&(sys.interface_ips||[]).includes(hubIP),hubName=sameHost&&sys.hostname?String(sys.hostname):hubIP,hostName=function(ip){if(kind==='offline')return ip;let entry=hostnamesByIP[ip];return entry&&Date.now()-entry.seen<3600000?entry.name:ip},short=function(v){let s=String(v);return s.length>25?s.slice(0,24)+'…':s},prefix=kind==='capture'?'captureTopo':kind==='expanded'?'expandedStateTopo':kind==='offline'?'offlineStateTopo':'stateTopo';
+  let svg='<svg viewBox="0 0 1000 '+h+'" style="height:'+h+'px" role="img" aria-label="Network topology centered on '+esc(hubName)+'"><defs>';
+  [['observed','var(--cyan)'],['predicted','var(--red)'],['alternative','var(--muted)'],['severity','var(--amber)']].forEach(function(x){svg+='<marker id="'+prefix+x[0]+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="'+x[1]+'"/></marker>'});
+  svg+='</defs><rect x="20" y="56" width="260" height="'+(h-100)+'" rx="20" fill="var(--topology-lane)"/><rect x="720" y="56" width="260" height="'+(h-100)+'" rx="20" fill="var(--topology-lane)"/><circle cx="500" cy="'+cy+'" r="116" fill="var(--topology-aura)" stroke="var(--topology-aura-border)"/>';
+  svg+='<text x="24" y="29" fill="var(--muted)" font-size="12">'+(step?'Observed + hypothetical through event +'+step+' per seed (no ETA)':'Observed topology')+' · showing '+shown.length+' of '+ranked.length+' peers</text>';
+  Array.from(links.values()).filter(function(e){return (e.a===hub||shownIPs.has(e.a))&&(e.b===hub||shownIPs.has(e.b))}).sort(function(a,b){return ['observed','alternative','predicted'].indexOf(a.type)-['observed','alternative','predicted'].indexOf(b.type)}).forEach(function(e){let a=pos[e.a],b=pos[e.b];if(!a||!b)return;let start=[a[0]+(b[0]>=a[0]?(e.a===hub?91:107):-(e.a===hub?91:107)),a[1]],end=[b[0]+(a[0]>=b[0]?(e.b===hub?91:107):-(e.b===hub?91:107)),b[1]],color=e.severity?'var(--amber)':e.type==='observed'?'var(--cyan)':e.type==='predicted'?'var(--red)':'var(--muted)',marker=e.severity?'severity':e.type,midX=(start[0]+end[0])/2,midY=(start[1]+end[1])/2+(e.type==='predicted'?-14:e.type==='alternative'?14:0);if(e.a!==hub&&e.b!==hub)midY+=midY<cy?-65:65;let meaning=e.type==='predicted'?'hypothetical event +'+e.step+'; no ETA; not observed':e.type==='observed'?'observed traffic':'alternative hypothetical link';svg+='<path d="M '+start[0]+' '+start[1]+' Q '+midX+' '+midY+' '+end[0]+' '+end[1]+'" fill="none" stroke="'+color+'" stroke-width="'+(e.type==='predicted'||e.severity?2.4:1.6)+'" stroke-dasharray="'+(e.type==='predicted'?'8 6':e.type==='alternative'?'2 6':'none')+'" opacity="'+(e.type==='observed'?'.50':'.85')+'" marker-end="url(#'+prefix+marker+')"><title>'+esc(e.a===hub?hubName:hostName(e.a))+' → '+esc(e.b===hub?hubName:hostName(e.b))+' · '+meaning+(e.severity?' · model severity '+esc(e.severity):'')+'</title></path>'});
+  shown.forEach(function(p){let xy=pos[p.ip],name=hostName(p.ip),hasName=name!==p.ip,fill=p.predicted&&!p.observed?'var(--topology-predicted-node)':'var(--topology-node)',border=p.severity?'var(--amber)':p.predicted?'var(--red)':'var(--topology-node-border)';svg+='<g><title>'+esc(name)+(hasName?' ('+esc(p.ip)+')':'')+' · '+(p.predicted?'predicted ':'')+(p.observed?'observed':'')+'</title><rect x="'+(xy[0]-107)+'" y="'+(xy[1]-nodeHeight/2)+'" width="214" height="'+nodeHeight+'" rx="12" fill="'+fill+'" stroke="'+border+'" stroke-width="'+(p.predicted?2:1.4)+'"/><text x="'+xy[0]+'" y="'+(xy[1]-(hasName?3:-1))+'" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700">'+esc(short(name))+'</text>'+(hasName?'<text x="'+xy[0]+'" y="'+(xy[1]+14)+'" text-anchor="middle" fill="var(--muted)" font-size="10">'+esc(short(p.ip))+'</text>':'')+'</g>'});
+  svg+='<g><title>'+esc(hubName)+' · '+esc(Array.from(hubIPs).join(', '))+'</title><rect x="407" y="'+(cy-32)+'" width="186" height="64" rx="17" fill="var(--red)"/><text x="500" y="'+(cy-4)+'" text-anchor="middle" fill="#fff" font-size="16" font-weight="800">'+esc(short(hubName))+'</text><text x="500" y="'+(cy+17)+'" text-anchor="middle" fill="#fff" font-size="10">'+esc(kind==='offline'?'CAPTURE HUB':hubName===hubIP?'MAIN HOST':short(hubIP))+'</text></g>';
+  svg+='<text x="24" y="'+(h-17)+'" fill="var(--muted)" font-size="10">'+(ranked.length>shown.length?(ranked.length-shown.length)+' lower-activity peers omitted to prevent overlap. ':'')+(kind==='offline'?'Offline capture IPs; no live hostnames are reused.':'Names come from captured DNS; IPs are shown otherwise.')+'</text></svg>';
+  return svg
 }
-
-function timeline(h) {
-  let windows = h.slice(-40);
-  let values = windows.map(function(x) { return +x.packets_per_second || 0; });
-  let max = Math.max(1, ...values);
-  let left = 58, right = 680, top = 18, bottom = 165, width = right-left, height = bottom-top;
-  let axes = '<line x1="'+left+'" y1="'+top+'" x2="'+left+'" y2="'+bottom+'" stroke="#000" stroke-opacity=".35" stroke-width="1"/>';
-  axes += '<line x1="'+left+'" y1="'+bottom+'" x2="'+right+'" y2="'+bottom+'" stroke="#000" stroke-opacity=".35" stroke-width="1"/>';
-  for(let i=0;i<=4;i++) {
-    let y = bottom-(i/4)*height, value = max*i/4;
-    axes += '<line x1="'+left+'" y1="'+y+'" x2="'+right+'" y2="'+y+'" stroke="#000" stroke-opacity=".12" stroke-dasharray="3 5"/>';
-    axes += '<text x="'+(left-9)+'" y="'+(y+4)+'" text-anchor="end" font-size="10" font-family="ui-monospace,monospace" fill="#000" fill-opacity=".62">'+value.toFixed(value<10?1:0)+'</text>';
-  }
-  let ticks = Math.min(4, Math.max(1, windows.length));
-  for(let i=0;i<ticks;i++) {
-    let index = ticks===1 ? 0 : Math.round(i*(windows.length-1)/(ticks-1));
-    let x = left+(windows.length<=1 ? 0 : index/(windows.length-1)*width);
-    let stamp = new Date(windows[index].window_start);
-    let label = isNaN(stamp) ? 'window '+(windows[index].window_index+1) : stamp.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    axes += '<line x1="'+x+'" y1="'+bottom+'" x2="'+x+'" y2="'+(bottom+4)+'" stroke="#000" stroke-opacity=".35"/>';
-    axes += '<text x="'+x+'" y="'+(bottom+18)+'" text-anchor="middle" font-size="9" font-family="ui-monospace,monospace" fill="#000" fill-opacity=".62">'+label+'</text>';
-  }
-  axes += '<text x="'+left+'" y="11" font-size="10" font-weight="700" font-family="ui-monospace,monospace" fill="#000" fill-opacity=".7">PACKETS / SECOND</text>';
-  $('timelineAxes').innerHTML = axes;
-  if(!windows.length) { $('timeline').setAttribute('d','M'+left+' '+bottom+' L'+right+' '+bottom); $('timelineArea').setAttribute('d','M'+left+' '+bottom+' L'+right+' '+bottom+' Z'); $('timelinePoints').innerHTML=''; return; }
-  let points = values.map(function(value, i) { let x = left+(windows.length<=1 ? 0 : i/(windows.length-1)*width), y = bottom-value/max*height; return [x,y]; });
-  let path = 'M'+points.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1);}).join(' L');
-  $('timeline').setAttribute('d',path);
-  $('timelineArea').setAttribute('d',path+' L'+points[points.length-1][0].toFixed(1)+' '+bottom+' L'+left+' '+bottom+' Z');
-  $('timelinePoints').innerHTML = points.map(function(p,i){return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.2" fill="#000"/><title>Window '+(windows[i].window_index+1)+': '+values[i].toFixed(2)+' packets/sec</title>';}).join('');
+let offlinePollTimer=null;
+function offlineTable(headings,rows){return '<div class="table-wrap"><table><thead><tr>'+headings.map(function(x){return '<th>'+esc(x)+'</th>'}).join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>'}
+let offlineWorldResult=null,offlineSelectedStep=1;
+function offlineWorldPanel(w){
+  let observed=w.observed||{},incidents=observed.incidents||[],threshold=w.threshold||{},source=w.source||{},maxStep=Math.min(3,Number(w.rollout_steps||0));
+  let incidentRows=incidents.length?incidents.slice().reverse().map(function(x){let events=x.related_events||[];return '<details><summary>'+esc(x.sender_ip)+' → '+esc(x.receiver_ip)+' · '+stamp(x.opened)+' · '+number(events.length)+' linked events</summary>'+offlineTable(['Captured','Source','Destination','Score','Severity'],events.map(function(e){return '<tr><td>'+stamp(e.t)+'</td><td class="mono">'+esc(e.sender_ip)+'</td><td class="mono">'+esc(e.receiver_ip)+'</td><td class="mono">'+score(e.value)+'</td><td>'+esc(e.severity)+'</td></tr>'}))+'</details>'}).join(''):'<p class="subtle">No persistent observed world-model incident under the original checkpoint rule.</p>';
+  let tabs=Array.from({length:maxStep+1},function(_,step){return '<button type="button" data-offline-step="'+step+'" aria-pressed="false">'+(step?'S[t+'+step+']':'S[t] observed')+'</button>'}).join('');
+  return '<div class="card"><div class="card-head"><div><h3>World model · '+number(w.events_scored)+' scored events</h3><p>Completed PCAP through the lag-tag checkpoints. Observed links are not forecast links.</p></div><span class="badge info">Offline replay</span></div>'+
+    '<p class="subtle">Last scored event: '+stamp(source.t)+' · capture ends: '+stamp(source.capture_last)+' · '+esc(threshold.rule||'No served threshold')+'.</p>'+
+    '<h4>Observed incidents</h4>'+incidentRows+
+    '<h4>Past ↔ next imagined states</h4><p class="subtle">Past events come from the completed capture. S[t+k] is the k-th imagined event on each seed path, not k seconds or the next k events actually captured.</p>'+
+    '<div class="offline-step-tabs" id="offlineStepTabs" role="group" aria-label="Offline forecast event step">'+tabs+'</div>'+
+    '<div class="offline-split"><div class="offline-pane past"><h5>Observed past</h5><p id="offlinePastNote">Latest scored events before S[t]</p><div id="offlinePast"></div></div><div class="offline-pane future"><h5>Imagined next events</h5><p id="offlineFutureNote">Three event steps per seed path at most</p><div id="offlineFuture"></div></div></div>'+
+    '<div class="model-graph offline-graph" id="offlineGraph" style="margin-top:14px"></div><p class="offline-timing" id="offlineTiming"></p></div>';
 }
-
-function donut(c) {
-  let segs = [
-    { n:'TCP', v:c.tcp_packets||0 },
-    { n:'UDP', v:c.udp_packets||0 },
-    { n:'DNS', v:c.dns_packets||0 },
-    { n:'ICMP', v:c.icmp_packets||0 }
-  ];
-  let other = Math.max(0, c.total_packets - segs[0].v - segs[1].v - segs[2].v - segs[3].v);
-  segs.push({ n:'Other', v:other });
-
-  let t = Math.max(1, c.total_packets), r = 70, circ = 2*Math.PI*r, offset = 0;
-
-  let svg = '<svg viewBox="0 0 180 180" class="w-full h-full transform -rotate-90 drop-shadow-2xl">';
-  svg += '<circle cx="90" cy="90" r="' + r + '" fill="none" stroke="#000000" stroke-width="28" opacity="0.1"/>';
-
-  segs.forEach(function(s, i) {
-    if(s.v === 0) return;
-    let dash = (s.v/t)*circ;
-    let strokeClass = 'stroke-black';
-    let dashArray = dash.toFixed(2) + ' ' + (circ-dash).toFixed(2);
-
-    if(i === 1) { dashArray = '5 8'; } // UDP dashed
-    if(i === 2) { strokeClass = 'stroke-black/40'; } // DNS lighter
-    if(i === 3) { dashArray = '2 5'; strokeClass = 'stroke-black/60'; } // ICMP dotted
-
-    svg += '<circle cx="90" cy="90" r="' + r + '" fill="none" class="' + strokeClass + '" stroke-width="24" stroke-dasharray="' + dashArray + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" stroke-linecap="round"/>';
-    offset += dash;
-  });
-  svg += '</svg>';
-
-  svg += '<div class="absolute inset-0 flex flex-col items-center justify-center">';
-  svg += '<span class="text-3xl font-display font-bold text-black tracking-tighter">' + bytes(c.total_bytes) + '</span>';
-  svg += '<span class="text-[9px] font-bold uppercase tracking-widest text-black/50 mt-1">Total Payload</span>';
-  svg += '</div>';
-
-  $('protocolDonut').innerHTML = svg;
+function renderOfflineState(){
+  let w=offlineWorldResult;if(!w||!$('offlineGraph'))return;
+  let observed=w.observed||{},predicted=w.predicted_edges||[],maxStep=Math.min(3,Number(w.rollout_steps||0));offlineSelectedStep=Math.max(0,Math.min(offlineSelectedStep,maxStep));
+  let recent=(observed.recent_events||[]).slice(-3).reverse();
+  if(recent.length){$('offlinePastNote').textContent='Last '+recent.length+' scored events in capture order';$('offlinePast').innerHTML=recent.map(function(e){return '<div class="offline-event"><small>'+stamp(e.t)+' · observed #'+number(e.event_id)+'</small><strong class="mono">'+esc(e.sender_ip)+' → '+esc(e.receiver_ip)+'</strong><small>Model score '+score(e.value)+'</small></div>'}).join('')}
+  else{let links=(observed.edges||[]).slice().sort(function(a,b){return Number(b.events||0)-Number(a.events||0)}).slice(0,3);$('offlinePastNote').textContent='Aggregated observed links; re-analyze this PCAP for exact event order';$('offlinePast').innerHTML=links.length?links.map(function(e){return '<div class="offline-event"><strong class="mono">'+esc(e.sender_ip)+' → '+esc(e.receiver_ip)+'</strong><small>'+number(e.events)+' observed events · not a chronological sequence</small></div>'}).join(''):'<p class="subtle">No observed links were returned.</p>'}
+  let current=predicted.filter(function(e){return Number(e.step)===offlineSelectedStep}),paths=new Set(current.map(function(e){return e.seed_event})).size;
+  $('offlineFutureNote').textContent=offlineSelectedStep?'Event +'+offlineSelectedStep+' · '+current.length+' imagined links across '+paths+' seed paths':'Select +1, +2, or +3 to inspect imagined links';
+  $('offlineFuture').innerHTML=offlineSelectedStep?(current.length?current.map(function(e){return '<div class="offline-event"><small>Seed #'+number(e.seed_event)+' · event +'+number(e.step)+' · hypothetical</small><strong class="mono">'+esc(e.sender_ip)+' → '+esc(e.receiver_ip)+'</strong><small>Model score '+score(e.value)+(e.severity?' · '+esc(e.severity):'')+'</small></div>'}).join(''):'<p class="subtle">No imagined link at this step.</p>'):'<p class="subtle">S[t] contains observed capture context only. It is not a prediction.</p>';
+  $('offlineStepTabs').querySelectorAll('button[data-offline-step]').forEach(function(button){let active=Number(button.dataset.offlineStep)===offlineSelectedStep;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active))});
+  setTopologyGraph('offlineGraph',topologySVG(observed.edges||[],predicted.filter(function(e){return Number(e.step)<=offlineSelectedStep&&Number(e.step)<=3}),[],[],offlineSelectedStep,'offline'));
+  $('offlineTiming').textContent=offlineSelectedStep?'Blue links were observed before the model state. Red links through event +'+offlineSelectedStep+' are imagined, not detected incidents. A completed PCAP may already contain packets after S[t]; the rollout has no validated wall-clock ETA.':'Blue links are observed input from the completed PCAP. Choose an event step to add hypothetical red links.';
 }
-
-function tcpBarsView(c) {
-  let items = [
-    { l:'ACK', v:c.ack_count },
-    { l:'PSH', v:c.psh_count },
-    { l:'RST', v:c.rst_count },
-    { l:'FIN', v:c.fin_count }
-  ];
-  let m = Math.max(1, ...items.map(function(x) { return x.v; }));
-
-  let html = '';
-  items.forEach(function(item) {
-    let pct = (100 * item.v / m).toFixed(1);
-    html += '<div class="w-full flex items-center gap-4">';
-    html += '<span class="w-10 text-[10px] font-bold uppercase tracking-widest text-[#4ade80]">' + item.l + '</span>';
-    html += '<div class="flex-1 h-6 rounded-md bg-black/40 border border-[#4ade80]/20 p-1">';
-    html += '<div class="h-full bg-[#4ade80] rounded-sm" style="width:' + pct + '%"></div>';
-    html += '</div>';
-    html += '<span class="w-16 text-right text-sm font-mono font-bold text-white">' + num(item.v) + '</span>';
-    html += '</div>';
-  });
-  $('tcpBars').innerHTML = html;
+$('offlineResult').addEventListener('click',function(event){let button=event.target.closest('button[data-offline-step]');if(!button)return;offlineSelectedStep=Number(button.dataset.offlineStep);renderOfflineState()});
+function renderOfflineResult(result){
+  let d=result.detection,w=result.world,parts=[];
+  if(d){let incidents=(d.incidents||[]).slice().reverse(),thresholds=d.thresholds||{};parts.push('<div class="card"><div class="card-head"><div><h3>Detection · '+number(d.events_scored)+' scored events</h3><p>Original checkpoint thresholds; incidents meet the detector persistence rule. Click one for its contributing captured events.</p></div><span class="badge '+(incidents.length?'danger':'good')+'">'+number(incidents.length)+' incidents</span></div><details><summary>Checkpoint thresholds by family</summary>'+offlineTable(['Family','Threshold'],Object.keys(thresholds).sort().map(function(family){return '<tr><td>'+esc(family)+'</td><td class="mono">'+score(thresholds[family].threshold)+'</td></tr>'}))+'</details>'+(incidents.length?incidents.map(function(x){let events=x.related_events||[];return '<details><summary>#'+number(x.incident)+' · '+esc(x.family)+' · '+stamp(x.t)+' · score '+score(x.score)+' · '+number(events.length)+' linked events</summary>'+(events.length?offlineTable(['Captured','Source','Destination','Protocol','Score'],events.map(function(e){return '<tr><td>'+stamp(e.t_obs)+'</td><td class="mono">'+esc(e.src)+':'+esc(e.src_port)+'</td><td class="mono">'+esc(e.dst)+':'+esc(e.dst_port)+'</td><td>'+esc(e.protocol)+'</td><td class="mono">'+score(e.score)+'</td></tr>'})):'<p class="subtle">No linked event details were retained for this incident.</p>')+'</details>'}).join(''):empty('No detector incidents','Scored events did not form a persistent incident under the original checkpoint thresholds.'))+'</div>')}
+  else parts.push('<div class="banner warn"><strong>Detection unavailable</strong><p>'+esc((result.errors||{}).detection||'No detector result')+'</p></div>');
+  if(w)parts.push(offlineWorldPanel(w));
+  else parts.push('<div class="banner warn"><strong>World model unavailable</strong><p>'+esc((result.errors||{}).world||'No world-model result')+'</p></div>');
+  $('offlineResult').innerHTML=parts.join('');
+  offlineWorldResult=w||null;
+  offlineSelectedStep=w&&Number(w.rollout_steps||0)>0?1:0;
+  if(w)renderOfflineState();
 }
-
-function ioBarsView(direction) {
-  let inB = direction.inbound_bytes || 0, outB = direction.outbound_bytes || 0;
-  let total = Math.max(1, inB + outB);
-  let inPct = (100 * inB / total).toFixed(1);
-  let outPct = (100 * outB / total).toFixed(1);
-
-  let html = '';
-  html += '<div class="flex flex-col gap-3">';
-  html += '<div class="flex justify-between items-end"><span class="text-sm font-bold uppercase tracking-wider">Inbound</span><span class="text-2xl font-mono font-bold bg-[#e4ff00] text-black px-3 py-1 rounded-lg shadow-md">' + bytes(inB) + '</span></div>';
-  html += '<div class="w-full h-10 bg-black/5 rounded-xl border border-black/10 p-1 flex"><div class="h-full bg-black rounded-lg shadow-inner" style="width:' + inPct + '%"></div></div>';
-  html += '<div class="text-right text-[11px] font-bold uppercase opacity-50">' + inPct + '% of total</div>';
-  html += '</div>';
-
-  html += '<div class="flex flex-col gap-3 mt-4">';
-  html += '<div class="flex justify-between items-end"><span class="text-sm font-bold uppercase tracking-wider">Outbound</span><span class="text-2xl font-mono font-bold bg-black text-white px-3 py-1 rounded-lg shadow-md">' + bytes(outB) + '</span></div>';
-  html += '<div class="w-full h-10 bg-black/5 rounded-xl border border-black/10 p-1 flex"><div class="h-full pattern-stripes text-black rounded-lg opacity-80" style="width:' + outPct + '%"></div></div>';
-  html += '<div class="text-right text-[11px] font-bold uppercase opacity-50">' + outPct + '% of total</div>';
-  html += '</div>';
-
-  $('ioBars').innerHTML = html;
+async function pollOfflineJob(id){
+  clearTimeout(offlinePollTimer);
+  try{let response=await fetch('/api/offline/jobs/'+encodeURIComponent(id),{cache:'no-store'}),job=await response.json();if(!response.ok)throw Error(job.error||'Job lookup failed');
+    if(job.status==='running'){$('offlineStatus').textContent='Analyzing · '+(job.stage||'Preparing capture')+' · job '+id;offlinePollTimer=setTimeout(function(){pollOfflineJob(id)},2500);return}
+    $('offlineSubmit').disabled=false;
+    if(job.status==='complete'){$('offlineStatus').textContent='Analysis complete · '+job.result.file+' · job '+id;renderOfflineResult(job.result)}
+    else $('offlineStatus').textContent='Analysis failed: '+(job.error||'Unknown error')
+  }catch(error){$('offlineStatus').textContent='Could not check analysis: '+String(error);$('offlineSubmit').disabled=false}
 }
-
-function details(c) {
-  let items = [
-    ['Syn/Ack Ratio', (c.syn_ack_ratio||0).toFixed(2), '#e4ff00'],
-    ['TCP Window Avg', num(c.tcp_window_mean), '#ffffff'],
-    ['TTL Extent', c.ttl_min + ' - ' + c.ttl_max, '#ffffff'],
-    ['Payload Mean', (c.payload_mean||0).toFixed(1) + ' B', '#4ade80'],
-    ['Fragmented', num(c.fragmented_packets_count), '#ffffff'],
-    ['Unique Sources', num(c.unique_source_ips), '#ffffff']
-  ];
-  let html = '';
-  items.forEach(function(x) { html += dataBlock(x[0], x[1], x[2]); });
-  $('deepDetail').innerHTML = html;
-}
-
-function flowsView(a) {
-  if(!a.length) {
-    $('flowTable').innerHTML = '<tr><td colspan="6" class="p-8">' + emptyState('No active flows detected.', true) + '</td></tr>';
-    return;
-  }
-  let html = '';
-  a.slice(0, 150).forEach(function(f) {
-    let stateColor = f.state === 'ESTABLISHED' ? 'text-[#4ade80]' : 'text-white/50';
-    html += '<tr class="bg-[#1a1a1a] hover:bg-[#222] transition-colors group">';
-    html += '<td class="py-4 px-4 font-mono text-sm border-l-2 border-transparent group-hover:border-[#e4ff00]">' + esc(f.initiator_ip) + '<span class="text-white/30">:' + f.initiator_port + '</span></td>';
-    html += '<td class="py-4 px-4 font-mono text-sm text-white/80">' + esc(f.responder_ip) + '<span class="text-white/30">:' + f.responder_port + '</span></td>';
-    html += '<td class="py-4 px-4"><span class="bg-white/10 text-white px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border border-white/5">' + esc(f.protocol) + '</span></td>';
-    html += '<td class="py-4 px-4 text-xs font-bold uppercase tracking-wider ' + stateColor + '">' + esc(f.state) + '</td>';
-    html += '<td class="py-4 px-4 text-right font-mono text-sm font-bold">' + num(f.total_packets) + '</td>';
-    html += '<td class="py-4 px-4 text-right font-mono text-sm font-bold text-[#e4ff00]">' + bytes(f.total_bytes) + '</td>';
-    html += '</tr>';
-  });
-  $('flowTable').innerHTML = html;
-}
-
-function mapView(g, locals, gatewayIP, containerId, isMini) {
-  let container = $(containerId);
-  if(!container) return;
-
-  let w = container.clientWidth || (isMini ? 400 : 1200);
-  let h = container.clientHeight || (isMini ? 250 : 800);
-
-  // The map is deliberately scoped to this PC. Third-party/internal host-to-host
-  // edges are not shown: an edge must have exactly one local endpoint.
-  let relevantEdges = (g.edges||[]).filter(function(edge) {
-    let sourceIsLocal = locals.includes(edge.src_ip);
-    let destinationIsLocal = locals.includes(edge.dst_ip);
-    return sourceIsLocal !== destinationIsLocal;
-  });
-  let remoteIPs = new Set();
-  relevantEdges.forEach(function(edge) { remoteIPs.add(locals.includes(edge.src_ip) ? edge.dst_ip : edge.src_ip); });
-  let remoteNodes = (g.nodes||[]).filter(function(n) { return remoteIPs.has(n.ip); }).slice(0, isMini ? 15 : 60);
-  let visibleIPs = new Set(remoteNodes.map(function(n) { return n.ip; }));
-  relevantEdges = relevantEdges.filter(function(edge) {
-    return visibleIPs.has(locals.includes(edge.src_ip) ? edge.dst_ip : edge.src_ip);
-  });
-  let hasLocal = relevantEdges.length > 0;
-
-  if(!remoteNodes.length && !hasLocal) {
-    container.innerHTML = emptyState('No topology data.', true);
-    if(containerId === 'graphMini') $('mapCountMini').textContent = '0 Nodes';
-    if(containerId === 'graphFull') $('mapCountFull').innerHTML = '<div class="w-2 h-2 rounded-full bg-black"></div> 0 Nodes';
-    return;
-  }
-
-  let pos = {};
-  let center = [w/2, h/2];
-
-  // Map ALL local IPs to the absolute center point so they render as a single machine
-  locals.forEach(function(ip) {
-    pos[ip] = center;
-  });
-
-  // Orbit layout for remote nodes
-  remoteNodes.forEach(function(n,i) {
-    let maxR = Math.min(w,h) * (isMini ? 0.35 : 0.45);
-    if(isMini) {
-      let a = -Math.PI/2 + i * 2 * Math.PI / Math.max(1, remoteNodes.length);
-      pos[n.ip] = [center[0] + Math.cos(a)*maxR, center[1] + Math.sin(a)*maxR];
-    } else {
-      let golden_ratio = (Math.sqrt(5) + 1) / 2;
-      let theta = i * 2 * Math.PI / golden_ratio;
-      let r = maxR * Math.sqrt((i+0.5) / remoteNodes.length);
-      pos[n.ip] = [center[0] + Math.cos(theta)*r, center[1] + Math.sin(theta)*r];
-    }
-  });
-
-  let svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" class="w-full h-full drop-shadow-2xl"><defs><marker id="arrow-out" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#e4ff00"/></marker><marker id="arrow-in" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4ade80"/></marker></defs>';
-
-  // Arrowhead direction is the actual packet direction: PC → host is outbound;
-  // host → PC is inbound. It is not inferred from a visual layout.
-  relevantEdges.forEach(function(x) {
-    let a = pos[x.src_ip], b = pos[x.dst_ip];
-    let weight = x.packet_count || 1;
-    let strokeW = isMini ? 1.5 : Math.min(5, 1+Math.log2(weight));
-    let outbound = locals.includes(x.src_ip);
-    let strokeColor = outbound ? '#e4ff00' : '#4ade80';
-    let animClass = weight > 100 ? 'map-edge-fast' : 'map-edge';
-
-    // Background dim line
-    svg += '<line stroke="rgba(255,255,255,0.05)" stroke-width="' + (strokeW+2) + '" x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '"/>';
-    // Animated glowing line
-    svg += '<line class="' + animClass + '" stroke="' + strokeColor + '" stroke-width="' + strokeW + '" stroke-linecap="round" marker-end="url(#' + (outbound ? 'arrow-out' : 'arrow-in') + ')" x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '"/>';
-  });
-
-  // Draw Remote Nodes
-  remoteNodes.forEach(function(x) {
-    let p = pos[x.ip];
-    let rBase = Math.min(isMini?6:12, (isMini?3:6) + Math.log2((x.packets_sent+x.packets_received||0)+1)*1.5);
-    let hostname = (x.hostnames && x.hostnames.length) ? String(x.hostnames[0]).replace(/\.$/, '') : '';
-    let nodeLabel = hostname || x.ip;
-
-    svg += '<g transform="translate(' + p[0] + ',' + p[1] + ')">';
-    let isGateway = gatewayIP && x.ip === gatewayIP;
-    svg += '<circle r="' + rBase + '" fill="#121212" stroke="' + (isGateway ? '#e4ff00' : '#0ea5e9') + '" stroke-width="' + (isMini ? 2 : 3) + '"/>';
-    if(isGateway && !isMini) svg += '<path d="M-10,-1 h20 v10 h-20 z M-6,-6 h12 v5 h-12 z M-6,4 h2 m4,0 h2 m4,0 h2" fill="none" stroke="#e4ff00" stroke-width="1.5"/>';
-    if(!isMini) svg += '<text y="' + (rBase+14) + '" text-anchor="middle" class="text-[9px] font-mono font-bold fill-white/60">' + esc(nodeLabel) + (isGateway ? ' · ROUTER' : '') + '</text>';
-    if(!isMini && hostname) svg += '<text y="' + (rBase+25) + '" text-anchor="middle" class="text-[8px] font-mono fill-white/30">' + esc(x.ip) + '</text>';
-    svg += '</g>';
-  });
-
-  // Draw SINGLE Local Machine Hub (Laptop Icon)
-  if(hasLocal) {
-    let scale = isMini ? 0.7 : 1;
-    svg += '<g transform="translate(' + center[0] + ',' + center[1] + ') scale(' + scale + ')">';
-
-    if(!isMini) {
-      svg += '<circle r="40" fill="none" stroke="#4ade80" stroke-width="1.5" class="pulse-ring"/>';
-    }
-
-    // Laptop Screen & Base
-    svg += '<rect x="-20" y="-12" width="40" height="26" rx="3" fill="#121212" stroke="#e4ff00" stroke-width="2.5"/>';
-    svg += '<rect x="-16" y="-8" width="32" height="18" rx="1" fill="#e4ff00" opacity="0.15"/>';
-    svg += '<path d="M-26 14 L26 14 L22 19 L-22 19 Z" fill="#e4ff00"/>';
-
-    // Wi-Fi Signal Symbol coming from the laptop
-    svg += '<path d="M-10 -22 A14 14 0 0 1 10 -22" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>';
-    svg += '<path d="M-5 -26 A7 7 0 0 1 5 -26" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>';
-    svg += '<circle cx="0" cy="-18" r="2" fill="#4ade80"/>';
-
-    if(!isMini) {
-      svg += '<text y="34" text-anchor="middle" class="text-[11px] font-bold fill-[#e4ff00] tracking-widest uppercase filter drop-shadow">Your PC</text>';
-    }
-    svg += '</g>';
-  }
-
-  svg += '</svg>';
-  container.innerHTML = svg;
-
-  // Count only your PC plus hosts that exchanged traffic with it.
-  let displayCount = remoteNodes.length + (hasLocal ? 1 : 0);
-  if(containerId === 'graphMini') $('mapCountMini').textContent = displayCount + ' Nodes';
-  if(containerId === 'graphFull') $('mapCountFull').innerHTML = '<div class="w-2 h-2 rounded-full bg-black animate-pulse"></div> ' + displayCount + ' Nodes';
-}
-
-function alertsView(a) {
-  $('alertCountLabel').textContent = a.length + ' Alerts';
-  if(!a.length) {
-    $('alertList').innerHTML = emptyState('No security indicators triggered.', true);
-    return;
-  }
-
-  let html = '';
-  a.slice().reverse().forEach(function(x) {
-    let isHi = String(x.severity||'').toUpperCase() === 'HIGH';
-    let bg = isHi ? 'bg-red-500/10 border-red-500/30' : 'bg-white/5 border-white/10';
-    let badge = isHi ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-[#e4ff00] text-black';
-    let titleColor = isHi ? 'text-red-400' : 'text-white';
-
-    html += '<div class="' + bg + ' p-6 rounded-[2rem] border flex flex-col gap-3 hover:bg-white/10 transition-colors">';
-    html += '<div class="flex items-center gap-4">';
-    html += '<span class="' + badge + ' px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">' + esc(x.severity) + '</span>';
-    html += '<h4 class="font-display font-bold text-xl ' + titleColor + '">' + esc(x.type) + '</h4>';
-    html += '</div>';
-    html += '<p class="font-mono text-sm bg-black/40 px-3 py-1.5 rounded-lg inline-block self-start text-white/70 border border-white/5">' + esc(x.source_ip||'?') + ' &rarr; ' + esc(x.destination_ip||'?') + '</p>';
-    html += '<p class="text-base text-white/80 font-medium leading-relaxed max-w-3xl mt-1">' + esc(x.reason) + '</p>';
-    if(x.mitre_attack_id) {
-      html += '<div class="mt-2 flex items-center gap-2 text-[10px] uppercase font-bold text-white/40"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' + esc(x.mitre_attack_id) + ' &middot; ' + esc(x.mitre_technique_name||'') + '</div>';
-    }
-    html += '</div>';
-  });
-  $('alertList').innerHTML = html;
-}
-
-function analysisView(c, a) {
-  let threat = a.length > 0;
-  $('analysisState').textContent = threat ? 'Indicators Active' : 'Nominal';
-  $('analysisCopy').textContent = threat ? 'Rule evidence detected. Review Alerts tab.' : 'Evaluating active window against deterministic models. No thresholds breached.';
-
-  let features = [
-    ['Src IPs', num(c.unique_source_ips)],
-    ['Dst IPs', num(c.unique_destination_ips)],
-    ['Graph Density', ((c.graph&&c.graph.density)||0).toFixed(4)],
-    ['SYN/s', (c.syn_per_second||0).toFixed(2)],
-    ['UDP/s', (c.udp_packets_per_second||0).toFixed(2)]
-  ];
-  let html = '';
-  features.forEach(function(x) { html += dataBlock(x[0], x[1]); });
-  $('featureDetail').innerHTML = html;
-}
-
-function systemView(sys, st, c) {
-  let items = [
-    ['Hostname', sys.hostname||'Unknown', '#e4ff00'],
-    ['OS', sys.operating_system||'Unknown'],
-    ['Interface', sys.network_interface||st.interface||'Unknown'],
-    ['Local IPs', (sys.interface_ips||[]).join(', ')||'Unknown'],
-    ['MAC', sys.mac_address||'Unknown'],
-    ['Duration', (st.capture_duration_seconds||0)+'s', '#4ade80'],
-    ['Version', '1.0.0']
-  ];
-  let html = '';
-  items.forEach(function(x) { html += dataBlock(x[0], x[1], x[2]); });
-  $('systemDetail').innerHTML = html;
-}
-
-// Event Source Initialization
-let stream = new EventSource('/api/stream');
-stream.addEventListener('telemetry', function(e) { render(JSON.parse(e.data)); });
-stream.onopen = function() {
-  $('dot').classList.replace('bg-white/40', 'bg-[#e4ff00]');
-  $('dotPing').classList.replace('bg-white/40', 'bg-[#e4ff00]');
-  $('liveText').textContent = 'LIVE';
-  $('liveText').classList.replace('text-white/60', 'text-[#e4ff00]');
+$('offlineForm').addEventListener('submit',async function(event){event.preventDefault();let file=$('offlineFile').files[0];if(!file)return;if(file.size>128*1024*1024){$('offlineStatus').textContent='Capture exceeds the 128 MiB limit.';return}let data=new FormData();data.append('file',file);$('offlineSubmit').disabled=true;$('offlineResult').innerHTML='';$('offlineStatus').textContent='Uploading '+file.name+'…';try{let response=await fetch('/api/offline/jobs',{method:'POST',body:data}),job=await response.json().catch(function(){return {}});if(!response.ok)throw Error(job.error||'Upload failed ('+response.status+')');history.replaceState(null,'','/offline?job='+encodeURIComponent(job.id));pollOfflineJob(job.id)}catch(error){$('offlineStatus').textContent=String(error);$('offlineSubmit').disabled=false}});
+let offlineExisting=new URLSearchParams(location.search).get('job');if(offlineExisting&&/^[a-f0-9]{24}$/.test(offlineExisting))pollOfflineJob(offlineExisting);
+// Service context is a port/role baseline and does not alter raw model scores.
+renderFlows=function(items){
+  $('flowBadge').textContent=items.length+' flows';
+  $('flowRows').innerHTML=items.length?items.slice(0,150).map(function(f){
+    return '<tr title="'+esc(f.rule_reason||'')+'"><td class="mono">'+esc(f.initiator_ip)+':'+number(f.initiator_port)+'</td><td class="mono">'+esc(f.responder_ip)+':'+number(f.responder_port)+'</td><td>'+esc(f.protocol)+'</td><td>'+esc(f.protocol_tag||'UNKNOWN')+'<br><small>'+esc(f.traffic_class||'UNKNOWN')+' · '+esc(f.connection_role||'UNKNOWN')+'</small></td><td>'+esc(f.state)+'</td><td>'+number(f.total_packets)+'</td><td>'+bytes(f.total_bytes)+'</td></tr>'
+  }).join(''):'<tr><td colspan="7">No active flows.</td></tr>';
 };
-stream.onerror = function() {
-  $('dot').classList.replace('bg-[#e4ff00]', 'bg-red-500');
-  $('dotPing').classList.replace('bg-[#e4ff00]', 'bg-red-500');
-  $('liveText').textContent = 'RECONNECTING';
-  $('liveText').classList.replace('text-[#e4ff00]', 'text-red-500');
+detectorIncidentDetail=function(incident){
+  let cached=detectorIncidentCache.get(detectorIncidentKey(incident));
+  if(!cached)return '<div class="incident-detail">Loading linked events…</div>';
+  if(cached.error)return '<div class="incident-detail">'+esc(cached.error)+'</div>';
+  let events=cached.events||[];
+  if(!events.length)return '<div class="incident-detail">No linked event details are available; the model incident remains visible.</div>';
+  return '<div class="incident-detail"><h4>Linked model events · '+number(events.length)+'</h4><p>Raw model classification and score are preserved. Service tags are deterministic context, not proof of safety.</p><table><thead><tr><th>Observed</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Service / role</th><th>Traffic class</th><th>Model score</th></tr></thead><tbody>'+events.map(function(x){
+    let protocol=Number(x.protocol)===6?'TCP':Number(x.protocol)===17?'UDP':String(x.protocol);
+    return '<tr title="'+esc(x.rule_reason||'')+'"><td>'+stamp(x.t_obs)+'<br><small>#'+number(x.event_id)+'</small></td><td class="mono">'+esc(x.src)+':'+number(x.src_port)+'</td><td class="mono">'+esc(x.dst)+':'+number(x.dst_port)+'</td><td>'+esc(protocol)+'</td><td>'+esc(x.protocol_tag||'UNKNOWN')+'<br><small>'+esc(x.connection_role||'UNKNOWN')+'</small></td><td>'+esc(x.traffic_class||'UNKNOWN')+'</td><td class="mono">'+score(x.model_score)+'<br><small>'+esc(x.model_classification||x.family)+'</small></td></tr>'
+  }).join('')+'</tbody></table></div>';
+};
+const renderOfflineResultBase=renderOfflineResult;
+renderOfflineResult=function(result){
+  renderOfflineResultBase(result);
+  let suppressed=((result||{}).detection||{}).suppressed_incidents||[];
+  if(suppressed.length)$('offlineResult').insertAdjacentHTML('afterbegin','<div class="banner">'+number(suppressed.length)+' INFILTRATION incident(s) suppressed by deterministic internal-service rules. Original model incidents remain in raw_incidents in the job result.</div>');
 };
 </script>
 </body>

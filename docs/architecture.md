@@ -306,7 +306,7 @@ stale the memory is allowed to be, so live serving uses the same batch size.
 
 **Job.** Name the attack family behind an event, with a probability, at a false-alarm budget the operator chooses.
 
-![Detector: h and s form 132 inputs to one head per day; thresholds from benign calibration scores at a false-alarm budget; persistence and 60 s incidents turn event alerts into incidents](diagrams/detector.svg)
+![Detector: h and s form 132 inputs to one head per day; thresholds from benign calibration scores at a false-alarm budget; the diagram shows the historical 60 s evaluation rule](diagrams/detector.svg)
 
 | | |
 |---|---|
@@ -321,7 +321,7 @@ stale the memory is allowed to be, so live serving uses the same batch size.
 turn them into something readable:
 
 1. **Persistence** — a host alerts only after 3 consecutive events above threshold.
-2. **Incidents** — alerts on one host with no quiet gap longer than 60 s are one incident.
+2. **Incidents** — alerts on one host with no quiet gap longer than 120 s are one incident. The diagram and older evaluation figures used 60 s; the 120 s incident false-positive rate has not been measured.
 
 ---
 
@@ -450,3 +450,30 @@ test metrics for each stage; the `live` compressor and world model are trained l
 | evaluation | `models/evaluation/` | `python -m models.evaluation` |
 
 Each package has a README with its files, inputs, outputs and settings.
+
+## Deterministic service context in the Go CLI
+
+`cli/semantics/services.go` is the transport/port service registry. Parsed
+packets and Go flow records carry `protocol_tag`, `service`, `traffic_class`,
+`connection_role`, `is_well_known_service`, `is_internal_service`, and
+`is_ephemeral_port`. A high client source port is tagged as ephemeral context,
+not as an attack. A reverse TCP packet is tagged `RESPONSE_TRAFFIC` only after
+the Go flow tracker has observed an established connection; a service source
+port alone cannot prove a response.
+
+The dashboard and `netwatch model` use a Go-only rule decision over the
+detector API. Model `family`/score are retained as `model_classification` and
+`model_score`; `raw_incidents`, `raw_recent_incidents`, and
+`suppressed_incidents` preserve model history separately from the final
+operator-facing `incidents` and `recent_incidents`. Only INFILTRATION incidents
+with at least three linked events consistently belonging to one,
+internal registered service/peer are suppressed. External HTTPS and other
+public service ports are tagged but do not, by themselves, suppress alerts.
+Mixed/unknown traffic, destination or port fanout,
+and missing linked evidence retain the model incident. Offline PCAP results
+use the same rule function and retain `raw_incidents` in the job response.
+The rule does not change
+checkpoint weights, probability calibration, or family thresholds. Service
+tags are baseline metadata, not a safe-list or a claim of measured false
+positive rate. Metadata-only rules cannot detect all tunneling or C2, so raw
+model evidence remains available for review.

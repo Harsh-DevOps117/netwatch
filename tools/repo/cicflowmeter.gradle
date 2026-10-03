@@ -1,0 +1,14 @@
+// Use the native library shipped with the pinned CICFlowMeter source. Its
+// org.jnetpcap:jnetpcap:1.4.1 dependency is no longer available from Maven.
+allprojects {
+    afterEvaluate { project ->
+        def platform = System.getProperty('os.name').toLowerCase().contains('windows') ? 'win' : 'linux'
+        project.configurations.compile.dependencies.removeAll {
+            it.group == 'org.jnetpcap' && it.name == 'jnetpcap'
+        }
+        project.dependencies.add('compile', project.files("jnetpcap/${platform}/jnetpcap-1.4.r1425/jnetpcap.jar"))
+        project.tasks.exeCMD.setArgs([
+            project.findProperty('pcapDir'), project.findProperty('outputDir')
+        ])
+    }
+}

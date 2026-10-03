@@ -8,7 +8,8 @@ Measured, in order, on the Bot day: thresholding alone emitted **8,544 alerts/ho
 events above threshold on the same key halved the false alarms (58 -> 30) at **zero** cost to early recall or to
 campaign onsets, because an attack produces a run of events and a noisy benign host produces isolated ones. Collapsing
 what remained into incidents with a 60 s quiet gap turned 30 alerts into 8. Together: **41.9 alerts/hour, 11.2
-incidents/hour**, still catching 99.7% of early events.
+incidents/hour**, still catching 99.7% of early events. Those are historical 60 s measurements; the served
+quiet gap is now 120 s and its incident false-positive rate has not been separately measured.
 
 None of this touches the model. It is the cheapest large win available anywhere in the system, which is why it is
 worth getting exactly right.
@@ -20,7 +21,7 @@ from collections import deque
 import torch
 
 PERSIST = 3            # consecutive events above threshold before a key may alert; 2 -> 3 halved false alarms
-GAP = 60.0             # quiet seconds that close an incident
+GAP = 120.0            # quiet seconds that close an incident
 CAPACITY = 500_000     # keys tracked at once; a live stream cannot hold a row per key it has ever seen
 
 
@@ -38,7 +39,10 @@ class AlertEmitter:
         self.threshold, self.persist, self.gap, self.capacity = float(threshold), int(persist), float(gap), capacity
         self.run: dict[int, int] = {}          # key -> consecutive events at or above threshold
         self.open_until: dict[int, float] = {}  # key -> when its current incident stops being open
+        self.open_id: dict[int, int] = {}
+        self.open_at: dict[int, float] = {}
         self.events = self.alerts = self.incidents = 0
+        self.prunes = 0
 
     def push(self, key: int, score: float, t: float) -> dict | None:
         """Feed one scored event.
@@ -76,9 +80,11 @@ class AlertEmitter:
         if not opened:
             return None                                  # same incident, still open: nothing new to show a human
         self.incidents += 1
+        self.open_id[key] = self.incidents
+        self.open_at[key] = t
         return {"key": key, "t": t, "score": float(score), "incident": self.incidents}
 
-    def push_batch(self, keys, scores, times) -> list[dict]:
+    def push_batch(self, keys, scores, times, on_step=None) -> list[dict]:
         """Feed a batch in arrival order.
 
         Input:  key, score and observation time per row, in the order the stream produced them
@@ -113,8 +119,13 @@ class AlertEmitter:
         score_list = scores[wanted].tolist()
         time_list = times[wanted].tolist()
         out = []
-        for key, score, t in zip(key_list, score_list, time_list):   # stream order, so runs stay consecutive
+        for index, key, score, t in zip(wanted.tolist(), key_list, score_list, time_list):
             got = self._step(int(key), float(score), float(t))
+            if on_step is not None:
+                active = self.run.get(int(key), 0) >= self.persist
+                on_step(int(index), int(key), float(score), float(t),
+                        self.open_id.get(int(key)) if active else None,
+                        self.open_at.get(int(key)) if active else None)
             if got is not None:
                 out.append(got)
         return out
@@ -128,13 +139,18 @@ class AlertEmitter:
         A key whose incident closed carries no state worth keeping: if it comes back it starts a fresh run, which is
         the same thing a never-seen key does. Only if pruning frees nothing is the oldest half dropped outright.
         """
+        self.prunes += 1
         stale = [k for k, until in self.open_until.items() if until < now - self.gap]
         for k in stale:
             self.open_until.pop(k, None)
+            self.open_id.pop(k, None)
+            self.open_at.pop(k, None)
             self.run.pop(k, None)
         if len(self.open_until) > self.capacity:
             for k in sorted(self.open_until, key=self.open_until.get)[: len(self.open_until) // 2]:
                 self.open_until.pop(k, None)
+                self.open_id.pop(k, None)
+                self.open_at.pop(k, None)
                 self.run.pop(k, None)
 
     def rates(self, hours: float) -> dict:
@@ -192,17 +208,22 @@ class Recalibrator:
                 if j < len(self.span):
                     self.span[j] = value
 
-    def threshold(self) -> float:
+    def threshold(self, budget: "float | None" = None) -> float:
         """The current threshold: the budget quantile of the spanning and recent samples together.
 
-        Input:  none
+        Input:  optional temporary budget; otherwise the calibrator's configured budget
         Output: threshold, or inf while nothing has been observed
         """
         pool = torch.cat([self.span[: self.filled],
                           torch.tensor(list(self.recent), dtype=torch.float32)])
         if not pool.numel():
             return float("inf")
-        return float(torch.quantile(pool, 1.0 - self.budget, interpolation="higher"))
+        selected = self.budget if budget is None else float(budget)
+        return float(torch.quantile(pool, 1.0 - selected, interpolation="higher"))
+
+    def sample_count(self) -> int:
+        """Number of live observations seen, without double-counting the recent and reservoir samples."""
+        return self.seen
 
     def drifted(self, realised_rate: float) -> bool:
         """Whether the realised alert rate has moved far enough from the budget to demand a recalibration.
@@ -219,12 +240,55 @@ class Recalibrator:
         return ratio > self.tolerance or ratio < 1.0 / self.tolerance
 
 
+class AdaptiveThreshold:
+    """A bounded live threshold layered on top of a checkpoint's committed operating point.
+
+    The committed threshold is a hard floor: live adaptation can suppress excess crossings caused by benign domain
+    shift, but can never make the detector more permissive than the evaluated checkpoint. The live quantile is not
+    trusted until ``warmup`` observations have arrived. Until the sample is large enough to resolve the requested
+    tail budget, ``tail_samples / N`` is used so the estimate rests on several observations instead of one maximum.
+
+    This is deliberately opt-in. It treats most traffic in the learning window as benign, so an operator must not
+    enable it while replaying an attack-heavy capture; doing so could teach the threshold to suppress that attack.
+    """
+
+    def __init__(self, baseline: float, budget: float, *, warmup: int = 128, tail_samples: int = 4,
+                 span: int = 200_000, recent: int = 50_000, seed: int = 0):
+        if warmup < 1 or tail_samples < 1:
+            raise ValueError("adaptive warmup and tail_samples must be positive")
+        self.baseline, self.budget = float(baseline), float(budget)
+        self.warmup, self.tail_samples = int(warmup), int(tail_samples)
+        self.calibrator = Recalibrator(self.budget, span=span, recent=recent, seed=seed)
+        self.current = self.baseline
+        self.effective_budget = None
+
+    def observe(self, scores) -> float:
+        """Learn from the completed batch and return the threshold to use for the next batch."""
+        self.calibrator.observe(scores)
+        count = self.calibrator.sample_count()
+        if count < self.warmup:
+            return self.current
+        self.effective_budget = max(self.budget, self.tail_samples / count)
+        self.current = max(self.baseline, self.calibrator.threshold(self.effective_budget))
+        return self.current
+
+    def threshold(self) -> float:
+        return self.current
+
+    def status(self) -> dict:
+        count = self.calibrator.sample_count()
+        return {"threshold": self.current, "baseline_threshold": self.baseline, "adaptive": True,
+                "adaptive_ready": count >= self.warmup, "adaptive_samples": count, "adaptive_warmup": self.warmup,
+                "effective_false_alarm_budget": self.effective_budget,
+                "false_alarm_budget": self.budget}
+
+
 def demo() -> None:
     """Self-check: persistence, incident collapse, key hygiene, the batch fast path, and the calibrator."""
     g = torch.Generator().manual_seed(0)
 
     # persist-3: two consecutive highs emit nothing, the third opens an incident
-    e = AlertEmitter(threshold=0.5, persist=3, gap=60.0)
+    e = AlertEmitter(threshold=0.5, persist=3, gap=GAP)
     assert e.push(1, 0.9, 0.0) is None
     assert e.push(1, 0.9, 1.0) is None
     first = e.push(1, 0.9, 2.0)
@@ -251,10 +315,10 @@ def demo() -> None:
     scores = torch.rand(4_000, generator=g)
     times = torch.sort(torch.rand(4_000, generator=g) * 3600).values
     for threshold in (0.5, 0.8, 0.95):
-        one = AlertEmitter(threshold, persist=3, gap=60.0)
+        one = AlertEmitter(threshold, persist=3, gap=GAP)
         serial = [one.push(int(k), float(s), float(t)) for k, s, t in zip(keys, scores, times)]
         serial = [x for x in serial if x is not None]
-        many = AlertEmitter(threshold, persist=3, gap=60.0)
+        many = AlertEmitter(threshold, persist=3, gap=GAP)
         batched = []
         for at in range(0, len(keys), 512):                 # the real batch width
             batched += many.push_batch(keys[at:at + 512], scores[at:at + 512], times[at:at + 512])
@@ -264,7 +328,7 @@ def demo() -> None:
     # persistence can only reduce volume, never increase it
     previous = float("inf")
     for persist in (1, 2, 3, 5):
-        e = AlertEmitter(0.8, persist=persist, gap=60.0)
+        e = AlertEmitter(0.8, persist=persist, gap=GAP)
         e.push_batch(keys, scores, times)
         assert e.events == 4_000
         assert e.alerts <= previous, persist
@@ -285,6 +349,16 @@ def demo() -> None:
     assert tight.threshold() >= c.threshold(), (tight.threshold(), c.threshold())
     assert Recalibrator(0.01).threshold() == float("inf"), "no observations yet -> never alert"
     assert c.drifted(0.05) and c.drifted(0.001) and not c.drifted(0.012)
+
+    # Adaptive thresholds wait for warm-up, never drop below the checkpoint, and can rise with live benign drift.
+    adaptive = AdaptiveThreshold(0.8, 0.01, warmup=100, tail_samples=4, span=1_000, recent=500)
+    adaptive.observe(torch.full((99,), 0.95))
+    assert adaptive.threshold() == 0.8 and not adaptive.status()["adaptive_ready"]
+    adaptive.observe(torch.tensor([0.95]))
+    assert adaptive.threshold() >= 0.949 and adaptive.status()["adaptive_ready"]
+    low = AdaptiveThreshold(0.8, 0.01, warmup=10, tail_samples=2, span=100, recent=50)
+    low.observe(torch.full((10,), 0.1))
+    assert low.threshold() == 0.8, "live adaptation must never lower the committed threshold"
     print("demo ok")
 
 

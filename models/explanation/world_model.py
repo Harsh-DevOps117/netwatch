@@ -24,7 +24,7 @@ GLOBAL_READOUT_NOTE = ("global readout not reported per seed; for a v1 checkpoin
                        "it is network-wide and is in attention_weights.parquet")
 
 
-def seed_explanations(replay, seed_events, names: "dict | None" = None, k: int = 3) -> list[dict]:
+def seed_explanations(replay, seed_events, names: "dict | None" = None, k: int = 8) -> list[dict]:
     """For each seed event of the latest chunk, the neighbours its initiator attended to most.
 
     Input:  a Replay that has scored at least one chunk, the seed event ids (rollout rows' `seed_id`), node_id -> IP,

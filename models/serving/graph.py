@@ -48,6 +48,7 @@ class NodeRegistry:
     def __init__(self, capacity: int | None = None):
         self.capacity = capacity
         self.of: OrderedDict[str, int] = OrderedDict()
+        self.ip_of: dict[int, str] = {}
         self.next_id = 0
         self.evicted = 0
 
@@ -71,8 +72,10 @@ class NodeRegistry:
                 got = self.next_id
                 self.next_id += 1
                 self.of[ip] = got
+                self.ip_of[got] = ip
                 if self.capacity is not None and len(self.of) > self.capacity:
-                    self.of.popitem(last=False)
+                    _, evicted_id = self.of.popitem(last=False)
+                    self.ip_of.pop(evicted_id, None)
                     self.evicted += 1
             else:
                 self.of.move_to_end(ip)
@@ -93,6 +96,7 @@ class NodeRegistry:
         if path.exists():
             state = json.loads(path.read_text())
             registry.of = OrderedDict(state["of"])
+            registry.ip_of = {node: ip for ip, node in registry.of.items()}
             registry.next_id = state["next_id"]
             registry.evicted = state.get("evicted", 0)
         return registry
@@ -200,6 +204,15 @@ class OnlineNeighbours:
         Read before push, because every neighbour must sit strictly earlier in the stream -- the offline index
         guarantees the same thing by searching only positions below the query's own.
         """
+        positions = self.positions(sender, receiver)
+        return torch.tensor(positions + [-1] * (self.size - len(positions)), dtype=torch.int64)
+
+    def positions(self, sender: int, receiver: int) -> list[int]:
+        """query() as a plain list, unpadded: the live encoder asks once per event and has no use for a tensor.
+
+        Input:  the event's sender and receiver node ids
+        Output: at most `size` positions of neighbouring events, most recent first
+        """
         found: list[int] = []
         for role, node, counterpart in ((self.roles[0], sender, receiver), (self.roles[1], receiver, sender)):
             table = role.get(node)
@@ -211,11 +224,8 @@ class OnlineNeighbours:
             # recent_neighbours: for an event 0->8 whose endpoint 0 last spoke to 8 at position 5, offline omits 5
             # from both roles even though it is neither the newest nor part of an ongoing run.
             found.extend(position for peer, position in table.items() if peer != counterpart)
-        out = torch.full((self.size,), -1, dtype=torch.int64)
         # Distinct positions, most recent first: one event can sit in both role tables.
-        for at, position in enumerate(sorted(set(found), reverse=True)[: self.size]):
-            out[at] = position
-        return out
+        return sorted(set(found), reverse=True)[:self.size]
 
     def query_batch(self, senders, receivers, positions) -> torch.Tensor:
         """Neighbourhoods for a batch, each read before that row is pushed.
