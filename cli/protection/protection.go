@@ -1,16 +1,12 @@
 package protection
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"net/netip"
 	"net/url"
 	"os/exec"
@@ -23,11 +19,7 @@ import (
 	"detector/modelapi"
 )
 
-const (
-	groqEndpoint = "https://api.groq.com/openai/v1/chat/completions"
-	groqModel    = "openai/gpt-oss-20b"
-	planLifetime = 5 * time.Minute
-)
+const planLifetime = 5 * time.Minute
 
 type Identity struct {
 	Family   string  `json:"family"`
@@ -87,9 +79,6 @@ type pendingUndo struct {
 
 type Service struct {
 	Models   *modelapi.Client
-	HTTP     *http.Client
-	Endpoint string
-	Model    string
 	Firewall firewall
 	mu       sync.Mutex
 	plans    map[string]pendingPlan
@@ -98,10 +87,7 @@ type Service struct {
 
 func New(models *modelapi.Client) *Service {
 	return &Service{
-		Models: models, Endpoint: groqEndpoint, Model: groqModel, Firewall: localFirewall{},
-		HTTP: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
-			return errors.New("Groq redirect refused")
-		}},
+		Models: models, Firewall: localFirewall{},
 		plans: make(map[string]pendingPlan), undos: make(map[string]pendingUndo),
 	}
 }
@@ -249,20 +235,14 @@ func token() (string, error) {
 	return hex.EncodeToString(data), nil
 }
 
-func (s *Service) Advise(ctx context.Context, id Identity, apiKey string) (Plan, error) {
-	apiKey = strings.TrimSpace(apiKey)
-	if apiKey == "" || len(apiKey) > 512 || strings.ContainsAny(apiKey, "\r\n") {
-		return Plan{}, errors.New("enter a valid Groq API key")
-	}
+// Advise returns the response guide for one incident and, when the incident is
+// eligible, a pending host-block plan that Execute applies after confirmation.
+func (s *Service) Advise(ctx context.Context, id Identity) (Plan, error) {
 	incident, err := s.resolve(ctx, id)
 	if err != nil {
 		return Plan{}, err
 	}
-	advice, err := s.askGroq(ctx, apiKey, incident)
-	if err != nil {
-		return Plan{}, err
-	}
-	plan := Plan{Family: id.Family, Incident: id.Incident, SourceIP: incident.ip, SourceScope: sourceScope(incident.ip), Active: incident.active, LinkedEvents: incident.events, Advice: advice,
+	plan := Plan{Family: id.Family, Incident: id.Incident, SourceIP: incident.ip, SourceScope: sourceScope(incident.ip), Active: incident.active, LinkedEvents: incident.events,
 		Action: "Block this source IP in the local host firewall (inbound traffic only)."}
 	if ip, err := netip.ParseAddr(incident.ip); err == nil && ip.IsPrivate() {
 		plan.Action += " This is a LAN source; blocking it may disrupt a legitimate local device or service."
@@ -292,56 +272,62 @@ func (s *Service) Advise(ctx context.Context, id Identity, apiKey string) (Plan,
 		s.plans[plan.Token] = pendingPlan{identity: id, ip: incident.ip, confirmation: plan.Confirmation, expires: time.Now().Add(planLifetime)}
 		s.mu.Unlock()
 	}
+	plan.Advice = guide(incident, plan.Reason)
 	return plan, nil
 }
 
-func (s *Service) askGroq(ctx context.Context, apiKey string, incident incidentContext) (string, error) {
-	requestBody := map[string]interface{}{
-		"model": s.Model, "max_completion_tokens": 800, "temperature": 0.2,
-		"reasoning_effort": "low", "tool_choice": "none",
-		"messages": []map[string]string{
-			{"role": "system", "content": "You are a defensive network-incident advisor. The attack family and score are unverified model flags, not packet-payload evidence or calibrated probabilities. Never claim observed HTTP methods, payloads, compromise, malicious intent, botnets, or endpoint exposure. No raw addresses or packet contents are provided. Never call a private LAN source public. For closed incidents give retrospective checks, not an immediate block. Suggest reversible validation before disruptive containment. Do not output shell commands or imply a single host block stops a distributed attack. Respond in 3-5 short plain-text bullets without Markdown emphasis."},
-			{"role": "user", "content": fmt.Sprintf("Detector model flag: family=%s, opening score=%.5f, active=%t, linked threshold-crossing flows=%d, source scope=%s. Addresses and packet payloads are deliberately withheld. Suggest validation, proportionate containment, and recovery based only on these facts. Automatic action, if eligible, is limited to one separately confirmed local host-firewall inbound block.", incident.incident.Family, incident.incident.Score, incident.active, incident.events, sourceScope(incident.ip))},
-		},
+// guide is the response guide for one incident: what the flag establishes, what
+// to check for its family, what containment this host offers, and how to recover.
+// It is built from the incident's verified facts alone, so one incident always
+// reads the same, and it claims nothing about packet contents, intent or
+// compromise, none of which the detector observes. blocked is why no host block
+// is offered, empty when one is.
+func guide(incident incidentContext, blocked string) string {
+	evidence := fmt.Sprintf("%d linked flows scored", incident.events)
+	switch incident.events {
+	case 0:
+		evidence = "no linked flow was kept, but the incident opened"
+	case 1:
+		evidence = "1 linked flow scored"
 	}
-	body, err := json.Marshal(requestBody)
-	if err != nil {
-		return "", err
+	lines := []string{
+		fmt.Sprintf("This is a model flag, not proof of an attack: %s above the %s threshold (opening score %.3f, source: %s). A score is not a probability, and the flag shows neither packet contents nor intent.",
+			evidence, incident.incident.Family, incident.incident.Score, sourceScope(incident.ip)),
+		familyCheck(incident.incident.Family),
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.Endpoint, bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	response, err := s.HTTP.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("Groq request failed: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Groq request failed (HTTP %d); check the API key and model access", response.StatusCode)
-	}
-	var payload struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 32<<10)).Decode(&payload); err != nil {
-		return "", fmt.Errorf("invalid Groq response: %w", err)
-	}
-	if len(payload.Choices) == 0 || strings.TrimSpace(payload.Choices[0].Message.Content) == "" {
-		return "", errors.New("Groq returned no guidance")
-	}
-	clean := strings.Map(func(r rune) rune {
-		if r < 32 && r != '\n' && r != '\t' {
-			return -1
+	switch {
+	case !incident.active:
+		lines = append(lines, "The incident is closed, so review it in retrospect: confirm the traffic stopped and keep its period for the check above. No block is offered for a closed incident.")
+	case blocked != "":
+		lines = append(lines, "No host block is offered. "+blocked+" If the check confirms unwanted traffic, limit it at the service or upstream instead.")
+	default:
+		containment := "If the check confirms unwanted traffic, a block of this one source in the host firewall is available: inbound traffic only, kept until you remove it. It does not stop traffic that comes from many addresses."
+		if ip, err := netip.ParseAddr(incident.ip); err == nil && ip.IsPrivate() {
+			containment += " The source is on your own LAN: identify the device first, because blocking it may cut off a legitimate device or service."
 		}
-		return r
-	}, payload.Choices[0].Message.Content)
-	return strings.TrimSpace(clean), nil
+		lines = append(lines, containment, "To recover, remove the firewall rule once the traffic has stopped, then confirm that the service's usual clients still connect.")
+	}
+	return "- " + strings.Join(lines, "\n- ")
+}
+
+// familyCheck names what to look at first for a flagged family. The family is the
+// model's label for the flows, so each line says where confirmation would show,
+// never that it is there.
+func familyCheck(family string) string {
+	name := strings.ToLower(strings.ReplaceAll(family, " ", ""))
+	switch {
+	case strings.HasPrefix(name, "dos-"):
+		return "Check the service these flows reach: its open connections, request rate and response times over the same period. A flood shows there; ordinary busy traffic can raise this flag too."
+	case name == "bruteforce-web":
+		return "Check the web server's access log over the same period for repeated failed logins from this source."
+	case name == "bruteforce-xss", name == "sqlinjection":
+		return "Check the web server's access and error logs over the same period for request parameters that carry script or SQL text from this source."
+	case name == "bot":
+		return "Check the source host for a process that makes regular outbound connections to a destination nobody recognises."
+	case name == "infiltration":
+		return "Check the source host's recent logins, new processes, and connections to hosts it does not normally reach."
+	}
+	return "Compare the linked flows with this source's normal traffic before acting."
 }
 
 func (s *Service) Execute(ctx context.Context, planToken, confirmation string) (Result, error) {
