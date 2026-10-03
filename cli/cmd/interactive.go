@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"detector/modelapi"
 )
 
 const (
@@ -58,6 +61,27 @@ func runInteractive() {
 				continue
 			}
 			runDashboard()
+		case "model":
+			if len(fields) != 1 {
+				fmt.Println("Usage: model (use 'detector model --help' for service and watch options)")
+				continue
+			}
+			forecastURL, detectionsURL, err := resolveModelEndpoints("lag", "", "")
+			if err != nil {
+				fmt.Printf("Model configuration error: %v\n", err)
+				continue
+			}
+			if err := renderModelSnapshot(context.Background(), modelapi.NewClient(forecastURL, detectionsURL), false, false, nil); err != nil {
+				fmt.Printf("Model service unavailable: %v\n", err)
+			}
+		case "protect":
+			if len(fields) != 1 {
+				fmt.Println("Usage: protect")
+				continue
+			}
+			if err := runProtection(context.Background(), "lag", ""); err != nil {
+				fmt.Printf("Protection unavailable: %v\n", err)
+			}
 		default:
 			fmt.Printf("Unknown command %q. Type 'help'.\n", fields[0])
 		}
@@ -122,9 +146,11 @@ func configureInteractiveOptions(args []string) (string, bool) {
 func resetInteractiveOptions() { configPath, outputPath, bpfFlag, windowSec = "", "", "", 0 }
 
 func printInteractiveHelp() {
+	fmt.Println("  protect                       Groq incident advice and optional host block")
 	fmt.Printf("  %s➜%s analyze <file.pcap> [-w seconds] [-o report.json] [-c config.yaml]\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s live [interface] [-w seconds] [-o report.json] [-c config.yaml] [--bpf expression]\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s dashboard [--port 8787] [--interface iface] [--bpf expression]\n", terminalGreen, terminalReset)
+	fmt.Printf("  %s➜%s model [--service lag|live|replay] [--detections] [--watch 5s]\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s version                         Show detector version\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s help                            Show this help\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s exit                            Close the terminal\n", terminalGreen, terminalReset)
