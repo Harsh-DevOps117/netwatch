@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 
 type LiveHandle struct {
 	cmd           *exec.Cmd
+	closeJob      func()
 	source        *gopacket.PacketSource
 	InterfaceName string
 }
@@ -83,11 +86,11 @@ func GetDefaultInterface() string {
 			}
 		}
 
-		if wirelessCandidate != "" {
-			return wirelessCandidate
-		}
 		if candidateWithIP != "" {
 			return candidateWithIP
+		}
+		if wirelessCandidate != "" {
+			return wirelessCandidate
 		}
 	}
 
@@ -128,10 +131,29 @@ func isWireless(name string) bool {
 	return strings.HasPrefix(lower, "wl") || strings.HasPrefix(lower, "wi")
 }
 
+// lookCaptureTool finds a capture tool in PATH, then in Wireshark's default
+// Windows install directories, which its installer does not add to PATH.
+func lookCaptureTool(name string) (string, error) {
+	path, err := exec.LookPath(name)
+	if err == nil || runtime.GOOS != "windows" {
+		return path, err
+	}
+	for _, root := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramW6432"), os.Getenv("ProgramFiles(x86)")} {
+		if root == "" {
+			continue
+		}
+		candidate := filepath.Join(root, "Wireshark", name+".exe")
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", err
+}
+
 func tryOpenLive(iface string, bpfFilter string) (*LiveHandle, error) {
 	var cmd *exec.Cmd
 
-	tsharkPath, err := exec.LookPath("tshark")
+	tsharkPath, err := lookCaptureTool("tshark")
 	if err == nil {
 		args := []string{"-i", iface, "-F", "pcap", "-w", "-"}
 		if bpfFilter != "" {
@@ -139,7 +161,7 @@ func tryOpenLive(iface string, bpfFilter string) (*LiveHandle, error) {
 		}
 		cmd = exec.Command(tsharkPath, args...)
 	} else {
-		tcpdumpPath, tcpErr := exec.LookPath("tcpdump")
+		tcpdumpPath, tcpErr := lookCaptureTool("tcpdump")
 		if tcpErr != nil {
 			return nil, fmt.Errorf("neither 'tshark' nor 'tcpdump' was found in PATH for live capture. Please install tshark (Wireshark) or tcpdump")
 		}
@@ -161,6 +183,12 @@ func tryOpenLive(iface string, bpfFilter string) (*LiveHandle, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start live capture on interface %q: %w", iface, err)
 	}
+	closeJob, err := bindCaptureLifetime(cmd)
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("failed to contain capture process on interface %q: %w", iface, err)
+	}
 
 	bufReader := bufio.NewReader(stdout)
 	pcapReader, err := pcapgo.NewReader(bufReader)
@@ -168,10 +196,11 @@ func tryOpenLive(iface string, bpfFilter string) (*LiveHandle, error) {
 		ngReader, ngErr := pcapgo.NewNgReader(bufReader, pcapgo.DefaultNgReaderOptions)
 		if ngErr == nil {
 			source := gopacket.NewPacketSource(ngReader, ngReader.LinkType())
-			return &LiveHandle{cmd: cmd, source: source, InterfaceName: iface}, nil
+			return &LiveHandle{cmd: cmd, closeJob: closeJob, source: source, InterfaceName: iface}, nil
 		}
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
+		closeJob()
 
 		stderrStr := strings.TrimSpace(stderrBuf.String())
 		if stderrStr != "" {
@@ -183,6 +212,7 @@ func tryOpenLive(iface string, bpfFilter string) (*LiveHandle, error) {
 	source := gopacket.NewPacketSource(pcapReader, pcapReader.LinkType())
 	return &LiveHandle{
 		cmd:           cmd,
+		closeJob:      closeJob,
 		source:        source,
 		InterfaceName: iface,
 	}, nil
@@ -224,6 +254,10 @@ func (lh *LiveHandle) Close() error {
 	if lh.cmd != nil && lh.cmd.Process != nil {
 		_ = lh.cmd.Process.Kill()
 		_ = lh.cmd.Wait()
+	}
+	if lh.closeJob != nil {
+		lh.closeJob()
+		lh.closeJob = nil
 	}
 	return nil
 }
