@@ -308,7 +308,7 @@ tshark -i eth0 -F pcap -w - | ./run.sh stdin
 ./run.sh build
 ./run.sh clean
 
-# 10. Incident-only Groq protection advice (prompts for a hidden API key)
+# 10. Response guide for a detector incident, with an optional confirmed host block
 ./run.sh protect
 ```
 
@@ -329,24 +329,22 @@ events from up to three imagined world-model event steps per seed path; the
 rollout has no wall-clock ETA. Jobs created before the observed-event timeline
 was added show aggregated observed links until the PCAP is analyzed again.
 
-The Protection page in the dashboard offers a Groq advisor for a selected detector
-incident. Save the Groq API key once in your local user profile, or enter it in
-the terminal (`protect` saves it after successful guidance). `GROQ_API_KEY` still
-overrides the saved key in the terminal. On Windows the saved key is encrypted
-for the current user with DPAPI; on Linux it is stored in a user-only mode-0600
-file under the user config directory. The dashboard can remove the saved key.
-Limited incident metadata, including family, active state, linked-event count,
-and private/public source scope, is sent to Groq; raw IPs and packet contents
-are not shared. Forecast links
-and raw event flags cannot activate protection. Advice is text only; Netwatch
-never executes AI-generated commands. For an active incident with a single
+The Protection page in the dashboard shows a response guide for a selected detector
+incident, and `protect` prints the same guide in the terminal. The guide is built
+on this machine from the incident's verified facts: family, opening score, active
+state, linked-event count and private/public source scope. One incident always
+reads the same, no key is needed and nothing is sent to an outside service. It
+says what the flag does and does not establish, what to check first for that
+family, what containment this host offers, and how to recover. Forecast links
+and raw event flags cannot activate protection. The guide is text only; the one
+action Netwatch can take is the block below. For an active incident with a single
 validated public source IPv4, an explicit `BLOCK <IP>` confirmation may add a
 host-firewall inbound block (`netsh` on Windows, `iptables` on Linux). The rule
 also supports a consistent private LAN source targeting this host when at least
 three linked events exist, but requires the stronger `BLOCK LAN <IP>` confirmation;
 blocking a LAN service or device can disrupt legitimate work. Local-host, reserved,
 and inconsistent sources remain ineligible. The red button becomes available only
-after Groq guidance returns an eligible active-incident plan. A block rule
+after the guide returns an eligible active-incident plan. A block rule
 remains after Netwatch exits (reboot persistence depends on the OS/firewall);
 the dashboard offers Undo while its process is running,
 and both UI and CLI print the manual removal command. Elevated firewall rights
