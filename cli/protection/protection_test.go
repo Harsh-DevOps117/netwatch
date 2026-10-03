@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -97,37 +94,31 @@ func TestProtectionRequiresActivePublicSourceAndConfirmation(t *testing.T) {
 		}
 	}))
 	defer detector.Close()
-	groq := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Errorf("Authorization = %q", got)
-		}
-		var request struct {
-			Messages []struct {
-				Content string `json:"content"`
-			} `json:"messages"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Error(err)
-		} else if len(request.Messages) < 2 || strings.Contains(request.Messages[1].Content, sourceIP) || !strings.Contains(request.Messages[1].Content, sourceScope(sourceIP)) {
-			t.Errorf("Groq request leaked an address or omitted the source scope: %+v", request.Messages)
-		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Check traffic, then contain it."}}]}`))
-	}))
-	defer groq.Close()
 	service := New(modelapi.NewClient("", detector.URL+"/detections"))
-	service.Endpoint = groq.URL
 	service.Firewall = &fakeFirewall{}
 	id := Identity{Family: "DoS-Hulk", Incident: 7, OpenedAt: opened}
-	plan, err := service.Advise(context.Background(), id, "test-key")
+	plan, err := service.Advise(context.Background(), id)
 	if err != nil || !plan.CanExecute || plan.SourceIP != sourceIP || plan.SourceScope != "public IPv4" || !plan.Active || plan.LinkedEvents != 3 {
 		t.Fatalf("public active plan = %+v, %v", plan, err)
+	}
+	guidance := plan.Advice
+	for _, expected := range []string{"3 linked flows", "DoS-Hulk threshold", "opening score 0.900", "source: public IPv4", "request rate", "block of this one source", "To recover"} {
+		if !strings.Contains(guidance, expected) {
+			t.Errorf("active guide lacks %q:\n%s", expected, guidance)
+		}
+	}
+	if strings.Contains(guidance, sourceIP) || strings.Contains(guidance, "LAN") || strings.Count(guidance, "\n- ") != 3 {
+		t.Errorf("active guide names the address, a LAN, or is not four points:\n%s", guidance)
 	}
 	if _, err := service.Execute(context.Background(), plan.Token, "BLOCK 1.1.1.1"); err == nil {
 		t.Fatal("wrong confirmation accepted")
 	}
-	plan, err = service.Advise(context.Background(), id, "test-key")
+	plan, err = service.Advise(context.Background(), id)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if plan.Advice != guidance {
+		t.Fatalf("the same incident read differently:\n%s", plan.Advice)
 	}
 	result, err := service.Execute(context.Background(), plan.Token, "BLOCK "+sourceIP)
 	if err != nil || result.SourceIP != sourceIP {
@@ -140,14 +131,20 @@ func TestProtectionRequiresActivePublicSourceAndConfirmation(t *testing.T) {
 		t.Fatalf("firewall calls = %+v", f)
 	}
 	active = false
-	plan, err = service.Advise(context.Background(), id, "test-key")
+	plan, err = service.Advise(context.Background(), id)
 	if err != nil || plan.CanExecute || !strings.Contains(plan.Reason, "closed") {
 		t.Fatalf("closed plan = %+v, %v", plan, err)
 	}
+	if !strings.Contains(plan.Advice, "review it in retrospect") || strings.Contains(plan.Advice, "is available") {
+		t.Errorf("closed guide must review, not offer a block:\n%s", plan.Advice)
+	}
 	active, sourceIP = true, "192.168.1.10"
-	plan, err = service.Advise(context.Background(), id, "test-key")
+	plan, err = service.Advise(context.Background(), id)
 	if err != nil || !plan.CanExecute || plan.Confirmation != "BLOCK LAN 192.168.1.10" || plan.SourceScope != "private LAN" {
 		t.Fatalf("private source plan = %+v, %v", plan, err)
+	}
+	if !strings.Contains(plan.Advice, "source: private LAN") || !strings.Contains(plan.Advice, "identify the device first") {
+		t.Errorf("LAN guide lacks its caution:\n%s", plan.Advice)
 	}
 	if _, err := service.Execute(context.Background(), plan.Token, "BLOCK 192.168.1.10"); err == nil {
 		t.Fatal("LAN block accepted the public-IP confirmation phrase")
@@ -156,9 +153,29 @@ func TestProtectionRequiresActivePublicSourceAndConfirmation(t *testing.T) {
 
 func TestProtectionRejectsRemoteDetector(t *testing.T) {
 	service := New(modelapi.NewClient("", "http://example.com/detections"))
-	_, err := service.Advise(context.Background(), Identity{Family: "Bot", Incident: 1, OpenedAt: 1}, "test-key")
+	_, err := service.Advise(context.Background(), Identity{Family: "Bot", Incident: 1, OpenedAt: 1})
 	if err == nil || !strings.Contains(err.Error(), "local detector") {
 		t.Fatalf("remote detector error = %v", err)
+	}
+}
+
+func TestGuideWithoutABlockSaysWhyAndChecksTheFamily(t *testing.T) {
+	checks := map[string]string{"DoS-Slowloris": "request rate", "Brute Force -Web": "failed logins", "Brute Force -XSS": "script or SQL",
+		"SQL Injection": "script or SQL", "Bot": "outbound connections", "Infiltration": "recent logins", "Unknown": "normal traffic"}
+	for family, check := range checks {
+		incident := incidentContext{incident: modelapi.Incident{Family: family, Score: 0.5}, active: true, ip: "8.8.4.4", events: 1}
+		got := guide(incident, "At least three linked threshold-crossing events are required for a host block.")
+		for _, expected := range []string{check, "1 linked flow scored", "No host block is offered. At least three", "at the service or upstream"} {
+			if !strings.Contains(got, expected) {
+				t.Errorf("%s guide lacks %q:\n%s", family, expected, got)
+			}
+		}
+		if strings.Contains(got, "is available") || strings.Contains(got, "To recover") {
+			t.Errorf("%s guide offers a block that is not offered:\n%s", family, got)
+		}
+	}
+	if got := guide(incidentContext{incident: modelapi.Incident{Family: "Bot"}, active: true}, "No linked source-IP evidence was retained for this incident."); !strings.Contains(got, "no linked flow was kept") || !strings.Contains(got, "source: unverified") {
+		t.Errorf("guide without evidence:\n%s", got)
 	}
 }
 
@@ -184,40 +201,3 @@ func TestBlockableIPv4IncludesPrivateButNotReserved(t *testing.T) {
 	}
 }
 
-func TestSavedAPIKeyRoundTrip(t *testing.T) {
-	config := t.TempDir()
-	if runtime.GOOS == "windows" {
-		t.Setenv("APPDATA", config)
-	} else {
-		t.Setenv("XDG_CONFIG_HOME", config)
-	}
-	if _, err := LoadAPIKey(); !os.IsNotExist(err) {
-		t.Fatalf("missing key error = %v", err)
-	}
-	if err := SaveAPIKey("test-secret-key"); err != nil {
-		t.Fatal(err)
-	}
-	got, err := LoadAPIKey()
-	if err != nil || got != "test-secret-key" {
-		t.Fatalf("loaded key = %q, err = %v", got, err)
-	}
-	data, err := os.ReadFile(filepath.Join(config, "netwatch", "groq-api-key"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if runtime.GOOS == "windows" && strings.Contains(string(data), "test-secret-key") {
-		t.Fatal("Windows key file contains plaintext")
-	}
-	if err := SaveAPIKey("replacement-secret"); err != nil {
-		t.Fatalf("replace key: %v", err)
-	}
-	if got, err := LoadAPIKey(); err != nil || got != "replacement-secret" {
-		t.Fatalf("replacement key = %q, err = %v", got, err)
-	}
-	if err := ClearAPIKey(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadAPIKey(); !os.IsNotExist(err) {
-		t.Fatalf("cleared key error = %v", err)
-	}
-}
