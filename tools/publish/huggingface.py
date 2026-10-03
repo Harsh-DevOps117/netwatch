@@ -156,8 +156,8 @@ split, which interleaves in wall-clock time. Nor does it claim cross-day or unse
 reported number is within-day.
 
 Alerts should be aggregated before reaching a human: three consecutive events above threshold on one host, then
-de-duplicated into incidents with a 60-second quiet gap. That takes the rate from thousands of alerts an hour to tens of
-incidents an hour at no cost to recall.
+de-duplicated into incidents with a 120-second quiet gap. The earlier tens-of-incidents-per-hour evaluation used a
+60-second gap; its measured rate and recall have not been revalidated at 120 seconds.
 
 ## Training data
 
