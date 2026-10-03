@@ -4,6 +4,8 @@ import (
 	"net"
 	"time"
 
+	"detector/semantics"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
@@ -33,6 +35,7 @@ func (f TCPFlags) IsFinOnly() bool {
 }
 
 type ParsedPacket struct {
+	semantics.Tags
 	Timestamp         time.Time `json:"timestamp"`
 	Length            int       `json:"length"`
 	PayloadLength     int       `json:"payload_length"`
@@ -181,6 +184,10 @@ func ParsePacket(pkt gopacket.Packet) *ParsedPacket {
 			parsed.PayloadLength = len(appLayer.Payload())
 		}
 	}
+	parsed.Tags = semantics.Classify(semantics.Observation{
+		Transport: parsed.Protocol, SrcIP: parsed.SrcIP.String(), DstIP: parsed.DstIP.String(),
+		SrcPort: parsed.SrcPort, DstPort: parsed.DstPort,
+	})
 
 	return parsed
 }
