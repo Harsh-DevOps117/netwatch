@@ -14,8 +14,68 @@ tools/
   setup.sh                once after cloning: uv sync, CICFlowMeter, the published model (artifacts/current points at it),
                           and the dataset if wanted (asks which set and days, or --dataset none|processed|model|both)
   setup_cicflowmeter.sh   fetches (git submodule, pinned), patches and builds tools/CICFlowMeter; setup.sh runs it
+  run_windows.ps1         starts live capture, detection, the lag forecast and the dashboard on Windows
+  ../start-netwatch.ps1    one-command Windows bootstrap and interactive CLI (no dashboard/frontend)
+  ../start-netwatch.sh     Linux/macOS bootstrap and interactive CLI (no dashboard/frontend)
   repo/          repository checks
 ```
+
+On Windows, the one-command CLI setup/start is:
+
+```powershell
+.\start-netwatch.cmd                       # or: powershell -ExecutionPolicy Bypass -File .\start-netwatch.ps1
+.\start-netwatch.cmd -Interface 'Ethernet' # select a different capture interface
+.\start-netwatch.cmd -SkipSetup            # subsequent starts without dependency sync
+.\start-netwatch.cmd -Device cpu          # explicit CPU override (default is CUDA)
+```
+
+It installs missing tools using winget, syncs the Python environment, builds CICFlowMeter,
+downloads the published model only if `artifacts/current` is absent, builds the Go CLI,
+starts capture plus both model services, then opens the interactive `netwatch>` prompt.
+It does not download the training dataset or start the frontend or dashboard. Wireshark's
+installer must be completed interactively so that Npcap is installed for live capture.
+The CLI can be left with `exit`; the model services continue in the background.
+
+Model serving defaults to CUDA. `uv sync --frozen` installs CUDA-enabled PyTorch
+on Windows and Linux from the official PyTorch CUDA 13.0 index. An NVIDIA GPU
+and compatible driver are required. Startup checks a real CUDA operation and
+prints `Detection: Running in CUDA` and `World model: Running in CUDA` in the
+service logs; the CLI's `model` output also reports the actual service device.
+An unavailable GPU produces a clear error; select CPU explicitly when needed.
+
+On Linux (Debian/Ubuntu, Fedora/RHEL, or Arch) and macOS, use the Unix launcher
+as a normal user, not with `sudo`:
+
+```bash
+bash ./start-netwatch.sh                         # chooses the default-route interface
+bash ./start-netwatch.sh --interface eth0        # explicit interface (see: tshark -D)
+bash ./start-netwatch.sh --skip-setup            # later starts without dependency sync
+bash ./start-netwatch.sh --device cpu            # CPU machines and macOS
+```
+
+It installs missing system tools through apt, dnf, pacman, or Homebrew, installs
+JDK 8 and uv if needed, then performs the same model/CICFlowMeter/CLI setup as
+the Windows launcher. Its service logs and PID files are in `artifacts/runtime/`.
+Packet capture requires permission to use `dumpcap`; on Linux, configure the
+Wireshark capture group/capabilities and re-login if necessary. On macOS,
+install Wireshark's ChmodBPF helper if capture devices are unavailable. The
+launcher reports capture-permission failures rather than running the whole
+model pipeline as root.
+
+The older setup/dashboard workflow remains available. After installing uv, Java 8,
+Wireshark and Npcap, run `tools/setup.sh --dataset none` with Git Bash. From PowerShell:
+
+```powershell
+.\tools\run_windows.ps1                 # starts all four services, reusing existing processes
+.\tools\run_windows.ps1 -Status         # checks capture, detection and forecasting
+.\tools\run_windows.ps1 -Restart        # apply updated service/dashboard code after calibration completes
+```
+
+The dashboard is at `http://127.0.0.1:8787`. The default interface is the active default-route adapter (LAN when it carries the route, otherwise Wi-Fi). Capture and both model services pin that adapter when started. After switching adapters, rerun the launcher to restart this checkout's managed services together. The System tab shows both the pinned capture interface and current active route, and warns if they differ. Per-interface capture and four-hour threshold-calibration files stay separate; existing Wi-Fi calibration files are retained.
+use `-Interface 'Ethernet'` to select another adapter. The published v1.0.0 model
+uses the lag forecast, which requires more than four minutes of capture to warm
+up. Detection starts immediately. Logs and the capture ring are kept under
+`artifacts/runtime/`.
 
 ## `dataset/`
 
