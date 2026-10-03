@@ -63,7 +63,7 @@ import torch
 
 from ingest.build.events import DEFAULT_K_PACKETS, build_event_stream
 from ingest.build.join import build_edges, build_flow_packet_map
-from ingest.sources.flows import csv_to_parquet, find_flow_csvs, run_cicflowmeter
+from ingest.sources.flows import cicflowmeter_command, csv_to_parquet, find_flow_csvs, run_cicflowmeter
 from ingest.sources.packets import pcap_to_parquet
 from models.compressor.autoencoder import EventAutoencoder
 from models.compressor.latents import export_latents as export_event_latents
@@ -74,9 +74,11 @@ from models.context_encoder.records import export_flow_records
 from models.flow_encoder.encoder import VARIANT, FlowAutoencoder
 from models.flow_encoder.export import export_latents as export_flow_latents
 from models.explanation.world_model import seed_explanations
+from models.serving.live_calibration import LiveScoreCalibration, checkpoint_signature
+from models.serving.threshold_mode import ThresholdMode
 from models.world_model.inference import Replay
 from models.world_model.reception import SPLIT_TEST, receive
-from models.world_model.service import Handler, STAGE_UNAVAILABLE, forecast_payload, node_names, served_threshold
+from models.world_model.service import Handler, STAGE_UNAVAILABLE, TARGET, forecast_payload, node_names, served_threshold
 
 DAY = "live"                   # the window's stream name; every stage keys its folders on it
 # CICFlowMeter's flow timeout (tools/CICFlowMeter .../ifm/Cmd.java: flowTimeout = 120000000 us). A flow that started this
@@ -88,6 +90,11 @@ TAG = "lag"                    # models.serving.registry: this runner is the `la
 
 def local_addresses() -> list[str]:
     """This machine's own addresses, so the panel can mark it the way the topology map does. Empty if unknown."""
+    if os.name == "nt":
+        import socket
+        import psutil
+        return [address.address for addresses in psutil.net_if_addrs().values() for address in addresses
+                if address.family in (socket.AF_INET, socket.AF_INET6)]
     try:
         out = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=5).stdout
     except (OSError, subprocess.SubprocessError):
@@ -156,7 +163,12 @@ class Chain:
         if not complete_flows(folder, start, cutoff):
             return 0
         (processed / DAY).mkdir(parents=True, exist_ok=True)
-        (processed / DAY / folder.name).symlink_to(folder.resolve(), target_is_directory=True)
+        destination = processed / DAY / folder.name
+        if os.name == "nt":
+            # Windows symlinks require Developer Mode or an administrator token.
+            shutil.copytree(folder, destination)
+        else:
+            destination.symlink_to(folder.resolve(), target_is_directory=True)
         n = build_event_stream(processed / DAY, events / DAY)
         export_side_features(DAY, events, processed, features / DAY, self.budget_ms)
         if "record" in self.reads:
@@ -209,32 +221,40 @@ class FlowStream:
     SOURCE = Path(__file__).resolve().parents[2] / "tools" / "live" / "StreamMeter.java"
 
     def __init__(self, cicflowmeter: Path, folder: Path):
-        self.cic, self.folder = Path(cicflowmeter).resolve(), Path(folder)
+        self.cic, self.folder = Path(cicflowmeter).resolve(), Path(folder).resolve()
         self.folder.mkdir(parents=True, exist_ok=True)
         self.fifo = self.folder / "stream.pcap"
-        if self.fifo.exists():
-            self.fifo.unlink()
-        os.mkfifo(self.fifo)
+        if os.name != "nt":
+            if self.fifo.exists():
+                self.fifo.unlink()
+            os.mkfifo(self.fifo)
         classes = self.compile()
+        platform = "win" if os.name == "nt" else "linux"
         self.proc = subprocess.Popen(
-            ["java", f"-Djava.library.path={self.cic / 'jnetpcap' / 'linux' / 'jnetpcap-1.4.r1425'}",
-             "-cp", f"{self.classpath()}:{classes}", "StreamMeter", str(self.fifo), "-"],
-            cwd=self.cic, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
-        self.pipe = open(self.fifo, "wb")             # returns once the meter has opened its end
+            ["java", "-Duser.timezone=UTC",
+             f"-Djava.library.path={self.cic / 'jnetpcap' / platform / 'jnetpcap-1.4.r1425'}",
+             "-cp", f"{self.classpath()}{os.pathsep}{classes}", "StreamMeter",
+             "-" if os.name == "nt" else str(self.fifo), "-"],
+            cwd=self.cic, stdin=subprocess.PIPE if os.name == "nt" else None,
+            stdout=subprocess.PIPE, stderr=None, text=True, bufsize=1)
+        self.pipe = self.proc.stdin.buffer if os.name == "nt" else open(self.fifo, "wb")
         self.header: "bytes | None" = None
         self.lock, self.pending, self.ready, self.swept = threading.Lock(), [], [], float("-inf")
         self.columns = None
-        threading.Thread(target=self._read, daemon=True).start()
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
 
     def classpath(self) -> str:
         """CICFlowMeter's runtime classpath, asked of its Gradle build once and cached beside the meter."""
         cache = self.folder / "classpath.txt"
-        if cache.exists() and cache.stat().st_mtime >= (self.cic / "build.gradle").stat().st_mtime:
+        overrides = Path(__file__).resolve().parents[2] / "tools" / "repo" / "cicflowmeter.gradle"
+        if cache.exists() and cache.stat().st_mtime >= max((self.cic / "build.gradle").stat().st_mtime,
+                                                          overrides.stat().st_mtime):
             return cache.read_text().strip()
         init = self.folder / "classpath.gradle"
         init.write_text('allprojects { afterEvaluate { p -> p.tasks.create("netwatchClasspath") { doLast { '
                         'println "NETWATCH_CP=" + p.sourceSets.main.runtimeClasspath.asPath } } } }\n')
-        out = subprocess.run(["./gradlew", "-q", "--offline", "-PpcapDir=-", "-PoutputDir=-", "-I", str(init),
+        out = subprocess.run([*cicflowmeter_command(self.cic), "-q", "--offline", "-PpcapDir=-", "-PoutputDir=-", "-I", str(init),
                               "compileJava", "netwatchClasspath"], cwd=self.cic, capture_output=True, text=True, check=True)
         path = next(line[len("NETWATCH_CP="):] for line in out.stdout.splitlines() if line.startswith("NETWATCH_CP="))
         cache.write_text(path + "\n")
@@ -299,34 +319,54 @@ class FlowStream:
     def close(self) -> None:
         self.pipe.close()
         self.proc.wait(timeout=30)
+        self.reader.join(timeout=5)
+        self.proc.stdout.close()
 
 
 class Live:
     """Watches the capture folder, runs the chain, and keeps the Forecast payload current."""
 
     def __init__(self, chain: Chain, inbox: Path, *, block10: Path, window: int, idle: float, rollout_steps: int,
-                 rollout_seeds: int, hold: float = HOLD_S):
+                 rollout_seeds: int, hold: float = HOLD_S, live_calibration_hours: float = 0.0,
+                 calibration_db: "Path | None" = None, model_paths: "list[Path] | None" = None):
         self.chain, self.inbox, self.block10 = chain, Path(inbox), Path(block10)
         self.window, self.idle, self.hold = window, idle, hold
         self.rollout_steps, self.rollout_seeds = rollout_steps, rollout_seeds
         self.threshold = served_threshold(self.block10)
+        self.live_calibration = (LiveScoreCalibration(
+            calibration_db or chain.work.parent / "calibration" / "world.sqlite",
+            {"world": float(self.threshold["threshold"])}, {"world": float(self.threshold["budget"])},
+            signature=checkpoint_signature(model_paths or [block10]), duration_s=live_calibration_hours * 3600)
+            if live_calibration_hours > 0 and self.threshold is not None else None)
+        mode_path = (calibration_db or chain.work.parent / "calibration" / "world.sqlite").with_name(
+            "world-threshold-mode.json")
+        self.threshold_mode = ThresholdMode(mode_path)
         self.pcaps: list[Path] = []
         self.seen: set = set()
         self.cycles = 0
+        self.scored_keys: dict[str, float] = {}
+        self.total_scored = 0
+        self.last_scored_wall: float | None = None
         self.packets: dict = {}          # capture file name -> its parsed packets, id offset and time span (None: empty)
         self.next_frame = 0              # packet ids stay unique across files: file offset + its own frame number
         self.next_flow = 0               # flow ids stay unique across slices
         self.slabs: list = []            # (latest flow end, the flows finished in one cycle), oldest first
         self.stream = FlowStream(chain.cicflowmeter, chain.work / "stream")
         self.status = {"status": "NOT_CONNECTED", "reason": "live runner started; waiting for the first finished "
-                       "capture file", "source": {"mode": "live"}}
+                       "capture file", "device": str(chain.device), "source": {"mode": "live", "device": str(chain.device)}}
 
     def finished(self) -> list[Path]:
         """Capture files that are done being written: not the newest, or idle for `idle` seconds."""
         files = sorted((p for pattern in CAPTURES for p in self.inbox.glob(pattern)), key=lambda p: p.stat().st_mtime)
         now = time.time()
-        return [p for i, p in enumerate(files)
-                if p.name not in self.seen and (i < len(files) - 1 or now - p.stat().st_mtime > self.idle)]
+        finished = [p for i, p in enumerate(files)
+                    if p.name not in self.seen and (i < len(files) - 1 or now - p.stat().st_mtime > self.idle)]
+        if len(finished) > self.window:
+            # On restart or after a slow build, do not replay a stale backlog.
+            # The model's state should use the newest contiguous capture window.
+            self.seen.update(p.name for p in finished[:-self.window])
+            return finished[-self.window:]
+        return finished
 
     def step(self) -> bool:
         """When a capture file finishes, rebuild the window and the forecast. Output: whether anything new arrived."""
@@ -446,21 +486,81 @@ class Live:
             return {"status": "NOT_CONNECTED", "reason": "the window has events but too few for a rollout yet",
                     "current_state": "S[t]", "future_states": [], "predicted_stage": STAGE_UNAVAILABLE,
                     "source": source}
+        threshold = self.threshold
+        if self.live_calibration is not None:
+            # Both event_id and flow_uid are renumbered on process restart. The
+            # source flow key plus observation time survives window rebuilds.
+            events = pq.read_table(cycle / "events" / DAY / "events.parquet",
+                                   columns=["event_id", "flow_uid"]).to_pandas()
+            flow_uid = dict(zip(events["event_id"], events["flow_uid"]))
+            flows = pq.read_table(cycle / "capture" / "window" / "flows.parquet",
+                                  columns=["flow_uid", "flow_key"]).to_pandas()
+            flow_key = dict(zip(flows["flow_uid"], flows["flow_key"]))
+            scored = []
+            for event_id, t, surprise, ranking, sender, receiver in zip(
+                    *(replay.rows[name] for name in ("event_id", "t", "surprise", "ranking", "sender", "receiver"))):
+                if threshold["score"] == TARGET:
+                    candidates = dict(ranking)
+                    value = max(candidates.get(sender, 0.0), candidates.get(receiver, 0.0))
+                else:
+                    value = surprise
+                scored.append((f"{float(t):.6f}|{flow_key[flow_uid[int(event_id)]]}", float(t),
+                               {"world": int(threshold["direction"]) * float(value)}))
+            fresh = [(key, observed_at) for key, observed_at, _ in scored if key not in self.scored_keys]
+            self.scored_keys.update(fresh)
+            if last_t is not None:
+                self.scored_keys = {key: observed_at for key, observed_at in self.scored_keys.items()
+                                    if observed_at >= last_t - 3600}
+            wall = time.time()
+            period = max(1.0, wall - self.last_scored_wall) if self.last_scored_wall is not None else None
+            self.last_scored_wall = wall
+            self.total_scored += len(fresh)
+            source["events_scored_total"] = self.total_scored
+            source["events_per_second"] = round(len(fresh) / period, 3) if period is not None else None
+            source["event_rate_window_s"] = round(period, 1) if period is not None else None
+            self.live_calibration.observe(scored)
+            live = self.live_calibration.status("world")
+            mode = self.threshold_mode.status(live["ready"])
+            threshold = {**threshold, "baseline_threshold": self.threshold["threshold"],
+                         "checkpoint_calibrated_on": self.threshold["calibrated_on"],
+                         "threshold_source": "checkpoint_validation", "live_calibration": live,
+                         "threshold_mode": mode}
+            if mode["effective"] == "live":
+                threshold["threshold"] = self.live_calibration.threshold("world")
+                threshold["threshold_source"] = "live_unlabeled_score_tail"
+                threshold["calibrated_on"] = f"{live['window_s'] / 3600:g} h unlabeled live score tail; checkpoint floor"
+                threshold["rule"] = (f"{'target probability' if threshold['score'] == TARGET else 'surprise'} "
+                                     f"{'≥' if threshold['direction'] > 0 else '≤'} "
+                                     f"{threshold['direction'] * threshold['threshold']:.4f}")
         caveats = [
             f"live: the last {len(self.pcaps)} capture file(s) of this machine, rebuilt every cycle; the state is as of "
             f"{source['lag_seconds']:.0f} s ago",
             f"only complete flows: those that started at least {self.hold:.0f} s before the newest captured packet "
             f"(CICFlowMeter closes every flow within that) and {self.hold:.0f} s after the window's first, so none was "
             "open before the window; the state always lags the wire by the hold or more",
-            "each step's target is the ranking head's choice; a predicted link has not happened",
+            "S[t+k] means k imagined event steps on each seeded rollout, not k seconds or the next k actual network events: the rollout assumes a one-second internal gap "
+            "but does not predict an arrival time; a predicted link has not been observed or confirmed as an incident",
         ]
+        if self.live_calibration is not None:
+            live = threshold["live_calibration"]
+            caveats.append((f"{live['window_s'] / 3600:g}-hour unlabeled live threshold active; "
+                            "checkpoint model scores are unchanged; score exceedance is not a measured "
+                            "false-positive rate; checkpoint test metrics describe only the baseline"
+                            if live["ready"] and self.threshold_mode.requested() == "live" else
+                            "four-hour live threshold is ready but original checkpoint remains selected"
+                            if live["ready"] else
+                            f"collecting live scores for a threshold-only operating point: {live['elapsed_s'] / 3600:.2f}/"
+                            f"{live['window_s'] / 3600:.2f} h; the checkpoint operating point remains in use"))
         if self.threshold and self.threshold.get("recall", 1) == 0:
             caveats.append("the served checkpoint caught none of its test attacks at this threshold; see "
                            "docs/dev/guides/world-model.md, 'Block 10 calibration'")
         names = node_names(cycle / "events" / DAY / "node_index.parquet")
-        return forecast_payload(rollouts, replay.rows, caveats=caveats, names=names, threshold=self.threshold,
+        payload = forecast_payload(rollouts, replay.rows, caveats=caveats, names=names, threshold=threshold,
                                 source=source,
                                 explanation=seed_explanations(replay, {r["seed_id"] for r in rollouts}, names))
+        payload["device"] = str(self.chain.device)
+        payload["source"]["device"] = str(self.chain.device)
+        return payload
 
 
 def main(argv: "list[str] | None" = None) -> int:
@@ -487,9 +587,23 @@ def main(argv: "list[str] | None" = None) -> int:
     parser.add_argument("--rollout-steps", type=int, default=6)
     parser.add_argument("--rollout-seeds", type=int, default=4)
     parser.add_argument("--port", type=int, default=8901)
-    parser.add_argument("--device", default=None)
+    parser.add_argument("--device", default="cuda", help="Model device (default: cuda; explicit cpu override)")
+    parser.add_argument("--threads", type=int, default=1,
+                        help="CPU inference threads (default: 1 to leave CPU available for live detection)")
+    parser.add_argument("--live-calibration-hours", type=float, default=0.0,
+                        help="collect this many continuous hours of unlabeled scored flows before serving a threshold-only live quantile")
+    parser.add_argument("--calibration-db", type=Path, default=None,
+                        help="persistent live score database; defaults to artifacts/runtime/calibration/world.sqlite")
     parser.add_argument("--once", action="store_true", help="process what is there, print the payload, and exit")
     args = parser.parse_args(argv)
+    from models.serving.device import checked_device, device_description
+    try:
+        args.device = checked_device(args.device)
+    except (ValueError, RuntimeError) as error:
+        parser.error(str(error))
+    if args.threads < 1:
+        parser.error("--threads must be positive")
+    torch.set_num_threads(args.threads)
     if args.registry is None and None in (args.block7, args.block8, args.block9, args.block10) and CURRENT.exists():
         args.registry = CURRENT
     if args.registry is not None:
@@ -503,7 +617,10 @@ def main(argv: "list[str] | None" = None) -> int:
     chain = Chain(args.work, block7=args.block7, block8=args.block8, block9=args.block9,
                   cicflowmeter=args.cicflowmeter, device=args.device)
     live = Live(chain, args.input, block10=args.block10, window=args.window, idle=args.idle,
-                rollout_steps=args.rollout_steps, rollout_seeds=args.rollout_seeds, hold=args.hold)
+                rollout_steps=args.rollout_steps, rollout_seeds=args.rollout_seeds, hold=args.hold,
+                live_calibration_hours=args.live_calibration_hours, calibration_db=args.calibration_db,
+                model_paths=[args.block7, args.block8, args.block9, args.block10])
+    print(f"World model: Running in {device_description(chain.device)}", flush=True)
     print(f"live runner: watching {args.input}, models on {chain.device}", flush=True)
     if args.once:
         live.idle = 0.0
@@ -515,6 +632,7 @@ def main(argv: "list[str] | None" = None) -> int:
         return 0 if payload.get("status") == "CONNECTED" else 1
 
     Handler.payload = live.status
+    Handler.mode_controller = live
 
     def loop() -> None:
         while True:
