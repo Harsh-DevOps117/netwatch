@@ -68,7 +68,7 @@ show_help() {
     echo -e "  ${GREEN}stdin${NC}                        Stream and parse PCAP telemetry from standard input pipe"
     echo -e "  ${GREEN}dashboard${NC} [--port 8787]      Start the local real-time intelligence dashboard"
     echo -e "  ${GREEN}model${NC} [--service lag]        Read model forecasts (and optionally detections)"
-    echo -e "  ${GREEN}protect${NC}                      Groq advice for a detector incident; optional confirmed host block"
+    echo -e "  ${GREEN}protect${NC}                      Response guide for a detector incident; optional confirmed host block"
     echo -e "  ${GREEN}build${NC}                        Compile the detector binary"
     echo -e "  ${GREEN}clean${NC}                        Clean up compiled binaries and exported JSON reports"
     echo -e "  ${GREEN}help${NC}                         Show this help message"
