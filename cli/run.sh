@@ -67,6 +67,8 @@ show_help() {
     echo -e "  ${GREEN}analyze${NC} <pcap-file>          Analyze an offline PCAP / PCAP-NG packet capture file"
     echo -e "  ${GREEN}stdin${NC}                        Stream and parse PCAP telemetry from standard input pipe"
     echo -e "  ${GREEN}dashboard${NC} [--port 8787]      Start the local real-time intelligence dashboard"
+    echo -e "  ${GREEN}model${NC} [--service lag]        Read model forecasts (and optionally detections)"
+    echo -e "  ${GREEN}protect${NC}                      Groq advice for a detector incident; optional confirmed host block"
     echo -e "  ${GREEN}build${NC}                        Compile the detector binary"
     echo -e "  ${GREEN}clean${NC}                        Clean up compiled binaries and exported JSON reports"
     echo -e "  ${GREEN}help${NC}                         Show this help message"
@@ -94,6 +96,9 @@ show_help() {
     echo ""
     echo -e "  # 5. Start the local dashboard (opens http://127.0.0.1:8787):"
     echo -e "  ${CYAN}./run.sh dashboard --port 8787${NC}"
+    echo ""
+    echo -e "  # 6. Watch the lag forecast and live detections:"
+    echo -e "  ${CYAN}./run.sh model --service lag --detections --watch 5s${NC}"
     echo ""
 }
 
@@ -123,7 +128,7 @@ case "${1:-}" in
         ensure_binary
         
         # Check if root/sudo is needed for live sniffing on Linux
-        if [[ $EUID -ne 0 ]] && command -v sudo &>/dev/null; then
+        if [[ $EUID -ne 0 ]] && command -v sudo &>/dev/null && [[ " $* " != *" --capture=false "* ]]; then
             echo -e "${YELLOW}[!] Live packet sniffing requires root permissions. Elevating via sudo...${NC}"
             exec sudo "${BINARY}" live "$@"
         else
@@ -149,6 +154,16 @@ case "${1:-}" in
         else
             exec "${BINARY}" dashboard "$@"
         fi
+        ;;
+    "model")
+        shift
+        ensure_binary
+        exec "${BINARY}" model "$@"
+        ;;
+    "protect")
+        shift
+        ensure_binary
+        exec "${BINARY}" protect "$@"
         ;;
     *)
         # Direct pass-through of flags (e.g., ./run.sh --pcap file.pcap or ./run.sh --live)
