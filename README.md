@@ -41,8 +41,8 @@ what was measured on the wire, and what a model said.
   verdict, and the encoder's attention over neighbouring events.
 - **Forecast** — the world model's predicted links and its state age. Forecasts are model outputs, not observations.
 - **PCAP analysis** — the same models run on a capture file, apart from live thresholds and incident history.
-- **Protection** — advice on one incident (through Groq, with your own key) and, only after you confirm it, a firewall
-  block of that incident's source address.
+- **Protection** — a response guide for one incident, built on the machine from its verified facts, and, only after
+  you confirm it, a firewall block of that incident's source address.
 
 A deterministic rule layer may hide an incident whose every linked event is routine service traffic; it never changes
 a model's scores, and the raw verdict stays visible.
