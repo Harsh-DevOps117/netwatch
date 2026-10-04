@@ -162,6 +162,25 @@ def rollout_graph(model: WorldModel, index: Neighbourhoods, day, attacker: int, 
     return out
 
 
+# ponytail: a fixed chunk count, so a short run costs at most this many forward passes; tune if a window is slow.
+MIN_CHUNKS = 64
+
+
+def chunking(events: int, trained: int) -> "tuple[int, int]":
+    """Chunk width and seed span for a run of `events` events and a checkpoint trained at width `trained`.
+
+    A run shorter than one chunk (a live window: tens to hundreds of events against a trained width of 512) was scored
+    whole against the empty memory: every surprise one of a few constants, the target probability zero, the
+    neighbourhood attention uniform over its slots. Narrower chunks let the run's earlier events build the state its
+    later ones are scored against. A run of MIN_CHUNKS full chunks or more keeps the trained width.
+
+    A narrowed run still starts cold, and its first events are surprising for that alone, so only its later half
+    seeds a rollout.
+    """
+    window = min(trained, max(1, -(-events // MIN_CHUNKS)))
+    return window, (trained if window == trained else max(1, events // 2))
+
+
 class Replay:
     """Scores a run chunk by chunk and keeps the model's memory between calls, so a caller can advance it in place.
 
@@ -181,8 +200,11 @@ class Replay:
                  keep: int | None = None):
         # The chunk width the checkpoint was trained with, unless the caller insists: serving at another width reads a
         # different staleness than training saw. Checkpoints from before the width was recorded were trained at 256.
+        # `span` is how many of the latest events seed a rollout: one chunk, unless the chunks were narrowed.
+        self.span = window
         if window is None:
-            window = int(torch.load(checkpoint, map_location="cpu", weights_only=False).get("window", 256))
+            trained = int(torch.load(checkpoint, map_location="cpu", weights_only=False).get("window", 256))
+            window, self.span = chunking(len(run), trained)
         self.run, self.neighbours, self.window = run, neighbours, window
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.active_window, self.max_candidates, self.attention = active_window, max_candidates, attention
@@ -296,9 +318,12 @@ class Replay:
                       to_tensor(day.dt_dst[positions], torch.float32), t_obs)
         # The whole batch, with its surprise: the rollout seeds from several distinct hosts, and one event per chunk
         # would only ever offer one.
-        self.recent = [(batch[i], day, positions[i], float(surprise[i])) for i in range(len(batch))]
+        recent = [(batch[i], day, positions[i], float(surprise[i])) for i in range(len(batch))]
+        # With narrowed chunks the seeds still come from the day's latest `span` events, not only the last chunk.
+        keep = self.span - len(recent) if self.window < self.span and self.recent and self.recent[-1][1] is day else 0
+        self.recent = self.recent[-keep:] + recent if keep > 0 else recent
         # Aligned with `recent`: each event's initiator-side neighbourhood attention, for models.explanation.
-        self.recent_attention = weights_init
+        self.recent_attention = torch.cat([self.recent_attention[-keep:], weights_init]) if keep > 0 else weights_init
 
     @torch.no_grad()
     def rollout(self, rollout_steps: int = 8, rollout_seeds: int = 1) -> list[dict]:
