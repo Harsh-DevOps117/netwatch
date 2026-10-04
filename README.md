@@ -67,9 +67,9 @@ false alarms are benign test flows of that population above the family's thresho
 
 The budget is met on calibration rows; on test rows the realised rate ranges from 0.006% to 0.043%. DoS-SlowHTTPTest
 flows all end within 10 ms, so it has no early rows (on the completed ones, threshold 0.266: recall 1.0000, 66 false
-alarms of 501,778, 0.0132%). The web attacks have too few test events to support a claim. After the alert rules
-(3 events in a row per host, 60 s incidents), every family comes to 1.3–6.3 incidents per hour over all test rows, and
-the alerting hosts carry 99.7–100% of the DoS, Bot and Infiltration attack events (`python -m models.evaluation`).
+alarms of 501,778, 0.0132%). After the alert rules (3 events in a row per host, 60 s incidents), every family comes to
+1.3–6.3 incidents per hour over all test rows, and the alerting hosts carry 99.7–100% of the DoS, Bot and Infiltration
+attack events (`python -m models.evaluation`).
 
 **Live.** The detector runs on live traffic and gives a verdict about 31 ms after a flow's first packet (median; 47 ms
 at the 99th percentile) on a capture paced in real time, reproducing training's inputs and verdicts
