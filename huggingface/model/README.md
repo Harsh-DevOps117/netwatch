@@ -32,15 +32,35 @@ cross a stage boundary.
 
 ## Quick start
 
-No account or access request is needed.
+The model is open: no account or access request is needed. You need `git`, `uv` and a JDK 8 on the machine.
+
+**1. Install.** This is the step that downloads from Hugging Face.
 
 ```bash
 git clone https://github.com/Harsh-DevOps117/netwatch && cd netwatch
-tools/setup.sh --dataset none     # Python environment, CICFlowMeter and this model
-./start-netwatch.sh               # capture, detection and forecast on a live interface, then the CLI
+tools/setup.sh --dataset none
 ```
 
-To fetch only the weights:
+| command | what it does | what it downloads from Hugging Face |
+|---|---|---|
+| `git clone …` | fetches the code from GitHub | nothing |
+| `tools/setup.sh --dataset none` | builds the Python environment and CICFlowMeter, fetches this model, rebuilds its checkpoints as `.pt` (bit-exact) and points `artifacts/current` at them | this repository at `v1.0.0`: 30 files, 4.5 MB (the safetensors weights, their configs and the serving code), into `artifacts/huggingface/download/netwatch-flow-cascade/` |
+
+`--dataset none` skips the dataset. With `--dataset processed`, `model` or `both`, the same command also downloads
+[kaustuk000/netwatch-ids2018-events](https://huggingface.co/datasets/kaustuk000/netwatch-ids2018-events): about 5 GB,
+8 GB or 13 GB. That repository is gated, so accept its terms on its page first and log in when the command asks.
+
+**2. Run.**
+
+```bash
+./start-netwatch.sh
+```
+
+Starts packet capture, the detection service and the forecast service on the active network interface, then opens the
+CLI. After step 1 it downloads nothing from Hugging Face. Run on its own, without step 1, it fetches the same 4.5 MB
+model first. It never downloads the dataset.
+
+To fetch only the weights, without the code:
 
 ```python
 from huggingface_hub import snapshot_download
