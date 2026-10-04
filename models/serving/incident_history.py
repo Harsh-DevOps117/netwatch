@@ -1,4 +1,4 @@
-"""Small durable ledger of detector incidents for the operator's recent-history view."""
+"""Small durable ledgers of detector incidents and world-model flags for the operator's recent-history view."""
 from __future__ import annotations
 
 import json
@@ -127,5 +127,58 @@ class IncidentHistory:
     def close(self) -> None:
         with self.read_lock:
             self.reader.close()
+        with self.lock:
+            self.db.close()
+
+
+class WorldAlertHistory:
+    """The observed events that crossed the world model's threshold, kept for the same three hours.
+
+    The live forecast rebuilds its window every cycle, so a flag is on screen only while its event is in that window.
+    An event is identified by its time and link: event ids are renumbered on every rebuild.
+    """
+
+    def __init__(self, path: Path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.lock = threading.Lock()
+        self.db = sqlite3.connect(path, timeout=10, check_same_thread=False)
+        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("CREATE TABLE IF NOT EXISTS world_alerts (t REAL NOT NULL, sender_ip TEXT NOT NULL, "
+                        "receiver_ip TEXT NOT NULL, incident INTEGER NOT NULL, detail TEXT NOT NULL, "
+                        "PRIMARY KEY (t, sender_ip, receiver_ip))")
+        self.db.commit()
+
+    def record(self, events: list[dict], now: "float | None" = None) -> None:
+        """Keep these flagged events. One that later joins an incident stays marked as part of it."""
+        values = [(float(e["t"]), str(e["sender_ip"]), str(e["receiver_ip"]), int(bool(e.get("incident"))),
+                   json.dumps(e)) for e in events]
+        with self.lock, self.db:
+            self.db.executemany("INSERT INTO world_alerts VALUES (?, ?, ?, ?, ?) ON CONFLICT (t, sender_ip, receiver_ip) "
+                                "DO UPDATE SET incident = MAX(incident, excluded.incident), detail = excluded.detail",
+                                values)
+            self.db.execute("DELETE FROM world_alerts WHERE t < ?", ((time.time() if now is None else now) - WINDOW_S,))
+
+    def remember(self, events: list[dict], incidents: list[dict]) -> list[dict]:
+        """Keep one cycle's threshold crossings and return everything kept.
+
+        Input:  the cycle's events (those without a `severity` did not cross and are skipped) and its incidents
+        Output: `recent()` after recording them
+        """
+        in_incident = {(e["t"], e["sender_ip"], e["receiver_ip"]) for incident in incidents
+                       for e in incident["related_events"]}
+        crossings = {(e["t"], e["sender_ip"], e["receiver_ip"]): e for e in events if e.get("severity")}
+        self.record([{**e, "incident": key in in_incident} for key, e in crossings.items()])
+        return self.recent()
+
+    def recent(self, now: "float | None" = None) -> list[dict]:
+        """The kept events, oldest first, each with `incident`: whether it was ever part of an incident."""
+        cutoff = (time.time() if now is None else float(now)) - WINDOW_S
+        with self.lock:
+            rows = self.db.execute("SELECT incident, detail FROM world_alerts WHERE t >= ? ORDER BY t",
+                                   (cutoff,)).fetchall()
+        return [{**json.loads(detail), "incident": bool(incident)} for incident, detail in rows]
+
+    def close(self) -> None:
         with self.lock:
             self.db.close()

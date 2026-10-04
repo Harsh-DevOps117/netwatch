@@ -146,6 +146,34 @@ def observed_incidents(rows: dict, threshold: "dict | None", names: dict, *, gap
     return [incident for incident in incidents if incident["last_seen"] + gap >= newest][-30:]
 
 
+def alert_groups(events: list[dict], *, gap: float = INCIDENT_GAP_S) -> list[dict]:
+    """Stored flagged events as one row per burst on a link, shaped like an incident.
+
+    Input:  flagged events (`t`, `sender_ip`, `receiver_ip`, `value`, `severity`, optionally `incident`), any order
+    Output: rows oldest first; a further flag on the link within `gap` seconds extends its row
+
+    `incident` on a row says whether any of its events met the incident rule (three crossings in a row) when it was
+    scored. A burst of three stored flags alone does not: unflagged events between them are not stored.
+    """
+    groups, latest = [], {}
+    for event in sorted(events, key=lambda e: e["t"]):
+        key = (event["sender_ip"], event["receiver_ip"])
+        group = latest.get(key)
+        if group is None or event["t"] > group["last_seen"] + gap:
+            group = latest[key] = {"id": f"{event['t']:.6f}|{key[0]}|{key[1]}", "opened": event["t"],
+                                   "last_seen": event["t"], "sender_ip": key[0], "receiver_ip": key[1],
+                                   "opening_score": event["value"], "events": 0, "related_events": [],
+                                   "severity": event["severity"], "incident": False}
+            groups.append(group)
+        group["last_seen"] = event["t"]
+        group["related_events"].append(event)
+        group["events"] += 1
+        group["incident"] = group["incident"] or bool(event.get("incident"))
+        if event["severity"] == "HIGH":
+            group["severity"] = "HIGH"
+    return groups
+
+
 def forecast_payload(rollouts: list[dict], rows: dict, *, caveats: list[str], names: "dict | None" = None,
                      threshold: "dict | None" = None, recent: int = 400, source: "dict | None" = None,
                      explanation: "list | None" = None) -> dict:

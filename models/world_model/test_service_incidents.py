@@ -1,7 +1,7 @@
 """Observed world-model incidents are distinct from raw event flags and forecasts."""
 import unittest
 
-from models.world_model.service import caveats_for, forecast_payload, observed_incidents, with_live_age
+from models.world_model.service import alert_groups, caveats_for, forecast_payload, observed_incidents, with_live_age
 
 
 def rows(times, scores):
@@ -64,6 +64,16 @@ class WorldIncidentTests(unittest.TestCase):
         incidents = observed_incidents(rows([0, 1, 2], [.1, .1, .1]), threshold, {})
         self.assertEqual(len(incidents), 1)
         self.assertEqual(incidents[0]["opening_score"], 0.1)
+
+    def test_stored_flags_become_one_row_per_burst_on_a_link(self):
+        flag = lambda t, receiver, **more: {"t": t, "sender_ip": "a", "receiver_ip": receiver, "value": .9,
+                                            "severity": "MEDIUM", **more}
+        groups = alert_groups([flag(300, "b", severity="HIGH"), flag(10, "b"), flag(100, "b", incident=True),
+                               flag(50, "c")])
+        self.assertEqual([(g["receiver_ip"], g["opened"], g["last_seen"], g["events"], g["incident"], g["severity"])
+                          for g in groups],
+                         [("b", 10, 100, 2, True, "MEDIUM"), ("c", 50, 50, 1, False, "MEDIUM"),
+                          ("b", 300, 300, 1, False, "HIGH")])
 
 
 if __name__ == "__main__":

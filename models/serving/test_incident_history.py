@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from models.serving.incident_history import IncidentHistory, WINDOW_S
+from models.serving.incident_history import IncidentHistory, WINDOW_S, WorldAlertHistory
 
 
 class IncidentHistoryTest(unittest.TestCase):
@@ -87,6 +87,21 @@ class IncidentHistoryTest(unittest.TestCase):
                              {"events": [], "total": 0, "truncated": False})
             self.assertEqual(history.events("Bot", 1, opened), rows)
             history.close()
+
+    def test_world_flags_outlive_the_window_and_keep_their_incident_mark(self):
+        with tempfile.TemporaryDirectory() as temp:
+            now = time.time()
+            flag = {"event_id": 4, "t": now - 60, "sender_ip": "10.0.0.5", "receiver_ip": "10.0.0.9",
+                    "value": .999, "severity": "MEDIUM"}
+            history = WorldAlertHistory(Path(temp) / "world-alerts.sqlite")
+            quiet = {**flag, "t": now - 30, "severity": ""}
+            history.record([{**flag, "t": now - WINDOW_S - 5}])
+            history.remember([flag, quiet], [{"related_events": [flag]}])
+            # The next cycle renumbers the event and no longer sees it inside an incident.
+            history.remember([{**flag, "event_id": 9}, quiet], [])
+            history.close()
+            kept = WorldAlertHistory(Path(temp) / "world-alerts.sqlite").recent()
+            self.assertEqual([(row["t"], row["event_id"], row["incident"]) for row in kept], [(now - 60, 9, True)])
 
 
 if __name__ == "__main__":

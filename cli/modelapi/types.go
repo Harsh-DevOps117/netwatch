@@ -114,6 +114,12 @@ type Observed struct {
 	SuppressedIncidents []ObservedIncident `json:"suppressed_incidents,omitempty"`
 	SuppressedAlerts    []ObservedAlert    `json:"suppressed_alerts,omitempty"`
 	SuppressedLinks     []SuppressedLink   `json:"suppressed_links,omitempty"`
+	// History is every observed threshold crossing the live service kept, as one
+	// row per burst on a link. ForecastWithRules drops the rows that are one
+	// routine internal service and counts them in SuppressedHistory.
+	History           []ObservedIncident `json:"history,omitempty"`
+	HistoryWindowS    float64            `json:"history_window_s,omitempty"`
+	SuppressedHistory int                `json:"suppressed_history,omitempty"`
 }
 
 // SuppressedLink is a host pair whose every flagged event in the window is one
@@ -137,6 +143,8 @@ type ObservedIncident struct {
 	Events        int             `json:"events"`
 	RelatedEvents []ObservedAlert `json:"related_events,omitempty"`
 	Severity      string          `json:"severity"`
+	// Incident is set on a History row whose events met the incident rule.
+	Incident bool `json:"incident,omitempty"`
 	// Deterministic service-rule decision; the model's score is not changed.
 	FinalDecision      string `json:"final_decision,omitempty"`
 	RuleClassification string `json:"rule_classification,omitempty"`

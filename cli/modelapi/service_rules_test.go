@@ -240,6 +240,14 @@ func TestWorldFlagsFollowTheServiceRules(t *testing.T) {
 	if len(single.Observed.SuppressedLinks) != 1 || len(single.Observed.Alerts) != 0 {
 		t.Fatalf("a single routine crossing: %+v", single.Observed)
 	}
+	// Kept history rows follow the same rule, each on its own events.
+	kept := &ForecastResponse{Observed: Observed{History: []ObservedIncident{
+		{ID: "old-dns", SenderIP: "10.4.4.120", ReceiverIP: resolver, Events: 1, RelatedEvents: []ObservedAlert{event(1, 10, resolver, 53)}},
+		{ID: "old-other", SenderIP: "10.4.4.120", ReceiverIP: other, Events: 1, RelatedEvents: []ObservedAlert{event(2, 20, other, 4444)}}}}}
+	applyWorldRules(kept)
+	if h := kept.Observed.History; len(h) != 1 || h[0].ID != "old-other" || h[0].RelatedEvents[0].TrafficClass == "" || kept.Observed.SuppressedHistory != 1 {
+		t.Fatalf("history rows on a routine service are dropped and counted: %+v", kept.Observed)
+	}
 	mixed := &ForecastResponse{Observed: Observed{Alerts: []ObservedAlert{event(1, 10, resolver, 53), event(2, 20, resolver, 4444)}}}
 	applyWorldRules(mixed)
 	if len(mixed.Observed.SuppressedLinks) != 0 || len(mixed.Observed.Alerts) != 2 {

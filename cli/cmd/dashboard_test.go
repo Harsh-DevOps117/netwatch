@@ -230,6 +230,19 @@ func TestDashboardHTMLIsNotCached(t *testing.T) {
 	}
 }
 
+func TestTopologyMapsHaveNoFixedHubAndCanZoom(t *testing.T) {
+	for _, required := range []string{`data-net="in"`, `data-net="out"`, `data-net="fit"`, `data-net="full"`, `requestFullscreen()`, `data-cat="observed"`, `data-cat="predicted"`, `data-cat="severity"`, `drawTopology('offlineGraph'`, `drawTopology('modelGraph'`, `drawTopology('captureGraph'`} {
+		if !strings.Contains(dashboardHTML, required) {
+			t.Fatalf("topology map is missing %q", required)
+		}
+	}
+	for _, removed := range []string{"CAPTURE HUB", "MAIN HOST", "lower-activity"} {
+		if strings.Contains(dashboardHTML, removed) {
+			t.Fatalf("topology map must not centre on one host or drop hosts: found %q", removed)
+		}
+	}
+}
+
 func TestOfflineUploadAndShortRolloutControls(t *testing.T) {
 	for _, required := range []string{`id="offlineUpload"`, `id="offlineStepTabs"`, `id="offlinePast"`, `id="offlineFuture"`, `id="offlineGraph"`, `Math.min(3,Number(w.rollout_steps||0))`} {
 		if !strings.Contains(dashboardHTML, required) {
