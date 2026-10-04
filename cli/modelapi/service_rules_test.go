@@ -197,3 +197,52 @@ func TestLowRateValidatedCameraDiscoveryAndNotArbitraryPort3956(t *testing.T) {
 		t.Fatalf("discovery flood: %+v", got)
 	}
 }
+
+func TestWorldFlagsFollowTheServiceRules(t *testing.T) {
+	event := func(id int, at float64, receiver string, port int) ObservedAlert {
+		return ObservedAlert{EventID: id, T: at, SenderIP: "10.4.4.120", ReceiverIP: receiver, Value: .999, Severity: "MEDIUM",
+			Src: "10.4.4.120", Dst: receiver, SrcPort: 50000 + id, DstPort: port, Protocol: 17,
+			NormalDNSQuery: true, SourcePacketsPerSecond: 2, ServiceEvidenceVersion: 1}
+	}
+	resolver, other := "10.200.0.200", "10.200.0.9"
+	dns := ObservedIncident{ID: "dns", Opened: 10, SenderIP: "10.4.4.120", ReceiverIP: resolver, Events: 3,
+		RelatedEvents: []ObservedAlert{event(1, 10, resolver, 53), event(2, 20, resolver, 53), event(3, 30, resolver, 53)}}
+	bare := ObservedIncident{ID: "bare", Opened: 10, SenderIP: "10.4.4.120", ReceiverIP: "203.0.113.9", Events: 3,
+		RelatedEvents: []ObservedAlert{{EventID: 7, T: 10, SenderIP: "10.4.4.120", ReceiverIP: "203.0.113.9"},
+			{EventID: 8, T: 20, SenderIP: "10.4.4.120", ReceiverIP: "203.0.113.9"}, {EventID: 9, T: 30, SenderIP: "10.4.4.120", ReceiverIP: "203.0.113.9"}}}
+	f := &ForecastResponse{
+		Observed: Observed{Incidents: []ObservedIncident{dns, bare},
+			// one resolver crossing, and one crossing on an unregistered port of another internal host
+			Alerts: []ObservedAlert{event(3, 30, resolver, 53), event(4, 40, other, 4444)}},
+		Alerts: []ForecastAlert{{SenderIP: resolver, ReceiverIP: "10.4.4.120"}, {SenderIP: "10.4.4.120", ReceiverIP: "203.0.113.9"}},
+	}
+	applyWorldRules(f)
+	o := f.Observed
+	if len(o.Incidents) != 1 || o.Incidents[0].ID != "bare" || o.Incidents[0].FinalDecision != "RETAINED" {
+		t.Fatalf("flags without port evidence must fail open: %+v", o.Incidents)
+	}
+	if len(o.SuppressedIncidents) != 1 || o.SuppressedIncidents[0].ProtocolTag != "DNS" || len(o.RawIncidents) != 2 {
+		t.Fatalf("routine internal DNS: suppressed %+v raw %d", o.SuppressedIncidents, len(o.RawIncidents))
+	}
+	if len(o.SuppressedLinks) != 1 || o.SuppressedLinks[0].Key != "10.200.0.200|10.4.4.120" || o.SuppressedLinks[0].Events != 3 || o.SuppressedLinks[0].Incidents != 1 {
+		t.Fatalf("suppressed links: %+v", o.SuppressedLinks)
+	}
+	if len(o.Alerts) != 1 || o.Alerts[0].EventID != 4 || len(o.SuppressedAlerts) != 1 {
+		t.Fatalf("only the routine link's flags leave the alert list: %+v", o.Alerts)
+	}
+	if len(f.Alerts) != 1 || f.Alerts[0].ReceiverIP != "203.0.113.9" || len(f.SuppressedAlerts) != 1 {
+		t.Fatalf("forecast alerts on a routine link are set aside: %+v", f.Alerts)
+	}
+
+	// One flagged resolver lookup is complete evidence; a second port on the same link is not routine.
+	single := &ForecastResponse{Observed: Observed{Alerts: []ObservedAlert{event(1, 10, resolver, 53)}}}
+	applyWorldRules(single)
+	if len(single.Observed.SuppressedLinks) != 1 || len(single.Observed.Alerts) != 0 {
+		t.Fatalf("a single routine crossing: %+v", single.Observed)
+	}
+	mixed := &ForecastResponse{Observed: Observed{Alerts: []ObservedAlert{event(1, 10, resolver, 53), event(2, 20, resolver, 4444)}}}
+	applyWorldRules(mixed)
+	if len(mixed.Observed.SuppressedLinks) != 0 || len(mixed.Observed.Alerts) != 2 {
+		t.Fatalf("a link carrying another port stays visible: %+v", mixed.Observed)
+	}
+}

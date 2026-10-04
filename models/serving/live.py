@@ -75,6 +75,7 @@ from models.flow_encoder.encoder import VARIANT, FlowAutoencoder
 from models.flow_encoder.export import export_latents as export_flow_latents
 from models.explanation.world_model import seed_explanations
 from models.serving.live_calibration import LiveScoreCalibration, checkpoint_signature
+from models.serving.service_evidence import flow_evidence
 from models.serving.threshold_mode import ThresholdMode
 from models.world_model.inference import Replay
 from models.world_model.reception import SPLIT_TEST, receive
@@ -383,8 +384,11 @@ class Live:
         for pcap in new:
             self.parse(pcap)
             if self.packets.get(pcap.name) and self.stream.feed(pcap):
-                # The meter sweeps once per second of capture time, so it has caught up within a second of the end.
-                self.stream.wait(self.packets[pcap.name]["last"] - 1.0)
+                # The meter sweeps once per second of capture time, so it has caught up within a second of the end --
+                # the end of what it reads: IPv4 TCP/UDP. Waiting for a later IPv6 packet would only ever time out.
+                metered = self.packets[pcap.name]["metered"]
+                if metered is not None:
+                    self.stream.wait(metered - 1.0)
         for name in [n for n in self.packets if n not in {p.name for p in self.pcaps}]:   # left the window
             shutil.rmtree(self.chain.work / "files" / Path(name).stem, ignore_errors=True)
             del self.packets[name]
@@ -418,10 +422,13 @@ class Live:
         out.mkdir(parents=True, exist_ok=True)
         entry = None
         if pcap_to_parquet(pcap, out / "packets.parquet", label_matcher=None):
-            table = pq.read_table(out / "packets.parquet", columns=["frame_no", "timestamp"])
+            table = pq.read_table(out / "packets.parquet", columns=["frame_no", "timestamp", "is_ipv6", "protocol"])
             times = table.column("timestamp").to_numpy()
+            metered = times[(table.column("is_ipv6").to_numpy() == 0)
+                            & np.isin(table.column("protocol").to_numpy(), (6, 17))]
             entry = {"path": out / "packets.parquet", "base": self.next_frame,
-                     "first": float(times.min()), "last": float(times.max())}
+                     "first": float(times.min()), "last": float(times.max()),
+                     "metered": float(metered.max()) if len(metered) else None}
             self.next_frame += int(pc.max(table.column("frame_no")).as_py()) + 1
         self.packets[pcap.name] = entry
 
@@ -555,11 +562,36 @@ class Live:
             caveats.append("the served checkpoint caught none of its test attacks at this threshold; see "
                            "docs/dev/guides/world-model.md, 'Block 10 calibration'")
         names = node_names(cycle / "events" / DAY / "node_index.parquet")
+        # The seeds are one event per initiating host, and on one machine's capture that is one or two rows: the matrix
+        # also shows the latest scored events, as the detection matrix does.
+        explained = {r["seed_id"] for r in rollouts} | {int(day.event_id[position])
+                                                        for _, day, position, _ in replay.recent[-8:]}
         payload = forecast_payload(rollouts, replay.rows, caveats=caveats, names=names, threshold=threshold,
                                 source=source,
-                                explanation=seed_explanations(replay, {r["seed_id"] for r in rollouts}, names))
+                                explanation=seed_explanations(replay, explained, names))
         payload["device"] = str(self.chain.device)
         payload["source"]["device"] = str(self.chain.device)
+        # Ports and connection evidence for the flagged events, so the CLI can apply the same deterministic service
+        # rules to world-model incidents as it does to the detector's. Context only: no score or threshold reads it.
+        observed = payload["observed"]
+        flagged = [*observed["alerts"], *observed["recent_events"],
+                   *(event for incident in observed["incidents"] for event in incident["related_events"])]
+        if flagged:
+            window = cycle / "capture" / "window"
+            events = pq.read_table(cycle / "events" / DAY / "events.parquet", columns=["event_id", "flow_uid"]).to_pandas()
+            flow_of = dict(zip(events["event_id"], events["flow_uid"]))
+            evidence = flow_evidence(pq.read_table(window / "flows.parquet",
+                                                   columns=["flow_uid", "Src IP", "Src Port", "Dst IP", "Dst Port",
+                                                            "Protocol"]).to_pandas(),
+                                     pq.read_table(window / "packets.parquet",
+                                                   columns=["timestamp", "src_ip", "dst_ip", "dst_port", "protocol",
+                                                            "frame_no", "ip_flag_mf", "ip_frag_offset", "payload_len",
+                                                            "payload"]).to_pandas(),
+                                     pq.read_table(window / "flow_packet_map.parquet",
+                                                   columns=["frame_no", "flow_uid"]).to_pandas(),
+                                     wanted={flow_of.get(event["event_id"]) for event in flagged})
+            for event in flagged:
+                event.update(evidence.get(flow_of.get(event["event_id"]), {}))
         return payload
 
 

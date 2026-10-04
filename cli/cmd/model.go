@@ -110,7 +110,7 @@ func resolveModelEndpoints(service, forecastOverride, detectionsOverride string)
 }
 
 func renderModelSnapshot(ctx context.Context, client *modelapi.Client, includeDetections, asJSON bool, alarms *modelAlarmTracker) error {
-	forecast, err := client.Forecast(ctx)
+	forecast, err := client.ForecastWithRules(ctx)
 	if err != nil {
 		return err
 	}
@@ -274,6 +274,11 @@ func printForecast(f *modelapi.ForecastResponse) {
 			fmt.Fprintf(w, "  %s\tS[t+%d]\t%s → %s\t%.5f\t%s\t%t\n", ordinal(i+1), edge.Step, edge.SenderIP, edge.ReceiverIP, edge.Value, severity, edge.OnManifold)
 		}
 		_ = w.Flush()
+	}
+
+	if n := len(f.Observed.SuppressedLinks); n > 0 {
+		fmt.Printf("\n  %d link(s) judged routine internal services by deterministic rules: %d flagged event(s), %d incident(s) and %d forecast alert(s) set aside; raw model history remains in JSON.\n",
+			n, len(f.Observed.SuppressedAlerts), len(f.Observed.SuppressedIncidents), len(f.SuppressedAlerts))
 	}
 
 	if len(f.Explanation) > 0 {

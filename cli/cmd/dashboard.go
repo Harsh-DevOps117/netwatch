@@ -401,7 +401,7 @@ func dashboardHandler(store *dashboardStore, modelClient *modelapi.Client) http.
 	mux.HandleFunc("/api/windows", func(w http.ResponseWriter, r *http.Request) { write(w, store.snapshot()["history"]) })
 	mux.HandleFunc("/api/system", func(w http.ResponseWriter, r *http.Request) { write(w, store.snapshot()["system"]) })
 	mux.HandleFunc("/api/forecast", func(w http.ResponseWriter, r *http.Request) {
-		forecast, err := modelClient.Forecast(r.Context())
+		forecast, err := modelClient.ForecastWithRules(r.Context())
 		if err != nil {
 			write(w, map[string]interface{}{"status": "NOT_CONNECTED", "reason": err.Error(), "current_state": "S[t]", "future_states": []interface{}{}, "predicted_stage": ""})
 			return
