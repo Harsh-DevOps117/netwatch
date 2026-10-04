@@ -1,0 +1,113 @@
+name: windows
+
+# The Windows launcher's setup path on a cloud Windows machine: the launcher parses in both PowerShells, the locked
+# Python environment installs, CICFlowMeter builds through gradlew.bat, the forecast service's Java build works and
+# the published model downloads. Packet capture is not covered: Npcap has no unattended installer.
+on:
+  pull_request:
+    paths:
+      - start-netwatch.ps1
+      - start-netwatch.cmd
+      - tools/repo/cicflowmeter.gradle
+      - tools/live/StreamMeter.java
+      - ingest/sources/flows.py
+      - models/serving/live.py
+      - tools/publish/download.py
+      - .gitmodules
+      - uv.lock
+      - .github/workflows/windows.yml
+  workflow_dispatch:
+
+jobs:
+  launcher-setup:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: .
+      PYTHONUTF8: "1"
+      TORCH_DISABLE_NATIVE_JIT: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      # Windows PowerShell 5.1 is what start-netwatch.cmd runs, and it reads a BOM-less script as ANSI.
+      - name: Launcher parses and answers -Help (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\start-netwatch.ps1", [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { Write-Host $_ }; exit 1 }
+          cmd /c start-netwatch.cmd -Help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Launcher parses and answers -Help (PowerShell 7)
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\start-netwatch.ps1", [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { Write-Host $_ }; exit 1 }
+          ./start-netwatch.ps1 -Help
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Python environment, as the launcher installs it
+        run: uv sync --frozen
+
+      - name: CICFlowMeter builds through gradlew.bat, as the launcher runs it
+        shell: pwsh
+        run: |
+          $commit = (git -C tools/CICFlowMeter rev-parse HEAD).Trim()
+          if ($commit -ne 'acaf8bea8611fb4b996b4d33964dfd9155d9efdf') { throw "CICFlowMeter is at $commit, not the pinned commit" }
+          $override = Join-Path $PWD 'tools\repo\cicflowmeter.gradle'
+          Push-Location tools\CICFlowMeter
+          & .\gradlew.bat -q -I $override compileJava '-PpcapDir=-' '-PoutputDir=-'
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { exit $code }
+
+      # The build steps of the forecast service's meter, without its capture pipe: jnetpcap.dll needs Npcap to load.
+      - name: Forecast service builds its Java meter
+        shell: pwsh
+        run: |
+          @'
+          import os
+          import tempfile
+          from pathlib import Path
+
+          from models.serving.live import FlowStream
+
+          meter = object.__new__(FlowStream)
+          meter.cic = Path("tools/CICFlowMeter").resolve()
+          meter.folder = Path(tempfile.mkdtemp(prefix="meter-"))
+          classpath = meter.classpath()
+          assert "jnetpcap" in classpath, classpath
+          classes = meter.compile()
+          assert (classes / "StreamMeter.class").exists(), "StreamMeter did not compile"
+          print("classpath entries:", len(classpath.split(os.pathsep)), "| StreamMeter compiled")
+          '@ | Set-Content -Encoding utf8 meter_check.py
+          uv run python meter_check.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Published model downloads and rebuilds, as the launcher fetches it
+        shell: pwsh
+        run: |
+          uv run --frozen --with huggingface_hub python tools/publish/download.py --repo kaustuk000/netwatch-flow-cascade --revision v1.0.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $downloaded = Join-Path $PWD 'artifacts\huggingface\download\netwatch-flow-cascade'
+          New-Item -ItemType Junction -Path (Join-Path $PWD 'artifacts\current') -Target $downloaded | Out-Null
+          foreach ($relative in @('flow_encoder.pt', 'detection_encoder.pt', 'forecasting_encoder.pt',
+                                  'compressor.pt', 'world_model.pt', 'serving.json')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $PWD "artifacts\current\$relative"))) {
+              throw "Model checkpoint missing through the junction: $relative"
+            }
+          }
+          if (-not (Get-ChildItem artifacts\current\detector -Filter 'head_*.pt')) { throw 'No detector heads found' }
