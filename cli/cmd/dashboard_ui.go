@@ -331,7 +331,7 @@ function renderForecast(f){forecast=f||{};let connected=forecast.status==='CONNE
   renderForecastTime();
   let recall=t?Number(t.recall||0):null;$('recallWarning').innerHTML=!t?'<div class="banner danger"><strong>Checkpoint is uncalibrated.</strong><p>Nothing alerts until a threshold is served.</p></div>':recall===0?'<div class="banner danger"><strong>Measured test recall is 0.000%.</strong><p>This checkpoint is not a working detector yet. Forecast alerts must not be treated as primary detections.</p></div>':'<div class="banner info"><strong>Forecast alerts are secondary.</strong><p>Measured test recall is '+(100*recall).toFixed(3)+'%. Use the early detection service as the primary alert source.</p></div>';
   $('calibrationCards').innerHTML=kpi('Source tag',src.tag||src.mode||'unknown',src.mode==='replay'?'recorded dataset':'served forecast product')+kpi('Model score',forecast.score||'unknown','score, not calibrated probability')+kpi('Rollout',number(forecast.rollout_steps)+' steps','one imagined event per step')+kpi('Events scored',number(forecast.events_scored),'service total');
-  $('thresholdDetail').innerHTML=t?row('Rule',t.rule||'—')+row('Calibrated on',t.calibrated_on||'—')+row('Measured recall',(100*Number(t.recall||0)).toFixed(3)+'%')+row('Measured FPR',(100*Number(t.fpr||0)).toFixed(4)+'%')+row('False alarms',number(t.false_alarms)+' / '+Number(t.test_hours||0).toFixed(2)+' h')+row('False incidents / h',Number(t.false_incidents_per_hour||0).toFixed(3))+row('Budget',Number(t.budget||0).toPrecision(3)):row('Threshold','uncalibrated');
+  $('thresholdDetail').innerHTML=t?row('Rule',t.rule||'—')+row('Calibrated on',t.calibrated_on||'—')+row('Budget',(100*Number(t.budget||0)).toPrecision(3)+'% of benign traffic may alert')+row('Dataset test: recall',(100*Number(t.recall||0)).toFixed(3)+'%')+row('Dataset test: false-alarm rate',(100*Number(t.fpr||0)).toFixed(4)+'%'+(t.overshoot_vs_budget?' · '+Number(t.overshoot_vs_budget).toFixed(2)+'× the budget':''))+row('Dataset test: false alarms',number(t.false_alarms)+' in '+number(t.test_benign)+' benign events / '+Number(t.test_hours||0).toFixed(2)+' h')+row('Dataset test: false incidents / h',Number(t.false_incidents_per_hour||0).toFixed(3)):row('Threshold','uncalibrated');
   renderState();renderRisk();renderPredictions();renderWorldAlerts();renderAttention();renderCaveats();renderWorldCalibration();
 }
 
@@ -401,7 +401,7 @@ renderDetections=function(d){
   let total=Number(d&&d.total_ip_packets||0),ipv6=Number(d&&d.ipv6_packets_excluded||0),share=total?100*ipv6/total:0;
   $('detectionInputWarning').innerHTML=share>=10?'<div class="banner warn">'+share.toFixed(1)+'% of parsed IP packets ('+number(ipv6)+' of '+number(total)+') are IPv6 and not scored by this IPv4-trained checkpoint. The displayed incident rate applies only to eligible IPv4 TCP/UDP flows. IPv6 needs a separately trained and validated model.</div>':'';
   let suppressed=(d&&d.suppressed_incidents)||[];
-  $('serviceRuleSummary').innerHTML=suppressed.length?'<div class="banner">'+number(suppressed.length)+' INFILTRATION incident(s) suppressed by deterministic service rules. Raw model scores and incidents remain in the API. A service port alone is not a whitelist.</div>':'';
+  $('serviceRuleSummary').innerHTML=suppressed.length?'<div class="banner">'+number(suppressed.length)+' model incident(s) suppressed by deterministic service rules. Raw model scores and incidents remain in the API. A service port alone is not a whitelist.</div>':'';
 };
 function renderDetectionEvents(){
   processAlarms('detection',(detections.recent_incidents||detections.incidents||[]).map(function(x){return {key:[x.family,x.incident,x.t].join('|'),label:x.family+' on sender node '+x.key}}))
@@ -554,7 +554,7 @@ const renderOfflineResultBase=renderOfflineResult;
 renderOfflineResult=function(result){
   renderOfflineResultBase(result);
   let suppressed=((result||{}).detection||{}).suppressed_incidents||[];
-  if(suppressed.length)$('offlineResult').insertAdjacentHTML('afterbegin','<div class="banner">'+number(suppressed.length)+' INFILTRATION incident(s) suppressed by deterministic internal-service rules. Original model incidents remain in raw_incidents in the job result.</div>');
+  if(suppressed.length)$('offlineResult').insertAdjacentHTML('afterbegin','<div class="banner">'+number(suppressed.length)+' model incident(s) suppressed by deterministic internal-service rules. Original model incidents remain in raw_incidents in the job result.</div>');
 };
 </script>
 </body>

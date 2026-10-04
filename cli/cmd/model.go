@@ -236,13 +236,29 @@ func printForecast(f *modelapi.ForecastResponse) {
 		fmt.Println("Operating pt : uncalibrated — alerts are disabled")
 	} else {
 		t := f.Threshold
-		fmt.Printf("Operating pt : %s · budget %.4g · epoch %d\n", t.Rule, t.Budget, t.Epoch)
-		fmt.Printf("Calibration  : %s\n", t.CalibratedOn)
-		fmt.Printf("Test result  : recall %.3f%% · FPR %.4f%% · %d false alarms over %.2f h\n", 100*t.Recall, 100*t.FPR, t.FalseAlarms, t.TestHours)
+		// Which threshold alerts are judged against, then what was measured for it and where.
+		inUse := "checkpoint threshold in use"
+		if t.ThresholdSource == "live_unlabeled_score_tail" {
+			inUse = "live score-tail threshold in use"
+		}
+		fmt.Printf("Operating pt : %s · %s · epoch %d\n", t.Rule, inUse, t.Epoch)
+		fmt.Printf("Budget       : %.4g%% of benign traffic may alert · calibrated on %s\n", 100*t.Budget, t.CalibratedOn)
+		fmt.Printf("Dataset test : checkpoint threshold on the recorded test split, not this machine: recall %.3f%% · false-alarm rate %.4f%% (%.2fx the budget) · %d false alarms in %d benign events over %.2f h\n",
+			100*t.Recall, 100*t.FPR, t.OvershootVsBudget, t.FalseAlarms, t.TestBenign, t.TestHours)
 		if live := t.LiveCalibration; live != nil {
-			fmt.Printf("Live scores  : %.2f/%.2f h, %d distinct flows, ready %t\n", live.ElapsedS/3600, live.WindowS/3600, live.Samples, live.Ready)
-			fmt.Printf("Live target  : %.4f%% score exceedance, not measured FPR\n", 100*live.TargetExceedanceBudget)
-			fmt.Println("Test result above describes the checkpoint, not this live threshold.")
+			if live.Ready {
+				fmt.Printf("Live scores  : rolling %.2f h window of this machine's traffic · %d distinct flows · ready\n", live.WindowS/3600, live.Samples)
+			} else {
+				fmt.Printf("Live scores  : collecting %.2f of %.2f h of this machine's traffic · %d distinct flows\n", live.ElapsedS/3600, live.WindowS/3600, live.Samples)
+			}
+			switch {
+			case t.ThresholdSource == "live_unlabeled_score_tail":
+				fmt.Printf("Live threshold: in use · targets a %.4g%% score exceedance, which is not a measured false-alarm rate\n", 100*live.TargetExceedanceBudget)
+			case live.Ready:
+				fmt.Println("Live threshold: ready but not selected; choose it under Forecast > Alert threshold in the dashboard")
+			default:
+				fmt.Println("Live threshold: not ready; the checkpoint threshold stays in use until the window is complete")
+			}
 		}
 		if t.Recall == 0 {
 			fmt.Println("WARNING      : measured test recall is zero; this is not a working detector yet")
@@ -318,7 +334,7 @@ func printDetections(d *modelapi.DetectionsResponse) {
 	}
 	fmt.Printf("\nINCIDENTS\n  %d active after persistence and quiet-gap aggregation · %d events scored internally · capture-to-verdict median %.1f ms / p99 %.1f ms\n", total, d.EventsScored, 1000*latency.Median, 1000*latency.P99)
 	if len(d.SuppressedIncidents) > 0 {
-		fmt.Printf("  %d model INFILTRATION incident(s) suppressed by deterministic internal-service rules; raw model history remains in JSON.\n", len(d.SuppressedIncidents))
+		fmt.Printf("  %d model incident(s) suppressed by deterministic internal-service rules; raw model history remains in JSON.\n", len(d.SuppressedIncidents))
 	}
 	if d.TotalIPPackets > 0 && d.IPv6PacketsExcluded > 0 {
 		fmt.Printf("  IPv6 outside checkpoint: %d / %d parsed IP packets (%.1f%%); only IPv4 TCP/UDP flows are scored\n", d.IPv6PacketsExcluded, d.TotalIPPackets, 100*float64(d.IPv6PacketsExcluded)/float64(d.TotalIPPackets))
