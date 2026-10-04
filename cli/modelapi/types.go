@@ -15,15 +15,17 @@ type ForecastResponse struct {
 	Observed       Observed        `json:"observed"`
 	PredictedEdges []PredictedEdge `json:"predicted_edges"`
 	Alerts         []ForecastAlert `json:"alerts"`
-	RolloutSteps   int             `json:"rollout_steps"`
-	CurrentState   string          `json:"current_state"`
-	FutureStates   []string        `json:"future_states"`
-	StepValue      []float64       `json:"step_value"`
-	AlertShare     []float64       `json:"alert_share"`
-	PredictedStage string          `json:"predicted_stage"`
-	Caveats        []string        `json:"caveats"`
-	EventsScored   int             `json:"events_scored"`
-	Explanation    []Explanation   `json:"explanation"`
+	// Forecast alerts on a link the service rules judged a routine internal service.
+	SuppressedAlerts []ForecastAlert `json:"suppressed_alerts,omitempty"`
+	RolloutSteps     int             `json:"rollout_steps"`
+	CurrentState     string          `json:"current_state"`
+	FutureStates     []string        `json:"future_states"`
+	StepValue        []float64       `json:"step_value"`
+	AlertShare       []float64       `json:"alert_share"`
+	PredictedStage   string          `json:"predicted_stage"`
+	Caveats          []string        `json:"caveats"`
+	EventsScored     int             `json:"events_scored"`
+	Explanation      []Explanation   `json:"explanation"`
 }
 
 type Threshold struct {
@@ -106,6 +108,23 @@ type Observed struct {
 	Alerts    []ObservedAlert    `json:"alerts"`
 	Incidents []ObservedIncident `json:"incidents"`
 	Events    int                `json:"events"`
+	// Set by ForecastWithRules. Incidents and Alerts hold the operator-facing
+	// view; what the service rules set aside stays in the fields below.
+	RawIncidents        []ObservedIncident `json:"raw_incidents,omitempty"`
+	SuppressedIncidents []ObservedIncident `json:"suppressed_incidents,omitempty"`
+	SuppressedAlerts    []ObservedAlert    `json:"suppressed_alerts,omitempty"`
+	SuppressedLinks     []SuppressedLink   `json:"suppressed_links,omitempty"`
+}
+
+// SuppressedLink is a host pair whose every flagged event in the window is one
+// routine internal service. Key is "a|b" with the two hosts sorted.
+type SuppressedLink struct {
+	Key                string `json:"key"`
+	ProtocolTag        string `json:"protocol_tag"`
+	RuleClassification string `json:"rule_classification"`
+	RuleReason         string `json:"rule_reason"`
+	Events             int    `json:"events"`
+	Incidents          int    `json:"incidents"`
 }
 
 type ObservedIncident struct {
@@ -118,6 +137,11 @@ type ObservedIncident struct {
 	Events        int             `json:"events"`
 	RelatedEvents []ObservedAlert `json:"related_events,omitempty"`
 	Severity      string          `json:"severity"`
+	// Deterministic service-rule decision; the model's score is not changed.
+	FinalDecision      string `json:"final_decision,omitempty"`
+	RuleClassification string `json:"rule_classification,omitempty"`
+	RuleReason         string `json:"rule_reason,omitempty"`
+	ProtocolTag        string `json:"protocol_tag,omitempty"`
 }
 
 type ObservedEdge struct {
@@ -135,6 +159,21 @@ type ObservedAlert struct {
 	ReceiverIP string  `json:"receiver_ip"`
 	Value      float64 `json:"value"`
 	Severity   string  `json:"severity"`
+	// Flow endpoints and service evidence, when the service supplies them
+	// (the lag service does); the tags are added by the CLI.
+	Src                    string `json:"src,omitempty"`
+	Dst                    string `json:"dst,omitempty"`
+	SrcPort                int    `json:"src_port,omitempty"`
+	DstPort                int    `json:"dst_port,omitempty"`
+	Protocol               int    `json:"protocol,omitempty"`
+	EstablishedConnection  bool   `json:"established_connection,omitempty"`
+	NormalDNSQuery         bool   `json:"normal_dns_query,omitempty"`
+	NormalGVCPDiscovery    bool   `json:"normal_gvcp_discovery,omitempty"`
+	SourcePacketsPerSecond int    `json:"source_packets_per_second,omitempty"`
+	ServiceEvidenceVersion int    `json:"service_evidence_version,omitempty"`
+	ProtocolTag            string `json:"protocol_tag,omitempty"`
+	TrafficClass           string `json:"traffic_class,omitempty"`
+	ConnectionRole         string `json:"connection_role,omitempty"`
 }
 
 type Candidate struct {

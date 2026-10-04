@@ -5,8 +5,11 @@ Usage:  uv run --with huggingface_hub python tools/publish/download.py --repo <a
             --sets processed model [--days Friday-02-03-2018 ...] [--revision v1.0.0]
 
 The dataset is fetched set by set (`processed`, `model`, as its card describes) and day by day, into
-artifacts/huggingface/download/<dataset name>/ in the repository's own layout: <set>/<portion>/<day>/*.parquet. It is
-gated: accept its terms on the Hugging Face page and log in (`hf auth login`) first.
+artifacts/huggingface/download/<dataset name>/ in the repository's own layout: <set>/<portion>/<day>/*.parquet.
+
+Before either download, the repository's access is checked. A public, ungated repository is pulled as it is. A gated or
+private one needs a Hugging Face login: if this machine has none, the tool asks for it (or, when it cannot ask, says how
+to log in) instead of failing with a traceback, and it says so when the account has not accepted the repository's terms.
 
 artifacts/huggingface/download/<repo name>/ after a download:
     *.safetensors, *.config.json, README.md, ...   the repository exactly as published
@@ -42,6 +45,46 @@ NAMES = {"flow_encoder": "flow_encoder.pt", "context_encoder": "detection_encode
          "live_compressor": "live_compressor.pt", "live_world_model": "live_world_model.pt"}
 
 
+LOGIN = "uvx --from huggingface_hub hf auth login"
+
+
+def ensure_access(repo: str, repo_type: str = "model") -> None:
+    """Make sure this machine may fetch `repo` before a download starts.
+
+    Input:  <account>/<name>, "model" or "dataset"
+    Output: None when the download can go ahead; otherwise the process exits with what to do, not a traceback
+
+    A public, ungated repository needs nothing. A gated or private one needs a login: without one the user is asked to
+    log in here when there is a terminal to ask on, and told the command when there is not.
+    """
+    from huggingface_hub import HfApi, get_token, login
+    from huggingface_hub.errors import GatedRepoError, HfHubHTTPError, RepositoryNotFoundError
+
+    api = HfApi()
+    page = f"https://huggingface.co/{'datasets/' if repo_type == 'dataset' else ''}{repo}"
+    try:
+        if not api.repo_info(repo, repo_type=repo_type, token=False).gated:
+            return                                        # public and ungated: anyone may pull it
+        why = "gated"
+    except RepositoryNotFoundError:                       # what an anonymous request to a private repository gets
+        why = "private, or does not exist"
+    if get_token() is None:
+        print(f"{repo} is {why}: downloading it needs a Hugging Face login.", flush=True)
+        if not sys.stdin.isatty():
+            raise SystemExit(f"Log in with:  {LOGIN}\nthen run this again.")
+        login()
+    try:
+        api.auth_check(repo, repo_type=repo_type)
+    except GatedRepoError:
+        raise SystemExit(f"Your Hugging Face account has no access to {repo} yet. Accept its terms at {page} and run "
+                         f"this again.") from None
+    except RepositoryNotFoundError:
+        raise SystemExit(f"{repo} is not visible to your Hugging Face account: check the name, or ask its owner for "
+                         f"access ({page}).") from None
+    except HfHubHTTPError as error:                       # an expired or revoked token
+        raise SystemExit(f"Hugging Face rejected the saved login ({error}). Log in again:  {LOGIN}") from None
+
+
 def download(repo: str, revision: "str | None" = None, root: Path = DOWNLOADS) -> Path:
     """Fetch `repo` and rebuild its checkpoints as .pt beside the published files.
 
@@ -50,6 +93,7 @@ def download(repo: str, revision: "str | None" = None, root: Path = DOWNLOADS) -
     """
     from huggingface_hub import snapshot_download        # only needed here: run with `uv run --with huggingface_hub`
 
+    ensure_access(repo)
     folder = Path(snapshot_download(repo_id=repo, revision=revision, local_dir=root / repo.split("/")[-1]))
     rebuilt = []
     # Every per-day head, under the name artifacts/current gives it.
@@ -87,6 +131,7 @@ def download_dataset(repo: str, sets: "list[str]", days: "list[str] | None" = No
     """Fetch the chosen sets (and days) of the dataset repository, in its own layout."""
     from huggingface_hub import snapshot_download
 
+    ensure_access(repo, "dataset")
     folder = Path(snapshot_download(repo_id=repo, repo_type="dataset", revision=revision,
                                     allow_patterns=dataset_patterns(sets, days), local_dir=root / repo.split("/")[-1]))
     files = [p for p in folder.rglob("*.parquet")]

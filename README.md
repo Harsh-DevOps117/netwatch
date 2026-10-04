@@ -113,8 +113,9 @@ elsewhere. Detection starts at once; the forecast needs a little over four minut
 ingest used, fetched, patched and built by `tools/setup_cicflowmeter.sh`; the published model (release `v1.0.0`) from
 Hugging Face into `artifacts/huggingface/download/netwatch-flow-cascade/`, with `artifacts/current` pointed at it so
 every serving command serves it. It then asks whether to download the dataset, and which set (`processed`, `model` or
-both) and which days; `--dataset none|processed|model|both` answers without asking. The dataset is gated: accept its
-terms on Hugging Face and log in first.
+both) and which days; `--dataset none|processed|model|both` answers without asking. The model is open and needs no
+account. The dataset is gated: accept its terms on Hugging Face; the download asks you to log in if this machine has no
+Hugging Face login yet.
 
 ```bash
 git clone --recurse-submodules https://github.com/Harsh-DevOps117/netwatch && cd netwatch

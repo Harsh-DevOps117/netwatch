@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from models.serving.npcap_capture import pcap_header, pcap_record, resolve_interface
-from models.serving.service_evidence import ServiceEvidence, normal_dns_query, normal_gvcp_discovery
+from models.serving.service_evidence import ServiceEvidence, flow_evidence, normal_dns_query, normal_gvcp_discovery
 
 
 class CaptureEvidenceTest(unittest.TestCase):
@@ -115,6 +115,44 @@ class CaptureEvidenceTest(unittest.TestCase):
                                senders=["192.168.0.2"], t=100.0)
         self.assertEqual(evidence.for_flow(flow)["source_packets_per_second"], 300)
 
+
+
+class FlowEvidenceTest(unittest.TestCase):
+    def test_complete_flows_get_ports_and_connection_evidence(self):
+        import pandas as pd
+        query = struct.pack("!6H", 1, 0x0100, 1, 0, 0, 0) + b"\x07example\x03com\x00" + struct.pack("!HH", 1, 1)
+        flows = pd.DataFrame({"flow_uid": ["dns", "web", "syn", "gone"],
+                              "Src IP": ["10.0.0.5", "10.0.0.5", "10.0.0.9", "10.0.0.5"], "Src Port": [50000.0, 50001.0, 50002.0, 50003.0],
+                              "Dst IP": ["10.0.0.1", "10.0.0.7", "10.0.0.7", "10.0.0.7"], "Dst Port": [53.0, 5432.0, 5432.0, 5432.0],
+                              "Protocol": [17.0, 6.0, 6.0, 6.0]})
+        rows = [(100.0, "10.0.0.5", "10.0.0.1", 53, 17, 1, len(query), query),
+                (100.5, "10.0.0.5", "10.0.0.7", 5432, 6, 2, 40, b"x" * 40),
+                (100.6, "10.0.0.7", "10.0.0.5", 50001, 6, 3, 80, b"y" * 80),
+                (101.0, "10.0.0.9", "10.0.0.7", 5432, 6, 4, 0, b""),
+                (101.1, "10.0.0.7", "10.0.0.9", 50002, 6, 5, 0, b"")]
+        packets = pd.DataFrame(rows, columns=["timestamp", "src_ip", "dst_ip", "dst_port", "protocol", "frame_no",
+                                              "payload_len", "payload"]).assign(ip_flag_mf=0, ip_frag_offset=0)
+        packet_map = pd.DataFrame({"frame_no": [1, 2, 3, 4, 5], "flow_uid": ["dns", "web", "web", "syn", "syn"]})
+        evidence = flow_evidence(flows, packets, packet_map)
+        self.assertEqual((evidence["dns"]["dst_port"], evidence["dns"]["protocol"]), (53, 17))
+        self.assertTrue(evidence["dns"]["normal_dns_query"])
+        self.assertTrue(evidence["web"]["established_connection"], "payload from both ends")
+        self.assertFalse(evidence["syn"]["established_connection"], "a handshake that carried nothing")
+        self.assertEqual(evidence["web"]["source_packets_per_second"], 2, "the source's packets in that second")
+        self.assertNotIn("service_evidence_version", evidence["gone"], "no packets in the window: fails open")
+        self.assertEqual(set(flow_evidence(flows, packets, packet_map, wanted={"web"})), {"web"})
+
+
+class OpenIncidentsTest(unittest.TestCase):
+    def test_only_the_latest_incident_of_an_open_key_is_active(self):
+        from models.serving.detect_live import open_incidents
+        opened = [{"family": "DoS-GoldenEye", "key": 1, "incident": 6, "t": 10.0},
+                  {"family": "Infiltration", "key": 1, "incident": 1, "t": 20.0},
+                  {"family": "DoS-GoldenEye", "key": 1, "incident": 7, "t": 300.0},
+                  {"family": "DoS-GoldenEye", "key": 2, "incident": 8, "t": 310.0}]
+        open_until = {"DoS-GoldenEye": {1: 420.0, 2: 330.0}, "Infiltration": {1: 140.0}}
+        self.assertEqual([i["incident"] for i in open_incidents(opened, open_until, 400.0)], [7])
+        self.assertEqual(open_incidents(opened, open_until, 500.0), [])
 
 if __name__ == "__main__":
     unittest.main()

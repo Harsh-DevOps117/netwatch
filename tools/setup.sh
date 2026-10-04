@@ -39,7 +39,6 @@ need java "a JDK 8, which CICFlowMeter builds with"
 command -v tshark >/dev/null 2>&1 || echo "note: tshark is not installed; ingest and live capture need it (apt install tshark)"
 
 hf_py() { uv run --quiet --with huggingface_hub python "$@"; }
-logged_in() { hf_py -c "from huggingface_hub import whoami; whoami()" >/dev/null 2>&1; }
 
 echo "== 1/4 Python environment"
 uv sync
@@ -48,10 +47,7 @@ echo "== 2/4 CICFlowMeter"
 tools/setup_cicflowmeter.sh
 
 echo "== 3/4 model ($REVISION)"
-if ! hf_py tools/publish/download.py --repo "$ACCOUNT/$MODEL_REPO" --revision "$REVISION"; then
-	echo "model download failed. If the repository is private, log in and re-run:  uvx --from huggingface_hub hf auth login"
-	exit 1
-fi
+hf_py tools/publish/download.py --repo "$ACCOUNT/$MODEL_REPO" --revision "$REVISION"   # asks for a login only if gated
 mkdir -p artifacts
 if [ ! -e artifacts/current ] && [ ! -L artifacts/current ]; then
 	ln -s "huggingface/download/$MODEL_REPO" artifacts/current
@@ -64,7 +60,7 @@ fi
 
 echo "== 4/4 dataset"
 if [ "$DATASET" = ask ]; then
-	read -rp "Download the dataset too? It is large and gated (accept its terms on Hugging Face first). [y/N] " yes
+	read -rp "Download the dataset too? It is large and gated (accept its terms on Hugging Face; you are asked to log in). [y/N] " yes
 	if [[ "$yes" =~ ^[Yy] ]]; then
 		echo "  1) processed  model-agnostic tables: events, node index, flow records, side features   ~4.8 GB"
 		echo "  2) model      flow embeddings and latents of this model version                     ~7.8 GB"
@@ -84,7 +80,6 @@ if [ "$DATASET" = none ]; then
 	echo "dataset skipped"
 else
 	SETS=("$DATASET"); [ "$DATASET" = both ] && SETS=(processed model)
-	logged_in || { echo "the dataset is gated: log in first"; uvx --from huggingface_hub hf auth login; }
 	hf_py tools/publish/download.py --dataset "$ACCOUNT/$DATASET_REPO" --revision "$REVISION" --sets "${SETS[@]}" \
 		${DAYS[@]+--days "${DAYS[@]}"}
 fi

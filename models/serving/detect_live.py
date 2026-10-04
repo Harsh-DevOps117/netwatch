@@ -981,8 +981,7 @@ class Detector:
             self.lag, self.capture_lag, self.delivery_lag, self.scoring_lag))
         now = self.tracker.clock
         opened = list(self.incidents)
-        active = [incident for incident in opened
-                  if self.emitters[incident["family"]].open_until.get(incident["key"], float("-inf")) >= now]
+        active = open_incidents(opened, {f: emitter.open_until for f, emitter in self.emitters.items()}, now)
         recent = (self.incident_history.recent() if self.incident_history is not None else
                   [incident for incident in opened if incident["t"] >= now - WINDOW_S])
         active_by_family = {f: sum(until >= now for until in emitter.open_until.values())
@@ -1034,6 +1033,20 @@ class Detector:
                 "attention": list(self.attention)}
 
 
+def open_incidents(opened: list[dict], open_until: "dict[str, dict]", now: float) -> list[dict]:
+    """The incidents still open at `now`, from the opened incidents in the order they opened.
+
+    Input:  opened incidents (family, key, ...), per family the time each key's current incident stops being open, now
+    Output: the latest incident of each (family, key) whose key is still open
+
+    A key stays in open_until while its current incident is open, and its earlier, closed incidents carry the same
+    key, so listing every incident with an open key reported closed incidents as active.
+    """
+    latest = {(incident["family"], incident["key"]): incident for incident in opened}
+    return [incident for (family, key), incident in latest.items()
+            if open_until.get(family, {}).get(key, float("-inf")) >= now]
+
+
 def reversed_of_flow(flow: Flow) -> float:
     """ingest.build.events._mark_reversed for one flow: 1 when the record runs server -> client, -1 when unknown."""
     first = flow.rows[0]
@@ -1054,44 +1067,75 @@ def tshark_command(source: str, interface: bool) -> list[str]:
     return [*command, "-l", "-M", str(DEFAULT_TSHARK_CHUNK_PACKETS)]
 
 
-def read_packets(command: list[str], out: "queue.Queue", capture=None) -> None:
-    """tshark's lines as packet dicts, parsed exactly as ingest parses them; None at the end."""
+def read_packets(command: list[str], out: "queue.Queue", capture=None, state: "dict | None" = None) -> None:
+    """tshark's lines as packet dicts, parsed exactly as ingest parses them; None at the end.
+
+    On a live interface the packets reach tshark from dumpcap through a pipe. `tshark -i` keeps every captured packet in
+    a temporary file that only grows; in /tmp on tmpfs that is RAM, and the capture died once it had filled it, leaving
+    the service to serve a frozen clock. A live source that stops is started again for the same reason.
+    """
     env = {**os.environ, "MALLOC_ARENA_MAX": "1"}
-    errors = tempfile.TemporaryFile("w+")
-    if capture is not None:
+    interface = command[command.index("-i") + 1] if "-i" in command else None
+    restart = capture is None and interface is not None        # the wire never ends; a stopped source has failed
+    piped = restart and os.name != "nt" and shutil.which("dumpcap") is not None
+    if capture is not None or piped:
         command = list(command)
         at = command.index("-i")
         command[at:at + 2] = ["-r", "-"]
-    process = subprocess.Popen(command, stdin=subprocess.PIPE if capture else None,
-                               stdout=subprocess.PIPE, stderr=errors, env=env)
-    stop = threading.Event()
-    def pump():
-        try:
-            capture.pump(process.stdin, stop)
-        except (OSError, BrokenPipeError) as exc:
-            capture.state["error"] = str(exc)
-            print(f"immediate capture stopped: {exc}", file=sys.stderr, flush=True)
-        finally:
-            process.stdin.close()
-            capture.close()
-    if capture:
-        threading.Thread(target=pump, daemon=True).start()
-    with io.TextIOWrapper(process.stdout) as lines:
-        for line in lines:
-            received = time.time()
-            values = line.rstrip("\r\n").split("\t")
-            if len(values) != len(TSHARK_FIELDS):
-                continue
-            packet = live_packet(values)
-            if packet is not None:
-                packet["_received_wall"] = received
-                out.put(packet)
-    stop.set()
-    if process.wait() != 0:
-        errors.seek(0)
-        print(f"tshark exited with {process.returncode}: {errors.read()[-2000:]}", file=sys.stderr, flush=True)
+    if state is not None and piped:
+        state["source"] = "dumpcap pipe"
+    failures = 0
+    while True:
+        started = time.monotonic()
+        errors = tempfile.TemporaryFile("w+")
+        feeder = (subprocess.Popen(["dumpcap", "-q", "-i", interface, "-F", "pcap", "-w", "-"], stdout=subprocess.PIPE,
+                                   stderr=errors, env=env) if piped else None)
+        process = subprocess.Popen(command, stdin=feeder.stdout if feeder else subprocess.PIPE if capture else None,
+                                   stdout=subprocess.PIPE, stderr=errors, env=env)
+        if feeder is not None:
+            feeder.stdout.close()                  # tshark holds the read end and sees the end when dumpcap exits
+        if state is not None:
+            state["running"] = True
+        stop = threading.Event()
+        def pump():
+            try:
+                capture.pump(process.stdin, stop)
+            except (OSError, BrokenPipeError) as exc:
+                capture.state["error"] = str(exc)
+                print(f"immediate capture stopped: {exc}", file=sys.stderr, flush=True)
+            finally:
+                process.stdin.close()
+                capture.close()
+        if capture:
+            threading.Thread(target=pump, daemon=True).start()
+        with io.TextIOWrapper(process.stdout) as lines:
+            for line in lines:
+                received = time.time()
+                values = line.rstrip("\r\n").split("\t")
+                if len(values) != len(TSHARK_FIELDS):
+                    continue
+                packet = live_packet(values)
+                if packet is not None:
+                    packet["_received_wall"] = received
+                    out.put(packet)
+        stop.set()
+        code = process.wait()
+        if feeder is not None:
+            feeder.terminate()
+            feeder.wait()
+        if code != 0 or restart:
+            errors.seek(0)
+            print(f"tshark exited with {code}: {errors.read()[-2000:]}", file=sys.stderr, flush=True)
+        errors.close()
+        if not restart:
+            break
+        failures = failures + 1 if time.monotonic() - started < 5.0 else 0
+        if state is not None:
+            state["running"] = False
+            state["restarts"] = state.get("restarts", 0) + 1
+            state["last_stop"] = time.time()
+        time.sleep(min(30.0, 2.0 * (failures + 1)))
     out.put(None)
-    errors.close()
 
 
 def run(detector: Detector, packets: "queue.Queue", live: bool, grace: float) -> None:
@@ -1227,7 +1271,8 @@ def main(argv: "list[str] | None" = None) -> int:
     if args.interface:
         detector.service_evidence = ServiceEvidence()
         detector.service_evidence.start()
-    threading.Thread(target=read_packets, args=(command, packets, capture), daemon=True).start()
+    threading.Thread(target=read_packets, args=(command, packets, capture),
+                     kwargs={"state": detector.capture_state}, daemon=True).start()
     served = ", ".join(f"{f} {t:.4g} (budget {detector.heads.budgets[f]:g})" if t is not None else f"{f} none"
                        for f, t in detector.heads.thresholds.items())
     print(f"detection: {len(heads)} heads; thresholds: {served}", flush=True)

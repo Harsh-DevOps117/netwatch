@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"sort"
 	"strings"
 	"time"
 
@@ -185,10 +186,17 @@ func decideLinkedIncident(x Incident, linked *IncidentEventsResponse) Incident {
 }
 
 func decideServiceIncident(x Incident, events []DetectionIncidentEvent) Incident {
+	return decideServiceEvents(x, events, 3)
+}
+
+// decideServiceEvents is the rule itself. minimum is the fewest linked events
+// that count as complete evidence: three for a detector incident, which is
+// three crossings by construction, so fewer means evidence went missing.
+func decideServiceEvents(x Incident, events []DetectionIncidentEvent, minimum int) Incident {
 	if !serviceRuleFamily(x.Family) {
 		return x
 	}
-	if len(events) < 3 {
+	if len(events) < minimum {
 		x.RuleReason = "Fewer than three linked events; insufficient evidence for service suppression"
 		return x
 	}
@@ -288,4 +296,130 @@ func decideServiceIncident(x Incident, events []DetectionIncidentEvent) Incident
 	x.RuleReason = "Linked crossings match one routine internal service or established HTTPS response peer, without measured bursts or service fanout; raw model verdict retained separately"
 	x.FinalDecision = "SUPPRESSED"
 	return x
+}
+
+// worldRuleFamily is the detector family whose service rule judges the world
+// model's flags: the internal-service rule, which has no exception for
+// responses from external hosts.
+const worldRuleFamily = "Infiltration"
+
+func linkKey(a, b string) string {
+	if a > b {
+		a, b = b, a
+	}
+	return a + "|" + b
+}
+
+// ForecastWithRules applies the detector's deterministic service rules to the
+// world model's flags. It never changes scores or calibration, and what it
+// sets aside stays in the response. A flag without port evidence fails open.
+func (c *Client) ForecastWithRules(ctx context.Context) (*ForecastResponse, error) {
+	f, err := c.Forecast(ctx)
+	if err != nil {
+		return nil, err
+	}
+	applyWorldRules(f)
+	return f, nil
+}
+
+// applyWorldRules judges each observed link by all of its flagged events in
+// the window: single crossings and incident crossings alike. The world model
+// flags single events, each with its own port evidence, so one event is
+// complete evidence here. A link whose flags are all one routine internal
+// service loses its incidents, its flagged events and its forecast alerts,
+// and is listed so the dashboard does not draw it.
+func applyWorldRules(f *ForecastResponse) {
+	o := &f.Observed
+	flagged, seen := map[string][]ObservedAlert{}, map[int]bool{}
+	add := func(e ObservedAlert) {
+		if !seen[e.EventID] {
+			seen[e.EventID] = true
+			key := linkKey(e.SenderIP, e.ReceiverIP)
+			flagged[key] = append(flagged[key], e)
+		}
+	}
+	for i := range o.Incidents {
+		o.Incidents[i].RelatedEvents = tagWorldEvents(o.Incidents[i].RelatedEvents)
+		for _, e := range o.Incidents[i].RelatedEvents {
+			add(e)
+		}
+	}
+	for _, e := range o.Alerts {
+		add(e)
+	}
+	routine := map[string]*SuppressedLink{}
+	for key, events := range flagged {
+		sort.SliceStable(events, func(i, j int) bool { return events[i].T < events[j].T })
+		decided := decideServiceEvents(Incident{Family: worldRuleFamily}, worldLinkedEvents(events), 1)
+		if decided.FinalDecision == "SUPPRESSED" {
+			routine[key] = &SuppressedLink{Key: key, ProtocolTag: decided.ProtocolTag, RuleClassification: decided.RuleClassification,
+				RuleReason: decided.RuleReason, Events: len(events)}
+		}
+	}
+	if len(o.Incidents) > 0 {
+		o.RawIncidents = append([]ObservedIncident{}, o.Incidents...)
+	}
+	retained := make([]ObservedIncident, 0, len(o.Incidents))
+	for _, x := range o.Incidents {
+		x.FinalDecision, x.RuleClassification = "RETAINED", "UNKNOWN"
+		x.RuleReason = "Model incident retained; no deterministic service suppression rule applies"
+		link := routine[linkKey(x.SenderIP, x.ReceiverIP)]
+		if link == nil {
+			retained = append(retained, x)
+			continue
+		}
+		link.Incidents++
+		x.FinalDecision, x.RuleClassification, x.RuleReason, x.ProtocolTag = "SUPPRESSED", link.RuleClassification, link.RuleReason, link.ProtocolTag
+		o.SuppressedIncidents = append(o.SuppressedIncidents, x)
+	}
+	o.Incidents = retained
+	alerts := make([]ObservedAlert, 0, len(o.Alerts))
+	for _, x := range o.Alerts {
+		if routine[linkKey(x.SenderIP, x.ReceiverIP)] != nil {
+			o.SuppressedAlerts = append(o.SuppressedAlerts, x)
+		} else {
+			alerts = append(alerts, x)
+		}
+	}
+	o.Alerts = alerts
+	// A forecast alert has no ports to judge. On a routine-service link it is
+	// that service again, so it is set aside with the link rather than raised.
+	predicted := make([]ForecastAlert, 0, len(f.Alerts))
+	for _, x := range f.Alerts {
+		if routine[linkKey(x.SenderIP, x.ReceiverIP)] != nil {
+			f.SuppressedAlerts = append(f.SuppressedAlerts, x)
+		} else {
+			predicted = append(predicted, x)
+		}
+	}
+	f.Alerts = predicted
+	for _, link := range routine {
+		o.SuppressedLinks = append(o.SuppressedLinks, *link)
+	}
+	sort.Slice(o.SuppressedLinks, func(i, j int) bool { return o.SuppressedLinks[i].Key < o.SuppressedLinks[j].Key })
+}
+
+func worldLinkedEvents(events []ObservedAlert) []DetectionIncidentEvent {
+	linked := make([]DetectionIncidentEvent, len(events))
+	for i, e := range events {
+		linked[i] = DetectionIncidentEvent{Family: "World model", EventID: e.EventID, TObs: e.T, Score: e.Value,
+			Src: e.Src, Dst: e.Dst, SrcPort: e.SrcPort, DstPort: e.DstPort, Protocol: e.Protocol,
+			EstablishedConnection: e.EstablishedConnection, NormalDNSQuery: e.NormalDNSQuery,
+			NormalGVCPDiscovery: e.NormalGVCPDiscovery, SourcePacketsPerSecond: e.SourcePacketsPerSecond,
+			ServiceEvidenceVersion: e.ServiceEvidenceVersion}
+	}
+	annotateIncidentEvents(linked)
+	return linked
+}
+
+// tagWorldEvents returns the events with their service tags, for display.
+func tagWorldEvents(events []ObservedAlert) []ObservedAlert {
+	linked := worldLinkedEvents(events)
+	tagged := append([]ObservedAlert{}, events...)
+	for i := range tagged {
+		if tagged[i].Src != "" {
+			tagged[i].ProtocolTag, tagged[i].TrafficClass, tagged[i].ConnectionRole = linked[i].ProtocolTag, linked[i].TrafficClass, linked[i].ConnectionRole
+		}
+	}
+	return tagged
 }

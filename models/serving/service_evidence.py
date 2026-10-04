@@ -104,3 +104,39 @@ class ServiceEvidence:
                 "normal_dns_query": flow.normal_dns_query,
                 "normal_gvcp_discovery": bool(getattr(flow, "normal_gvcp_discovery", False)),
                 "source_packets_per_second": peak, "service_evidence_version": 1}
+
+
+def flow_evidence(flows, packets, packet_map, wanted=None) -> dict:
+    """Service context for the complete flows of a capture window, keyed by flow_uid.
+
+    Input:  the window's flows, packets and flow-packet map as pandas frames (the layout Chain.ingest writes), and
+            optionally the flow_uids to report
+    Output: flow_uid -> the flow's endpoints, plus the fields `ServiceEvidence.for_flow` gives a live flow when the
+            flow's packets are in the window
+
+    A live flow is corroborated against the OS socket table. A complete flow is older than its socket, so here a TCP
+    flow counts as established only when both of its endpoints sent payload: a bare SYN, a refused connection or a
+    handshake that carried nothing does not. A flow with no packets in the window gets no evidence and fails open.
+    """
+    ends = flows.drop_duplicates("flow_uid").set_index("flow_uid")[["Src IP", "Src Port", "Dst IP", "Dst Port", "Protocol"]]
+    if wanted is not None:
+        ends = ends[ends.index.isin(set(wanted))]
+    out = {uid: {"src": str(src), "dst": str(dst), "src_port": int(sport), "dst_port": int(dport), "protocol": int(proto)}
+           for uid, (src, sport, dst, dport, proto) in zip(ends.index, ends.fillna(0).to_numpy())}
+    if "flow_uid" not in packets.columns:
+        packets = packets.merge(packet_map[["frame_no", "flow_uid"]], on="frame_no")
+    # Packets per source per second over the whole window, as `ServiceEvidence.observe` counts them on the wire.
+    rate = packets.groupby(["src_ip", packets["timestamp"].astype("int64")]).size().to_dict()
+    mapped = packets[packets["flow_uid"].isin(out.keys())].sort_values("timestamp", kind="stable")
+    for uid, group in mapped.groupby("flow_uid", sort=False):
+        flow, first = out[uid], group.iloc[0].to_dict()
+        payload = group.groupby("src_ip")["payload_len"].sum()
+        second = int(first["timestamp"])
+        flow.update({
+            "established_connection": bool(flow["protocol"] == 6 and payload.get(flow["src"], 0) > 0
+                                           and payload.get(flow["dst"], 0) > 0),
+            "normal_dns_query": normal_dns_query(first),
+            "normal_gvcp_discovery": normal_gvcp_discovery(first),
+            "source_packets_per_second": int(max(rate.get((first["src_ip"], at), 0) for at in (second - 1, second))),
+            "service_evidence_version": 1})
+    return out

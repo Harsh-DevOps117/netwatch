@@ -146,7 +146,7 @@ func configureInteractiveOptions(args []string) (string, bool) {
 func resetInteractiveOptions() { configPath, outputPath, bpfFlag, windowSec = "", "", "", 0 }
 
 func printInteractiveHelp() {
-	fmt.Println("  protect                       Incident response guide and optional host block")
+	fmt.Printf("  %s➜%s protect                         Incident response guide and optional host block\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s analyze <file.pcap> [-w seconds] [-o report.json] [-c config.yaml]\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s live [interface] [-w seconds] [-o report.json] [-c config.yaml] [--bpf expression]\n", terminalGreen, terminalReset)
 	fmt.Printf("  %s➜%s dashboard [--port 8787] [--interface iface] [--bpf expression]\n", terminalGreen, terminalReset)

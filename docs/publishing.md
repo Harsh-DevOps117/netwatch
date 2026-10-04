@@ -81,7 +81,7 @@ what was actually staged; the text below its `END GENERATED` marker is never tou
 
 ## 3. Download
 
-Each release is tagged (`v1.0.0`, then `v1.1.0` with the revised world model), and the cards carry the same version, so a
+Each release is tagged (`v1.0.0`), and the cards carry the same version, so a
 consumer can pin one with `revision="v1.0.0"`.
 
 `tools/setup.sh` does this after a clone (and points `artifacts/current` at the download). By hand:
