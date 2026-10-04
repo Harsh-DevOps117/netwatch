@@ -397,6 +397,18 @@ func applyWorldRules(f *ForecastResponse) {
 		o.SuppressedLinks = append(o.SuppressedLinks, *link)
 	}
 	sort.Slice(o.SuppressedLinks, func(i, j int) bool { return o.SuppressedLinks[i].Key < o.SuppressedLinks[j].Key })
+	// A kept row is judged on its own events: what was routine an hour ago
+	// says nothing about the link now, and the other way round.
+	history := make([]ObservedIncident, 0, len(o.History))
+	for _, x := range o.History {
+		x.RelatedEvents = tagWorldEvents(x.RelatedEvents)
+		if decideServiceEvents(Incident{Family: worldRuleFamily}, worldLinkedEvents(x.RelatedEvents), 1).FinalDecision == "SUPPRESSED" {
+			o.SuppressedHistory++
+			continue
+		}
+		history = append(history, x)
+	}
+	o.History = history
 }
 
 func worldLinkedEvents(events []ObservedAlert) []DetectionIncidentEvent {

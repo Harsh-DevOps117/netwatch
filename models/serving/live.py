@@ -74,12 +74,14 @@ from models.context_encoder.records import export_flow_records
 from models.flow_encoder.encoder import VARIANT, FlowAutoencoder
 from models.flow_encoder.export import export_latents as export_flow_latents
 from models.explanation.world_model import seed_explanations
+from models.serving.incident_history import MAX_RETURNED, WINDOW_S, WorldAlertHistory
 from models.serving.live_calibration import LiveScoreCalibration, checkpoint_signature
 from models.serving.service_evidence import flow_evidence
 from models.serving.threshold_mode import ThresholdMode
 from models.world_model.inference import Replay
 from models.world_model.reception import SPLIT_TEST, receive
-from models.world_model.service import Handler, STAGE_UNAVAILABLE, TARGET, forecast_payload, node_names, served_threshold
+from models.world_model.service import (Handler, STAGE_UNAVAILABLE, TARGET, alert_groups, forecast_payload, node_names,
+                                        served_threshold)
 
 DAY = "live"                   # the window's stream name; every stage keys its folders on it
 # CICFlowMeter's flow timeout (tools/CICFlowMeter .../ifm/Cmd.java: flowTimeout = 120000000 us). A flow that started this
@@ -329,8 +331,10 @@ class Live:
 
     def __init__(self, chain: Chain, inbox: Path, *, block10: Path, window: int, idle: float, rollout_steps: int,
                  rollout_seeds: int, hold: float = HOLD_S, live_calibration_hours: float = 0.0,
-                 calibration_db: "Path | None" = None, model_paths: "list[Path] | None" = None):
+                 calibration_db: "Path | None" = None, model_paths: "list[Path] | None" = None,
+                 alert_db: "Path | None" = None):
         self.chain, self.inbox, self.block10 = chain, Path(inbox), Path(block10)
+        self.alert_history = WorldAlertHistory(alert_db or chain.work.parent / "world-alerts.sqlite")
         self.window, self.idle, self.hold = window, idle, hold
         self.rollout_steps, self.rollout_seeds = rollout_steps, rollout_seeds
         self.threshold = served_threshold(self.block10)
@@ -592,6 +596,10 @@ class Live:
                                      wanted={flow_of.get(event["event_id"]) for event in flagged})
             for event in flagged:
                 event.update(evidence.get(flow_of.get(event["event_id"]), {}))
+        # The window is rebuilt every cycle, so a flag leaves the payload when its event leaves the window. Every
+        # observed threshold crossing is kept for three hours, with its evidence, and served as bursts per link.
+        observed["history"] = alert_groups(self.alert_history.remember(flagged, observed["incidents"]))[-MAX_RETURNED:]
+        observed["history_window_s"] = WINDOW_S
         return payload
 
 
