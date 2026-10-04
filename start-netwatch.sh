@@ -16,12 +16,14 @@ SKIP_SETUP=0
 MODEL_ACCOUNT="kaustuk000"
 MODEL_REVISION="v1.0.0"
 OS="$(uname -s)"
+ORIGINAL_ARGS=("$@")
 
 usage() {
   printf '%s\n' \
     'Usage: bash ./start-netwatch.sh [--interface eth0] [--skip-setup]' \
     '       [--device cuda|cpu] [--model-account account] [--model-revision tag]' \
-    'Installs dependencies, starts capture/detection/forecast, then opens the CLI.' \
+    'Installs every dependency (system tools, Go, JDK 8, uv + Python packages,' \
+    'CICFlowMeter, the published model), starts capture/detection/forecast, then opens the CLI.' \
     'The frontend and dashboard are not started.'
 }
 
@@ -42,7 +44,10 @@ while (($#)); do
   esac
 done
 
-die() { printf 'Netwatch: %s\n' "$*" >&2; exit 1; }
+step() { printf '\n%s  %s\n' "$1" "$2"; }
+ok() { printf '✅ %s\n' "$*"; }
+warn() { printf '⚠️  %s\n' "$*" >&2; }
+die() { printf '❌ Netwatch: %s\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing $1; re-run without --skip-setup"; }
 admin() { command -v sudo >/dev/null 2>&1 || die 'sudo is required to install system packages'; sudo "$@"; }
 
@@ -53,6 +58,18 @@ if (( EUID == 0 )); then
   die 'Run as your normal user, not with sudo. The script requests sudo only for system packages.'
 fi
 
+ensure_brew() {
+  command -v brew >/dev/null 2>&1 && return 0
+  (( SKIP_SETUP == 0 )) || die 'Homebrew is missing; re-run without --skip-setup'
+  step 🍺 'Installing Homebrew'
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  local brew_bin
+  for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [[ -x "$brew_bin" ]]; then eval "$("$brew_bin" shellenv)"; fi
+  done
+  need brew
+}
+
 install_system_tools() {
   local missing=()
   command -v git >/dev/null 2>&1 || missing+=(git)
@@ -61,11 +78,11 @@ install_system_tools() {
   command -v dumpcap >/dev/null 2>&1 || missing+=(dumpcap)
   command -v curl >/dev/null 2>&1 || missing+=(curl)
   if [[ "$OS" == Linux ]]; then command -v python3 >/dev/null 2>&1 || missing+=(python3); fi
-  ((${#missing[@]})) || return 0
+  ((${#missing[@]})) || { ok 'System tools already installed'; return 0; }
   (( SKIP_SETUP == 0 )) || die "missing tools: ${missing[*]}"
-  printf 'Installing system tools: %s\n' "${missing[*]}"
+  step 📦 "Installing system tools: ${missing[*]}"
   if [[ "$OS" == Darwin ]]; then
-    need brew
+    ensure_brew
     local packages=()
     command -v git >/dev/null 2>&1 || packages+=(git)
     command -v go >/dev/null 2>&1 || packages+=(go)
@@ -73,8 +90,10 @@ install_system_tools() {
     command -v curl >/dev/null 2>&1 || packages+=(curl)
     brew install "${packages[@]}"
   elif command -v apt-get >/dev/null 2>&1; then
+    # Answer wireshark-common's "may non-root users capture?" prompt up front.
+    printf '%s\n' 'wireshark-common wireshark-common/install-setuid boolean true' | admin debconf-set-selections
     admin apt-get update
-    admin apt-get install -y git golang-go tshark wireshark-common curl ca-certificates python3
+    admin env DEBIAN_FRONTEND=noninteractive apt-get install -y git golang-go tshark wireshark-common curl ca-certificates python3
   elif command -v dnf >/dev/null 2>&1; then
     admin dnf install -y git golang wireshark-cli curl ca-certificates python3
   elif command -v pacman >/dev/null 2>&1; then
@@ -82,6 +101,29 @@ install_system_tools() {
   else
     die 'Unsupported Linux package manager. Install git, Go 1.21+, tshark, dumpcap, curl, and JDK 8, then use --skip-setup.'
   fi
+  ok 'System tools installed'
+}
+
+# dumpcap is usually root:wireshark with capture capabilities, so a fresh
+# install cannot capture until the user is in that group.
+ensure_capture_access() {
+  [[ "$OS" == Linux ]] || return 0
+  dumpcap -D >/dev/null 2>&1 && return 0
+  (( SKIP_SETUP == 0 )) || die "dumpcap cannot capture as $USER; re-run without --skip-setup"
+  step 🔐 'Granting packet-capture access'
+  if command -v dpkg-reconfigure >/dev/null 2>&1; then
+    printf '%s\n' 'wireshark-common wireshark-common/install-setuid boolean true' | admin debconf-set-selections
+    admin env DEBIAN_FRONTEND=noninteractive dpkg-reconfigure wireshark-common
+  fi
+  getent group wireshark >/dev/null || die 'No wireshark group; give dumpcap capture rights manually, then re-run'
+  if ! id -nG "$USER" | grep -qw wireshark; then
+    admin usermod -aG wireshark "$USER"
+    ok "Added $USER to the wireshark group"
+  fi
+  [[ -z "${NETWATCH_REEXEC:-}" ]] || die 'dumpcap still cannot capture after joining the wireshark group; check: dumpcap -D'
+  warn 'Group change needs a new login to stick; continuing this run under the wireshark group.'
+  export NETWATCH_REEXEC=1
+  exec sg wireshark -c "$(printf '%q ' bash "$ROOT/start-netwatch.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"})"
 }
 
 use_java8() {
@@ -107,11 +149,11 @@ use_java8() {
 }
 
 install_java8() {
-  use_java8 && return 0
+  if use_java8; then ok 'JDK 8 already installed'; return 0; fi
   (( SKIP_SETUP == 0 )) || die 'JDK 8 is required by CICFlowMeter; re-run without --skip-setup'
-  printf '%s\n' 'Installing JDK 8 for CICFlowMeter...'
+  step ☕ 'Installing JDK 8 for CICFlowMeter'
   if [[ "$OS" == Darwin ]]; then
-    need brew
+    ensure_brew
     brew install --cask temurin@8
   elif command -v apt-get >/dev/null 2>&1; then
     if apt-cache show openjdk-8-jdk >/dev/null 2>&1; then
@@ -135,20 +177,27 @@ install_java8() {
       admin apt-get install -y temurin-8-jdk
     fi
   elif command -v dnf >/dev/null 2>&1; then
-    admin dnf install -y java-1.8.0-openjdk-devel
+    # Fedora 42+ dropped its own OpenJDK 8; Temurin 8 comes from the Adoptium repo it ships.
+    admin dnf install -y java-1.8.0-openjdk-devel || {
+      admin dnf install -y adoptium-temurin-java-repository
+      admin dnf install -y --enablerepo=adoptium-temurin-java-repository temurin-8-jdk
+    }
   elif command -v pacman >/dev/null 2>&1; then
     admin pacman -S --needed jdk8-openjdk
   fi
   use_java8 || die 'JDK 8 was installed but is not available; set JAVA_HOME to its installation and re-run'
+  ok "JDK 8 installed ($JAVA_HOME)"
 }
 
 install_uv() {
   export PATH="${XDG_BIN_HOME:-$HOME/.local/bin}:$HOME/.local/bin:$PATH"
-  if command -v uv >/dev/null 2>&1; then return 0; fi
+  if command -v uv >/dev/null 2>&1; then ok "$(uv --version) already installed"; return 0; fi
   (( SKIP_SETUP == 0 )) || die 'uv is missing; re-run without --skip-setup'
   need curl
+  step 🐍 'Installing uv (Python package manager)'
   curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v uv >/dev/null 2>&1 || die 'uv installed but is not on PATH; open a new shell and re-run'
+  ok "$(uv --version) installed"
 }
 
 check_go() {
@@ -156,11 +205,12 @@ check_go() {
   version="$(go version)"
   if [[ "$version" =~ go([0-9]+)\.([0-9]+) ]]; then
     major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"
-    (( major > 1 || (major == 1 && minor >= 21) )) && return 0
+    if (( major > 1 || (major == 1 && minor >= 21) )); then ok "Go $major.$minor already installed"; return 0; fi
   fi
   (( SKIP_SETUP == 0 )) || die "Go 1.21+ is required; found: $version"
+  step 🐹 "Upgrading Go (found: $version)"
   if [[ "$OS" == Darwin ]]; then
-    need brew
+    ensure_brew
     brew upgrade go || brew install go
     version="$(go version)"
     [[ "$version" =~ go([0-9]+)\.([0-9]+) ]] &&
@@ -191,14 +241,15 @@ check_go() {
     rmdir -- "$temp_dir"
   fi
   export PATH="$target/bin:$PATH"
-  printf 'Using %s\n' "$(go version)"
+  ok "Using $(go version)"
 }
 
 setup_models() {
   if (( SKIP_SETUP == 0 )); then
-    printf '%s\n' '== Sync Python dependencies'
+    step 🐍 'Syncing Python dependencies (first run downloads PyTorch, this takes a while)'
     uv sync --frozen
-    printf '%s\n' '== Build CICFlowMeter'
+    ok 'Python environment ready'
+    step 🔨 'Building CICFlowMeter'
     local flow_dir="$ROOT/tools/CICFlowMeter" flow_commit
     if [[ ! -f "$flow_dir/gradlew" ]]; then git submodule update --init tools/CICFlowMeter; fi
     [[ -f "$flow_dir/gradlew" ]] || die 'CICFlowMeter submodule is missing'
@@ -206,8 +257,9 @@ setup_models() {
     [[ "$flow_commit" == acaf8bea8611fb4b996b4d33964dfd9155d9efdf ]] ||
       die "CICFlowMeter is at $flow_commit, not its pinned setup commit; preserve local changes before restoring it"
     ( cd "$flow_dir" && bash ./gradlew -q -I "$ROOT/tools/repo/cicflowmeter.gradle" compileJava -PpcapDir=- -PoutputDir=- )
+    ok 'CICFlowMeter built'
     if [[ ! -e "$ROOT/artifacts/current" && ! -L "$ROOT/artifacts/current" ]]; then
-      printf '== Download model %s/netwatch-flow-cascade@%s\n' "$MODEL_ACCOUNT" "$MODEL_REVISION"
+      step 🧠 "Downloading model $MODEL_ACCOUNT/netwatch-flow-cascade@$MODEL_REVISION"
       uv run --frozen --with huggingface_hub python tools/publish/download.py \
         --repo "$MODEL_ACCOUNT/netwatch-flow-cascade" --revision "$MODEL_REVISION"
       local downloaded="$ROOT/artifacts/huggingface/download/netwatch-flow-cascade"
@@ -215,12 +267,15 @@ setup_models() {
       ln -s 'huggingface/download/netwatch-flow-cascade' "$ROOT/artifacts/current"
     fi
   fi
+  # Upstream commits gradlew without the execute bit, and the services run ./gradlew directly.
+  chmod +x "$ROOT/tools/CICFlowMeter/gradlew"
   [[ -x "$PYTHON" ]] || die 'Python environment missing; re-run without --skip-setup'
   local item
   for item in flow_encoder.pt detection_encoder.pt forecasting_encoder.pt compressor.pt world_model.pt serving.json; do
     [[ -f "$ROOT/artifacts/current/$item" ]] || die "Model checkpoint missing: artifacts/current/$item"
   done
   compgen -G "$ROOT/artifacts/current/detector/head_*.pt" >/dev/null || die 'No detector heads in artifacts/current/detector'
+  ok 'Model checkpoints present'
 }
 
 select_interface() {
@@ -235,7 +290,23 @@ select_interface() {
   local devices
   devices="$(tshark -D 2>&1)" || die "Cannot list capture devices. Configure dumpcap capture permissions first. Details: $devices"
   grep -Fq -- "$INTERFACE" <<<"$devices" || die "Interface '$INTERFACE' not found. Available devices: $devices"
-  printf 'Capture interface: %s\n' "$INTERFACE"
+  ok "Capture interface: $INTERFACE"
+}
+
+# jnetpcap (CICFlowMeter's reader, used by forecast) links against the unversioned
+# libpcap.so, which only -dev packages ship. Point it at the runtime library
+# that tshark already depends on, so no extra system package is needed.
+ensure_libpcap_link() {
+  [[ "$OS" == Linux ]] || return 0
+  local libs lib
+  libs="$(PATH="$PATH:/sbin:/usr/sbin" ldconfig -p)"
+  grep -q 'libpcap\.so ' <<<"$libs" && return 0
+  lib="$(awk '/libpcap\.so\.[0-9]/ {print $NF; exit}' <<<"$libs")"
+  [[ -n "$lib" ]] || die 'libpcap is not installed; install your distro libpcap package and re-run'
+  mkdir -p "$RUNTIME/lib"
+  ln -sf "$lib" "$RUNTIME/lib/libpcap.so"
+  export LD_LIBRARY_PATH="$RUNTIME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  ok "libpcap.so linked to $lib for CICFlowMeter"
 }
 
 start_service() {
@@ -247,7 +318,7 @@ start_service() {
     if [[ "${pid:-}" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
       existing="$(ps -p "$pid" -o args= 2>/dev/null || true)"
       if [[ "$existing" == *"$signature"* ]]; then
-        printf '%s already running (PID %s)\n' "$name" "$pid"
+        ok "$name already running (PID $pid)"
         grep -m1 'Running in ' "$LOGS/$name.out.log" || true
         return 0
       fi
@@ -258,11 +329,11 @@ start_service() {
   printf '%s\n' "$pid" > "$pid_file"
   sleep 2
   if ! kill -0 "$pid" 2>/dev/null; then
-    printf '%s failed to start; last log lines:\n' "$name" >&2
+    printf '❌ %s failed to start; last log lines:\n' "$name" >&2
     tail -n 15 "$LOGS/$name.err.log" >&2 || true
     die 'Check capture permissions, interface, model files, and the log above.'
   fi
-  printf '%s started (PID %s)\n' "$name" "$pid"
+  ok "$name started (PID $pid)"
   if [[ "$name" == detection || "$name" == forecast ]]; then
     for ((attempt=0; attempt<30; attempt++)); do
       if grep -m1 'Running in ' "$LOGS/$name.out.log"; then return 0; fi
@@ -272,13 +343,15 @@ start_service() {
       fi
       sleep 1
     done
-    printf '%s is still loading; check %s/%s.out.log for its verified device.\n' "$name" "$LOGS" "$name"
+    warn "$name is still loading; check $LOGS/$name.out.log for its verified device."
   fi
 }
 
 cd "$ROOT"
+printf '\n🛡️  Netwatch launcher (%s)\n' "$OS"
 install_system_tools
 need git; need go; need tshark; need dumpcap; need curl
+ensure_capture_access
 check_go
 install_java8
 install_uv
@@ -305,7 +378,7 @@ if [[ -z "$previous_interface" && -f "$PIDS/detection.pid" ]]; then
   fi
 fi
 if [[ ( -n "$previous_interface" && "$previous_interface" != "$INTERFACE" ) || "$previous_device" != "$DEVICE" ]]; then
-  printf 'Restarting this checkout\047s services for interface %s and device %s.\n' "$INTERFACE" "$DEVICE"
+  step 🔄 "Restarting this checkout's services for interface $INTERFACE and device $DEVICE"
   for service in detection forecast capture; do
     pid_file="$PIDS/$service.pid"
     [[ -f "$pid_file" ]] || continue
@@ -327,10 +400,12 @@ if [[ ( -n "$previous_interface" && "$previous_interface" != "$INTERFACE" ) || "
   done
 fi
 mkdir -p "$LOGS" "$PIDS" "$CAPTURE" "$RUNTIME/calibration" "$FORECAST_WORK"
-printf '%s\n' '== Build Netwatch CLI'
+ensure_libpcap_link
+step 🔨 'Building Netwatch CLI'
 ( cd "$ROOT/cli" && go build -o "$CLI" . )
+ok 'CLI built'
 
-printf '%s\n' '== Start capture, detection, and forecast (no frontend or dashboard)'
+step 📡 'Starting capture, detection, and forecast (no frontend or dashboard)'
 start_service capture "$CAPTURE" dumpcap -i "$INTERFACE" -F pcap -b duration:30 -b files:40 -w "$CAPTURE/live.pcap"
 start_service detection models.serving.detect_live "$PYTHON" -u -m models.serving.detect_live \
   --interface "$INTERFACE" --device "$DEVICE" --port 8902 --live-calibration-hours 4 \
@@ -341,8 +416,8 @@ start_service forecast models.serving.live "$PYTHON" -u -m models.serving.live \
   --live-calibration-hours 4 --calibration-db "$RUNTIME/calibration/world-4h-$SAFE_INTERFACE.sqlite"
 printf '%s\n' "$INTERFACE" > "$INTERFACE_STATE"
 printf '%s\n' "$DEVICE" > "$DEVICE_STATE"
-printf 'Models requested on %s; verified device is reported in each service startup log.\n' "$DEVICE"
+printf '   Models requested on %s; verified device is reported in each service startup log.\n' "$DEVICE"
 
-printf '\nNetwatch CLI ready. Type help, model, or exit. Logs: %s\n' "$LOGS"
-printf '%s\n' 'Services continue in the background after the CLI exits.'
+printf '\n🚀 Netwatch CLI ready. Type help, model, or exit. Logs: %s\n' "$LOGS"
+printf '%s\n' '   Services continue in the background after the CLI exits.'
 exec "$CLI" --config "$ROOT/cli/config.yaml"
