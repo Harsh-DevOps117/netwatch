@@ -70,6 +70,101 @@ func TestListAndUnblockOnlyManagedRule(t *testing.T) {
 	}
 }
 
+func TestRepliesFromAServedPortBlockTheClient(t *testing.T) {
+	const opened, host, client = 1720000000.25, "127.0.0.1", "8.8.4.4"
+	served := true
+	detector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		incident := map[string]any{"key": 11, "t": opened, "score": 0.9, "incident": 7, "family": "DoS-Hulk"}
+		if r.URL.Path == "/detections" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "RUNNING", "recent_incidents": []any{incident}, "incidents": []any{incident}})
+			return
+		}
+		events := []any{}
+		for i := 0; i < 10; i++ {
+			// A flood on this host's port 5173, seen from the reply side; or this host flooding the other's port 80.
+			local, remote := 5173, 40000+i
+			if !served {
+				local, remote = 40000+i, 80
+			}
+			events = append(events, map[string]any{"sender_ip": host, "src": host, "dst": client, "src_port": local, "dst_port": remote})
+		}
+		// One unrelated flow of this host is linked to the same incident: it must not decide the matter.
+		events = append(events, map[string]any{"sender_ip": host, "src": host, "dst": "1.1.1.1", "src_port": 50000, "dst_port": 443})
+		_ = json.NewEncoder(w).Encode(map[string]any{"events": events})
+	}))
+	defer detector.Close()
+	service := New(modelapi.NewClient("", detector.URL+"/detections"))
+	service.Firewall = &fakeFirewall{}
+	id := Identity{Family: "DoS-Hulk", Incident: 7, OpenedAt: opened}
+	plan, err := service.Advise(context.Background(), id)
+	if err != nil || !plan.CanExecute || plan.SourceIP != client || plan.Confirmation != "BLOCK "+client || !strings.Contains(plan.Advice, "replies from its port 5173") {
+		t.Fatalf("replies from a served port must offer a block of the client: %+v, %v", plan, err)
+	}
+	if result, err := service.Execute(context.Background(), plan.Token, plan.Confirmation); err != nil || result.SourceIP != client {
+		t.Fatalf("the block must land on the client: %+v, %v", result, err)
+	}
+	served = false
+	plan, err = service.Advise(context.Background(), id)
+	if err != nil || plan.CanExecute || plan.SourceIP != host {
+		t.Fatalf("traffic this host starts itself must not block its target: %+v, %v", plan, err)
+	}
+}
+
+func TestFloodPreviewIsDecidedOnTheDetectorsSummary(t *testing.T) {
+	const opened, attacker = 1720000000.25, "8.8.4.4"
+	total := 40000
+	summary := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		incident := map[string]any{"key": 11, "t": opened, "score": 0.9, "incident": 7, "family": "DoS-Hulk"}
+		if r.URL.Path == "/detections" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "RUNNING", "recent_incidents": []any{incident}, "incidents": []any{incident}})
+			return
+		}
+		flow := map[string]any{"sender_ip": attacker, "src": attacker, "dst": "127.0.0.1"}
+		_ = json.NewEncoder(w).Encode(map[string]any{"events": []any{flow, flow, flow}, "total": total, "truncated": true,
+			"summary": map[string]any{"groups": []any{map[string]any{"sender_ip": attacker, "src": attacker, "dst": "127.0.0.1", "events": 40000, "dst_ports": 1}},
+				"top_src_port": map[string]any{"port": 40001, "events": 3}}})
+	})
+	detector := httptest.NewServer(summary)
+	defer detector.Close()
+	service := New(modelapi.NewClient("", detector.URL+"/detections"))
+	service.Firewall = &fakeFirewall{}
+	id := Identity{Family: "DoS-Hulk", Incident: 7, OpenedAt: opened}
+	plan, err := service.Advise(context.Background(), id)
+	if err != nil || !plan.CanExecute || plan.SourceIP != attacker || plan.LinkedEvents != 40000 {
+		t.Fatalf("a flood whose summary names one source must stay blockable: %+v, %v", plan, err)
+	}
+	// Some of the same flood is recorded from this host's side; a third host's flows are another matter.
+	extra := func(src, dst string) {
+		detector.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			incident := map[string]any{"key": 11, "t": opened, "score": 0.9, "incident": 7, "family": "DoS-Hulk"}
+			if r.URL.Path == "/detections" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"status": "RUNNING", "recent_incidents": []any{incident}, "incidents": []any{incident}})
+				return
+			}
+			flow := map[string]any{"sender_ip": attacker, "src": attacker, "dst": "127.0.0.1"}
+			_ = json.NewEncoder(w).Encode(map[string]any{"events": []any{flow, flow, flow, map[string]any{"sender_ip": attacker, "src": src, "dst": dst}}})
+		})
+	}
+	extra("127.0.0.1", attacker)
+	if plan, err = service.Advise(context.Background(), id); err != nil || !plan.CanExecute || plan.SourceIP != attacker {
+		t.Fatalf("this host's replies to the sender are still the sender's traffic: %+v, %v", plan, err)
+	}
+	extra("1.1.1.1", attacker)
+	if plan, err = service.Advise(context.Background(), id); err != nil || plan.CanExecute {
+		t.Fatalf("a third host's flow must still stop the block: %+v, %v", plan, err)
+	}
+	// Groups the summary left out could be another source: without the full count, no block.
+	detector.Config.Handler = summary
+	total = 40500
+	plan, err = service.Advise(context.Background(), id)
+	if err != nil || plan.CanExecute || !strings.Contains(plan.Reason, "40000 of 40500") {
+		t.Fatalf("an incomplete summary must not allow a block: %+v, %v", plan, err)
+	}
+}
+
 func TestProtectionRequiresActivePublicSourceAndConfirmation(t *testing.T) {
 	const opened = 1720000000.25
 	sourceIP, active := "8.8.4.4", true

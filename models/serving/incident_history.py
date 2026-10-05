@@ -11,6 +11,7 @@ WINDOW_S = 3 * 3600
 MAX_RETURNED = 500
 EVENT_LIMIT = 30_000     # linked events one answer may carry: about what the dashboard's 16 MiB response bound holds
 EVENT_PREVIEW = 1_000    # how many of a larger incident's events are returned instead, marked truncated
+SUMMARY_GROUPS = 16      # how many (sender, source, destination) groups a truncated answer summarises
 
 
 class IncidentHistory:
@@ -76,7 +77,10 @@ class IncidentHistory:
 
         Input:  the incident's identity; how many linked events a complete answer may hold, and how many of a
                 larger incident's are returned instead
-        Output: '{"events": [...], "total": N, "truncated": bool}', events in observation order
+        Output: '{"events": [...], "total": N, "truncated": bool}', events in observation order; a truncated
+                answer also carries "summary", counted over every linked event: its largest groups by
+                (sender_ip, src, dst) with their event and distinct destination-port counts, and the most used
+                source port. That is what a consumer needs to decide who the incident's traffic is between.
 
         A flood links over 100,000 events to one incident, more than a consumer reads. Such an answer carries
         the first `preview` and says so: whoever needs the complete evidence must not conclude from it. Those
@@ -89,8 +93,21 @@ class IncidentHistory:
             order, count = ("observed_at, event_id", total) if total <= limit else ("event_id", preview)
             rows = self.reader.execute("SELECT detail FROM incident_events WHERE family=? AND incident=? "
                                        f"AND opened_at=? ORDER BY {order} LIMIT ?", (*key, count)).fetchall()
+            summary = ""
+            if total > limit:
+                where = "FROM incident_events WHERE family=? AND incident=? AND opened_at=?"
+                groups = self.reader.execute(
+                    "SELECT json_extract(detail, '$.sender_ip'), json_extract(detail, '$.src'), "
+                    "json_extract(detail, '$.dst'), COUNT(*), COUNT(DISTINCT json_extract(detail, '$.dst_port')) "
+                    f"{where} GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT ?", (*key, SUMMARY_GROUPS)).fetchall()
+                port = self.reader.execute(f"SELECT json_extract(detail, '$.src_port'), COUNT(*) {where} "
+                                           "GROUP BY 1 ORDER BY 2 DESC LIMIT 1", key).fetchone()
+                summary = ', "summary": ' + json.dumps({
+                    "groups": [{"sender_ip": sender, "src": src, "dst": dst, "events": events, "dst_ports": ports}
+                               for sender, src, dst, events, ports in groups],
+                    "top_src_port": {"port": port[0], "events": port[1]}})
         return ('{"events": [' + ", ".join(row[0] for row in rows) +
-                f'], "total": {total}, "truncated": {json.dumps(total > limit)}}}')
+                f'], "total": {total}, "truncated": {json.dumps(total > limit)}{summary}}}')
 
     def import_log(self, path: Path) -> int:
         """Recover incidents logged by an older detector before this ledger existed."""

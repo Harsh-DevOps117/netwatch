@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -99,6 +100,9 @@ type incidentContext struct {
 	events           int
 	reason           string
 	localDestination bool
+	// servedPort is set when the linked flows are this host's replies from one
+	// served port: ip is then the client those replies go to.
+	servedPort int
 }
 
 func (s *Service) resolve(ctx context.Context, id Identity) (incidentContext, error) {
@@ -137,29 +141,96 @@ func (s *Service) resolve(ctx context.Context, id Identity) (incidentContext, er
 	if err != nil {
 		return incidentContext{}, err
 	}
-	result.events = len(linked.Events)
+	// What the linked flows are between: taken from the events, or, when the
+	// detector sent only a preview of a flood, from its summary of all of them.
+	type group struct {
+		sender, src, dst string
+		events           int
+	}
+	var groups []group
+	peers, localPorts, peerPorts := map[string]int{}, map[int]int{}, 0
+	counted := !linked.Truncated
+	if linked.Truncated && linked.Summary != nil {
+		for _, g := range linked.Summary.Groups {
+			groups = append(groups, group{g.SenderIP, g.Src, g.Dst, g.Events})
+			result.events += g.Events
+			if g.DstPorts > peerPorts {
+				peerPorts = g.DstPorts
+			}
+		}
+		localPorts[linked.Summary.TopSrcPort.Port] = linked.Summary.TopSrcPort.Events
+		// The summary lists the largest groups: it settles the matter only when they are all of them.
+		counted = result.events == linked.Total
+	} else {
+		ports := map[int]bool{}
+		for _, event := range linked.Events {
+			groups = append(groups, group{event.SenderIP, event.Src, event.Dst, 1})
+			localPorts[event.SrcPort]++
+			ports[event.DstPort] = true
+		}
+		result.events, peerPorts = len(linked.Events), len(ports)
+	}
 	if result.events == 0 {
 		result.reason = "No linked source-IP evidence was retained for this incident."
 		return result, nil
 	}
-	for _, event := range linked.Events {
-		if event.SenderIP == "" || (result.ip != "" && event.SenderIP != result.ip) {
+	known := map[string]bool{}
+	local := func(ip string) bool {
+		if _, seen := known[ip]; !seen {
+			known[ip] = localAddress(ip)
+		}
+		return known[ip]
+	}
+	for _, g := range groups {
+		peers[g.dst] += g.events
+		if g.sender == "" || (result.ip != "" && g.sender != result.ip) {
 			result.ip = ""
 			result.reason = "Linked events do not agree on one source IP."
 			return result, nil
 		}
-		result.ip = event.SenderIP
-		if event.Src != "" && event.Src != event.SenderIP {
+		result.ip = g.sender
+		// Under a flood some flows between the same two hosts are recorded from
+		// this host's side (its reply is the first packet seen). They are the
+		// sender's traffic with this host all the same.
+		reply := g.dst == g.sender && local(g.src)
+		if g.src != "" && g.src != g.sender && !reply {
 			result.reason = "Linked traffic does not consistently originate from the sender IP."
 			return result, nil
 		}
-		if localAddress(event.Dst) {
+		if reply || local(g.dst) {
 			result.localDestination = true
 		}
 	}
-	if linked.Truncated {
+	// A flood on a service this host runs is often seen from the reply side: the
+	// linked flows leave this host from the served port towards one client's
+	// changing ports. The traffic to contain is then that client's, so the block
+	// is offered for it. An incident is keyed by its sender, so a few unrelated
+	// flows of this host can be linked too: the port and the client must each
+	// account for nine in ten of the linked flows. Traffic this host starts
+	// itself has the opposite shape (changing local ports, one remote port) and
+	// stays ineligible.
+	if local(result.ip) && peerPorts >= 3 {
+		most := func(counts map[string]int) (string, bool) {
+			for key, count := range counts {
+				if count*10 >= result.events*9 {
+					return key, true
+				}
+			}
+			return "", false
+		}
+		ports := map[string]int{}
+		for port, count := range localPorts {
+			ports[strconv.Itoa(port)] = count
+		}
+		port, served := most(ports)
+		if peer, one := most(peers); served && one && port != "0" && peer != "" {
+			result.ip, result.localDestination = peer, true
+			result.servedPort, _ = strconv.Atoi(port)
+		}
+	}
+	if !counted {
 		// One source must account for every linked event, not only those returned.
-		result.reason = fmt.Sprintf("Only the first %d of %d linked events could be checked for a single source; automatic blocking is disabled.", result.events, linked.Total)
+		result.reason = fmt.Sprintf("Only %d of %d linked events could be checked for a single source; automatic blocking is disabled.", result.events, linked.Total)
 	} else if result.events < 3 {
 		result.reason = "At least three linked threshold-crossing events are required for a host block."
 	} else if !result.localDestination {
@@ -302,6 +373,9 @@ func guide(incident incidentContext, blocked string) string {
 		lines = append(lines, "No host block is offered. "+blocked+" If the check confirms unwanted traffic, limit it at the service or upstream instead.")
 	default:
 		containment := "If the check confirms unwanted traffic, a block of this one source in the host firewall is available: inbound traffic only, kept until you remove it. It does not stop traffic that comes from many addresses."
+		if incident.servedPort != 0 {
+			containment = fmt.Sprintf("The linked flows are this host's replies from its port %d to %s, so that address is the client sending the requests, and the block applies to it. ", incident.servedPort, incident.ip) + containment
+		}
 		if ip, err := netip.ParseAddr(incident.ip); err == nil && ip.IsPrivate() {
 			containment += " The source is on your own LAN: identify the device first, because blocking it may cut off a legitimate device or service."
 		}

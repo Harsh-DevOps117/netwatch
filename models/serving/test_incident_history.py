@@ -82,10 +82,30 @@ class IncidentHistoryTest(unittest.TestCase):
             complete = json.loads(history.events_json("Bot", 1, opened, limit=5, preview=2))
             self.assertEqual(complete, {"events": rows, "total": 5, "truncated": False})
             prefix = json.loads(history.events_json("Bot", 1, opened, limit=4, preview=2))
-            self.assertEqual(prefix, {"events": rows[:2], "total": 5, "truncated": True})
+            self.assertEqual({k: prefix[k] for k in ("events", "total", "truncated")},
+                             {"events": rows[:2], "total": 5, "truncated": True})
             self.assertEqual(json.loads(history.events_json("Bot", 2, opened)),
                              {"events": [], "total": 0, "truncated": False})
             self.assertEqual(history.events("Bot", 1, opened), rows)
+            history.close()
+
+    def test_truncated_answer_summarises_every_linked_event(self):
+        with tempfile.TemporaryDirectory() as temp:
+            history = IncidentHistory(Path(temp) / "incidents.sqlite")
+            opened = time.time() - 10
+            flow = lambda i, dst, sport, dport: {"family": "DoS-Hulk", "incident": 1, "opened_at": opened, "event_id": i,
+                                                 "t_obs": opened + i, "sender_ip": "10.0.0.5", "src": "10.0.0.5",
+                                                 "dst": dst, "src_port": sport, "dst_port": dport}
+            # Replies from this host's port 5173 to one client's changing ports, and one unrelated flow.
+            history.record_events([flow(i, "10.0.0.9", 5173, 40000 + i) for i in range(4)] +
+                                  [flow(4, "1.1.1.1", 50000, 443)])
+            answer = json.loads(history.events_json("DoS-Hulk", 1, opened, limit=3, preview=1))
+            self.assertEqual((len(answer["events"]), answer["total"], answer["truncated"]), (1, 5, True))
+            self.assertEqual(answer["summary"], {
+                "groups": [{"sender_ip": "10.0.0.5", "src": "10.0.0.5", "dst": "10.0.0.9", "events": 4, "dst_ports": 4},
+                           {"sender_ip": "10.0.0.5", "src": "10.0.0.5", "dst": "1.1.1.1", "events": 1, "dst_ports": 1}],
+                "top_src_port": {"port": 5173, "events": 4}})
+            self.assertNotIn("summary", json.loads(history.events_json("DoS-Hulk", 1, opened)))
             history.close()
 
     def test_world_flags_outlive_the_window_and_keep_their_incident_mark(self):
