@@ -55,11 +55,22 @@ def align_meter_clock(folder: Path) -> float:
     return shift
 
 
+CPU_RETRY = "NETWATCH_PCAP_CPU_RETRY"       # set in the environment of the run that repeats a job on the CPU
+
+
+def gpu_short(error: object) -> bool:
+    """Whether a failure is the GPU running out of memory (or refusing an allocation), not a fault in the capture."""
+    text = str(error)
+    return any(mark in text for mark in ("CUDA error", "CUDA out of memory", "out of memory", "CUBLAS", "CUDNN"))
+
+
 def analyze(pcap: Path, work: Path, result_path: Path, name: str) -> dict:
     if os.name == "nt":
         wireshark = Path("C:/Program Files/Wireshark")
         if wireshark.is_dir():
             os.environ["PATH"] = str(wireshark) + os.pathsep + os.environ.get("PATH", "")
+    import torch
+
     from models.serving.live import Chain, DAY
     from models.serving.registry import resolve
     from models.world_model.inference import Replay
@@ -77,8 +88,13 @@ def analyze(pcap: Path, work: Path, result_path: Path, name: str) -> dict:
     stage("Scoring detector events")
     detection_file = work / "detection.json"
     try:
-        subprocess.run([sys.executable, "-m", "models.serving.detect_live", "--pcap", str(pcap),
-                        "--once", "--json-out", str(detection_file)], check=True, timeout=1800)
+        scored = subprocess.run([sys.executable, "-m", "models.serving.detect_live", "--pcap", str(pcap), "--once",
+                                 "--device", "cuda" if torch.cuda.is_available() else "cpu",
+                                 "--json-out", str(detection_file)], stderr=subprocess.PIPE, text=True, timeout=1800)
+        sys.stderr.write(scored.stderr)
+        if scored.returncode:
+            # The reason is the detector's last line, not the fact that its command failed.
+            raise RuntimeError((scored.stderr.strip().splitlines() or [f"detector exited with {scored.returncode}"])[-1])
         detection = json.loads(detection_file.read_text(encoding="utf-8"))
         # Incident details are deliberately separate from the rolling live-event feed.
         result["detection"] = {"status": detection["status"], "packets": detection["packets"],
@@ -125,6 +141,9 @@ def analyze(pcap: Path, work: Path, result_path: Path, name: str) -> dict:
         caveats = ["Offline analysis of a completed PCAP. Live thresholds and incident history are untouched.",
                    "S[t+k] is k imagined model event steps, not k seconds or confirmed future traffic.",
                    "Unlabeled capture: score-tail exceedance is not a measured false-positive rate."]
+        if os.environ.get(CPU_RETRY):
+            caveats.append("The GPU had no free memory, so this capture was analysed on the CPU: the scores are the "
+                           "same, the analysis took longer.")
         result["world"] = forecast_payload(
             rollouts, replay.rows, caveats=caveats,
             names=node_names(work / "world" / "cycle" / "events" / DAY / "node_index.parquet"),
@@ -147,6 +166,13 @@ def main() -> int:
     parser.add_argument("--name", required=True)
     args = parser.parse_args()
     result = analyze(args.pcap, args.work, args.out, args.name)
+    # The GPU is shared with the live services. When it has no room the job is run again with the GPU hidden, so
+    # every stage stays on the CPU, including those that choose a device themselves.
+    if not os.environ.get(CPU_RETRY) and any(gpu_short(error) for error in result["errors"].values()):
+        print("The GPU has no free memory; analysing this capture again on the CPU", flush=True)
+        shutil.rmtree(args.work / "world", ignore_errors=True)
+        return subprocess.run([sys.executable, "-m", "models.serving.analyze_pcap", *sys.argv[1:]],
+                              env={**os.environ, "CUDA_VISIBLE_DEVICES": "", CPU_RETRY: "1"}).returncode
     return 0 if result["detection"] is not None or result["world"] is not None else 1
 
 

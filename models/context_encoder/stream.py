@@ -26,6 +26,10 @@ LOOKBACK = 64 * NEIGHBOURS
 # The first pass's depth: benign endpoints saturate here (19.93 of 20 at 320, 19.95 at 1,280), so only the rows that
 # could still gain from depth pay for it.
 SHALLOW = 16 * NEIGHBOURS
+# How many (query, run) cells one pass of the search holds at once. A pass builds about ten tensors of that many
+# 8-byte cells, so this keeps it near 160 MB whatever the block. Unbounded, a flood's 41,177 queries at full depth
+# took over 4 GB of a 6 GB GPU that the detector and PCAP analysis share (measured on the live forecast service).
+CELLS = 2_000_000
 
 
 def availability_order(observation_time: np.ndarray, event_id: np.ndarray) -> np.ndarray:
@@ -153,12 +157,22 @@ class NeighbourIndex:
                      torch.as_tensor(receiver[part].astype(np.int64), device=device)]
             where = torch.as_tensor(np.asarray(position[part], np.int64), device=device)
             rows = torch.arange(len(where), device=device)
-            best, redo = self._pass(roles, nodes, where, size, min(shallow, lookback))
+            best, redo = self._bounded(roles, nodes, where, size, min(shallow, lookback))
             if lookback > shallow and redo.any():
-                deep, _ = self._pass(roles, [n[redo] for n in nodes], where[redo], size, lookback, final=True)
+                deep, _ = self._bounded(roles, [n[redo] for n in nodes], where[redo], size, lookback, final=True)
                 best[rows[redo]] = deep
             out[part] = best.cpu().numpy()
         return out
+
+    def _bounded(self, roles, nodes, where, size: int, lookback: int, final: bool = False):
+        """`_pass` over as many rows at a time as CELLS allows. Rows are searched independently, so the result is
+        the same as one pass over all of them."""
+        step = max(1, CELLS // lookback)
+        if len(where) <= step:
+            return self._pass(roles, nodes, where, size, lookback, final)
+        parts = [self._pass(roles, [n[i:i + step] for n in nodes], where[i:i + step], size, lookback, final)
+                 for i in range(0, len(where), step)]
+        return torch.cat([best for best, _ in parts]), None if final else torch.cat([redo for _, redo in parts])
 
     def _pass(self, roles, nodes, where, size: int, lookback: int, final: bool = False):
         """One depth of the search over both endpoints.

@@ -339,7 +339,11 @@ family, what containment this host offers, and how to recover. Forecast links
 and raw event flags cannot activate protection. The guide is text only; the one
 action Netwatch can take is the block below. For an active incident with a single
 validated public source IPv4, an explicit `BLOCK <IP>` confirmation may add a
-host-firewall inbound block (`netsh` on Windows, `iptables` on Linux). The rule
+host-firewall inbound block (`netsh` on Windows, `iptables` on Linux). Both need
+administrator rights. Windows shows its approval prompt when the block is added.
+On Linux `iptables` needs root even to list its rules, so Netwatch uses `sudo`
+when it asks for no password and otherwise the desktop's `pkexec` prompt, once
+per action (list, block or unblock). The rule
 also supports a consistent private LAN source targeting this host when at least
 three linked events exist, but requires the stronger `BLOCK LAN <IP>` confirmation;
 blocking a LAN service or device can disrupt legitimate work. Local-host, reserved,

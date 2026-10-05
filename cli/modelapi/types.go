@@ -348,6 +348,22 @@ type IncidentEventsResponse struct {
 	Events    []DetectionIncidentEvent `json:"events"`
 	Total     int                      `json:"total"`
 	Truncated bool                     `json:"truncated"`
+	// Summary is sent with a truncated answer and counts every linked event.
+	Summary *IncidentEventsSummary `json:"summary,omitempty"`
+}
+
+type IncidentEventsSummary struct {
+	Groups []struct {
+		SenderIP string `json:"sender_ip"`
+		Src      string `json:"src"`
+		Dst      string `json:"dst"`
+		Events   int    `json:"events"`
+		DstPorts int    `json:"dst_ports"`
+	} `json:"groups"`
+	TopSrcPort struct {
+		Port   int `json:"port"`
+		Events int `json:"events"`
+	} `json:"top_src_port"`
 }
 
 type DetectionIncidentEvent struct {
