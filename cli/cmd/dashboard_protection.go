@@ -90,7 +90,7 @@ func registerProtectionRoutes(mux *http.ServeMux, models *modelapi.Client) {
 			http.Error(w, "GET required", http.StatusMethodNotAllowed)
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()
 		blocks, err := service.ListBlocks(ctx)
 		if err != nil {

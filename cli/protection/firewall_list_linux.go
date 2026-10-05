@@ -5,17 +5,27 @@ package protection
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
+	"time"
 )
 
 func (localFirewall) List(ctx context.Context) ([]BlockEntry, error) {
-	output, err := exec.CommandContext(ctx, "iptables", "-S", "INPUT").CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("could not inspect Linux firewall rules: %w", err)
+	listing.Lock()
+	defer listing.Unlock()
+	if time.Since(listing.read) >= listingLifetime {
+		output, err := asRoot(ctx, "iptables", []string{"-S", "INPUT"})
+		if err != nil {
+			return nil, fmt.Errorf("could not inspect Linux firewall rules: %w", err)
+		}
+		listing.blocks, listing.read = parseBlocks(string(output)), time.Now()
 	}
+	return append([]BlockEntry(nil), listing.blocks...), nil
+}
+
+// parseBlocks reads `iptables -S INPUT` and keeps the DROP rules Netwatch named.
+func parseBlocks(output string) []BlockEntry {
 	var blocks []BlockEntry
-	for _, line := range strings.Split(string(output), "\n") {
+	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(strings.ReplaceAll(line, `"`, ""))
 		if len(fields) < 10 || fields[0] != "-A" || fields[1] != "INPUT" {
 			continue
@@ -35,5 +45,5 @@ func (localFirewall) List(ctx context.Context) ([]BlockEntry, error) {
 			blocks = append(blocks, BlockEntry{SourceIP: ip, Rule: rule})
 		}
 	}
-	return blocks, nil
+	return blocks
 }
