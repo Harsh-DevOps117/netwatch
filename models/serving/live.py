@@ -685,6 +685,10 @@ def main(argv: "list[str] | None" = None) -> int:
                     Handler.payload = live.status
             except Exception:                     # a failed cycle must not take the sensor down
                 traceback.print_exc()
+            # PyTorch keeps every block a cycle used and never returns it, so this service would sit on its largest
+            # cycle's memory for good. The GPU is shared with the detector and with PCAP analysis: give it back.
+            if str(chain.device).startswith("cuda"):
+                torch.cuda.empty_cache()
             time.sleep(args.poll)
 
     threading.Thread(target=loop, daemon=True).start()
